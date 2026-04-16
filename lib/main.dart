@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
@@ -8,6 +8,7 @@ import 'package:coriander_player/src/rust/api/logger.dart';
 import 'package:coriander_player/src/rust/frb_generated.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/window_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -56,10 +57,6 @@ Future<void> main() async {
     LOGGER.i("[rs]: $msg");
   });
 
-  // For hot reload, `unregisterAll()` needs to be called.
-  await HotkeysHelper.unregisterAll();
-  HotkeysHelper.registerHotKeys();
-
   await migrateAppData();
 
   final supportPath = (await getAppDataDir()).path;
@@ -72,7 +69,10 @@ Future<void> main() async {
   }
   final welcome = !File("$supportPath\\index.json").existsSync();
 
+  // Must initialize after loading preferences to avoid default-volume capture.
+  WindowControls.init();
   await initWindow();
+  await HotkeysHelper.init();
 
   runApp(Entry(welcome: welcome));
 }

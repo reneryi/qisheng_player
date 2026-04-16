@@ -66,6 +66,9 @@ class AppSettings {
 
   String? fontFamily;
   String? fontPath;
+  String? backgroundImagePath;
+  double backgroundImageOpacity = 0.18;
+  final ValueNotifier<int> backgroundVersion = ValueNotifier(0);
 
   late String artistSplitPattern = artistSeparator.join("|");
 
@@ -90,10 +93,14 @@ class AppSettings {
       systemTheme.accent.$2,
       systemTheme.accent.$3,
       systemTheme.accent.$4,
-    ).value;
+    ).toARGB32();
   }
 
   AppSettings._();
+
+  void notifyBackgroundChanged() {
+    backgroundVersion.value++;
+  }
 
   static Future<void> _readFromJson_old(Map settingsMap) async {
     final ust = settingsMap["UseSystemTheme"];
@@ -201,6 +208,15 @@ class AppSettings {
         _instance.fontFamily = ff;
         _instance.fontPath = fp;
       }
+
+      final bgImage = settingsMap["BackgroundImagePath"];
+      if (bgImage is String && bgImage.isNotEmpty) {
+        _instance.backgroundImagePath = bgImage;
+      }
+      final bgOpacity = settingsMap["BackgroundImageOpacity"];
+      if (bgOpacity is num) {
+        _instance.backgroundImageOpacity = bgOpacity.toDouble().clamp(0.0, 0.6);
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -222,6 +238,8 @@ class AppSettings {
         "IsWindowMaximized": isMaximized,
         "FontFamily": fontFamily,
         "FontPath": fontPath,
+        "BackgroundImagePath": backgroundImagePath,
+        "BackgroundImageOpacity": backgroundImageOpacity,
       };
 
       // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸

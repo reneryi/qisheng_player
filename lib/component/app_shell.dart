@@ -1,5 +1,8 @@
 // ignore_for_file: camel_case_types
 
+import 'dart:io';
+
+import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/mini_now_playing.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/component/side_nav.dart';
@@ -42,7 +45,13 @@ class _AppShell_Small extends StatelessWidget {
         child: TitleBar(),
       ),
       drawer: const SideNav(),
-      body: Stack(children: [page, const MiniNowPlaying()]),
+      body: Stack(
+        children: [
+          const _CustomBackground(),
+          page,
+          const MiniNowPlaying(),
+        ],
+      ),
     );
   }
 }
@@ -66,6 +75,7 @@ class _AppShell_Large extends StatelessWidget {
           const SideNav(),
           Expanded(
             child: Stack(children: [
+              const _CustomBackground(),
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(8.0),
@@ -77,6 +87,40 @@ class _AppShell_Large extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomBackground extends StatelessWidget {
+  const _CustomBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: AppSettings.instance.backgroundVersion,
+      builder: (context, _, __) {
+        final bgPath = AppSettings.instance.backgroundImagePath;
+        if (bgPath == null || bgPath.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final file = File(bgPath);
+        if (!file.existsSync()) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: AppSettings.instance.backgroundImageOpacity,
+              child: Image.file(
+                file,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

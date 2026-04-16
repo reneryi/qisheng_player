@@ -1,5 +1,6 @@
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_source_view.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,7 @@ enum LyricTextAlign {
 class LyricViewController extends ChangeNotifier {
   final nowPlayingPagePref = AppPreference.instance.nowPlayingPagePref;
   late LyricTextAlign lyricTextAlign = nowPlayingPagePref.lyricTextAlign;
+  late bool showTranslation = nowPlayingPagePref.showTranslation;
   late double lyricFontSize = nowPlayingPagePref.lyricFontSize;
   late double translationFontSize = nowPlayingPagePref.translationFontSize;
 
@@ -54,6 +56,13 @@ class LyricViewController extends ChangeNotifier {
     nowPlayingPagePref.translationFontSize = translationFontSize;
     notifyListeners();
   }
+
+  void toggleShowTranslation() {
+    showTranslation = !showTranslation;
+    nowPlayingPagePref.showTranslation = showTranslation;
+    notifyListeners();
+    PlayService.instance.lyricService.refreshCurrentLyricLine();
+  }
 }
 
 class LyricViewControls extends StatelessWidget {
@@ -70,6 +79,8 @@ class LyricViewControls extends StatelessWidget {
           SetLyricSourceBtn(),
           SizedBox(height: 8.0),
           _LyricAlignSwitchBtn(),
+          SizedBox(height: 8.0),
+          _TranslationSwitchBtn(),
           SizedBox(height: 8.0),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -119,6 +130,27 @@ class _IncreaseFontSizeBtn extends StatelessWidget {
       tooltip: "增大歌词字体",
       color: scheme.onSecondaryContainer,
       icon: const Icon(Symbols.text_increase),
+    );
+  }
+}
+
+class _TranslationSwitchBtn extends StatelessWidget {
+  const _TranslationSwitchBtn();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final lyricViewController = context.watch<LyricViewController>();
+
+    return IconButton(
+      onPressed: lyricViewController.toggleShowTranslation,
+      tooltip: lyricViewController.showTranslation ? "隐藏翻译" : "显示翻译",
+      color: scheme.onSecondaryContainer,
+      icon: Icon(
+        lyricViewController.showTranslation
+            ? Symbols.subtitles
+            : Symbols.subtitles_off,
+      ),
     );
   }
 }

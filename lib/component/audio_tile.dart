@@ -1,22 +1,27 @@
-import 'package:coriander_player/component/scroll_aware_future_builder.dart';
-import 'package:coriander_player/utils.dart';
-import 'package:coriander_player/library/audio_library.dart';
-import 'package:coriander_player/page/uni_page.dart';
-import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/component/scroll_aware_future_builder.dart';
+import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/audio_metadata_override_store.dart';
+import 'package:coriander_player/library/online_cover_store.dart';
+import 'package:coriander_player/library/play_count_store.dart';
+import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/music_matcher.dart';
+import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// 由[playlist]和[audioIndex]确定audio，而不是直接传入audio，
-/// 这是为了实现点击列表项播放乐曲时指定该列表为播放列表。
-/// 同时，播放乐曲时也是需要index和playlist来定位audio和设置播放列表。
+/// 展示 `playlist[audioIndex]` 对应的歌曲条目。
+/// 可通过 [leading]/[action] 注入额外前后缀组件。
 class AudioTile extends StatelessWidget {
   const AudioTile({
     super.key,
     required this.audioIndex,
     required this.playlist,
+    this.showPlayCount = false,
     this.focus = false,
     this.leading,
     this.action,
@@ -25,6 +30,7 @@ class AudioTile extends StatelessWidget {
 
   final int audioIndex;
   final List<Audio> playlist;
+  final bool showPlayCount;
   final bool focus;
   final Widget? leading;
   final Widget? action;
@@ -34,207 +40,527 @@ class AudioTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final audio = playlist[audioIndex];
+    final playbackService = PlayService.instance.playbackService;
 
-    return MenuAnchor(
-      consumeOutsideTap: true,
-      menuChildren: [
-        /// artists
-        SubmenuButton(
-          menuChildren: List.generate(
-            audio.splitedArtists.length,
-            (i) => MenuItemButton(
-              onPressed: () {
-                final Artist artist = AudioLibrary
-                    .instance.artistCollection[audio.splitedArtists[i]]!;
-                context.push(
-                  app_paths.ARTIST_DETAIL_PAGE,
-                  extra: artist,
-                );
-              },
-              leadingIcon: const Icon(Symbols.artist),
-              child: Text(audio.splitedArtists[i]),
-            ),
-          ),
-          child: const Text("艺术家"),
-        ),
-
-        /// album
-        MenuItemButton(
-          onPressed: () {
-            final Album album =
-                AudioLibrary.instance.albumCollection[audio.album]!;
-            context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album);
-          },
-          leadingIcon: const Icon(Symbols.album),
-          child: Text(audio.album),
-        ),
-
-        /// 下一首播放
-        MenuItemButton(
-          onPressed: () {
-            PlayService.instance.playbackService.addToNext(audio);
-          },
-          leadingIcon: const Icon(Symbols.plus_one),
-          child: const Text("下一首播放"),
-        ),
-
-        /// 多选
-        if (multiSelectController != null)
-          MenuItemButton(
-            onPressed: () {
-              multiSelectController!.useMultiSelectView(true);
-              multiSelectController!.select(audio);
-            },
-            leadingIcon: const Icon(Symbols.select),
-            child: const Text("多选"),
-          ),
-
-        /// add to playlist
-        SubmenuButton(
-          menuChildren: List.generate(
-            PLAYLISTS.length,
-            (i) => MenuItemButton(
-              onPressed: () {
-                final added = PLAYLISTS[i].audios.containsKey(audio.path);
-                if (added) {
-                  showTextOnSnackBar("歌曲“${audio.title}”已存在");
-                  return;
-                }
-
-                PLAYLISTS[i].audios[audio.path] = audio;
-                showTextOnSnackBar(
-                  "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
-                );
-              },
-              leadingIcon: const Icon(Symbols.queue_music),
-              child: Text(PLAYLISTS[i].name),
-            ),
-          ),
-          child: const Text("添加到歌单"),
-        ),
-
-        /// to detail page
-        MenuItemButton(
-          onPressed: () {
-            context.push(app_paths.AUDIO_DETAIL_PAGE, extra: audio);
-          },
-          leadingIcon: const Icon(Symbols.info),
-          child: const Text("详细信息"),
-        ),
-      ],
-      builder: (context, controller, _) {
-        final textColor = focus ? scheme.primary : scheme.onSurface;
-        final placeholder = Icon(
-          Symbols.broken_image,
-          size: 48.0,
-          color: scheme.onSurface,
-        );
-
-        return Ink(
-          height: 64.0,
-          decoration: BoxDecoration(
-            color: multiSelectController == null
-                ? Colors.transparent
-                : multiSelectController!.selected.contains(audio)
-                    ? scheme.secondaryContainer
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          child: InkWell(
-            focusColor: Colors.transparent,
-            borderRadius: BorderRadius.circular(8.0),
-            onTap: () {
-              if (controller.isOpen) {
-                controller.close();
-                return;
-              }
-
-              if (multiSelectController == null ||
-                  !multiSelectController!.enableMultiSelectView) {
-                PlayService.instance.playbackService.play(audioIndex, playlist);
-              } else {
-                if (multiSelectController!.selected.contains(audio)) {
-                  multiSelectController!.unselect(audio);
-                } else {
-                  multiSelectController!.select(audio);
-                }
-              }
-            },
-            onSecondaryTapDown: (details) {
-              if (multiSelectController?.enableMultiSelectView == true) return;
-
-              controller.open(
-                  position: details.localPosition.translate(0, -240));
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Row(children: [
-                if (leading != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16.0),
-                    child: leading!,
-                  ),
-
-                /// cover
-                ScrollAwareFutureBuilder(
-                  future: () => audio.cover,
-                  builder: (context, snapshot) {
-                    if (snapshot.data == null) {
-                      return placeholder;
-                    }
-
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: Image(
-                        image: snapshot.data!,
-                        width: 48.0,
-                        height: 48.0,
-                        errorBuilder: (_, __, ___) => placeholder,
-                      ),
+    return ListenableBuilder(
+      listenable: playbackService,
+      builder: (context, _) {
+        final isNowPlaying = playbackService.nowPlaying?.path == audio.path;
+        final effectiveFocus = focus || isNowPlaying;
+        return MenuAnchor(
+          consumeOutsideTap: true,
+          menuChildren: [
+            SubmenuButton(
+              menuChildren: List.generate(
+                audio.splitedArtists.length,
+                (i) => MenuItemButton(
+                  onPressed: () {
+                    final artist = AudioLibrary
+                        .instance.artistCollection[audio.splitedArtists[i]]!;
+                    context.push(
+                      app_paths.ARTIST_DETAIL_PAGE,
+                      extra: artist,
                     );
                   },
+                  leadingIcon: const Icon(Symbols.artist),
+                  child: Text(audio.splitedArtists[i]),
                 ),
-                const SizedBox(width: 16.0),
+              ),
+              child: const Text("艺术家"),
+            ),
+            MenuItemButton(
+              onPressed: () {
+                final album =
+                    AudioLibrary.instance.albumCollection[audio.album]!;
+                context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album);
+              },
+              leadingIcon: const Icon(Symbols.album),
+              child: Text(audio.album),
+            ),
+            MenuItemButton(
+              onPressed: () {
+                PlayService.instance.playbackService.addToNext(audio);
+              },
+              leadingIcon: const Icon(Symbols.plus_one),
+              child: const Text("下一首播放"),
+            ),
+            SubmenuButton(
+              menuChildren: [
+                MenuItemButton(
+                  onPressed: () async {
+                    final controller = TextEditingController();
+                    final name = await showDialog<String>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("新建歌单"),
+                        content: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: "歌单名称",
+                            border: OutlineInputBorder(),
+                          ),
+                          onSubmitted: (value) {
+                            Navigator.pop(context, value);
+                          },
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("取消"),
+                          ),
+                          FilledButton(
+                            onPressed: () {
+                              Navigator.pop(context, controller.text);
+                            },
+                            child: const Text("创建"),
+                          ),
+                        ],
+                      ),
+                    );
 
-                /// title, artist and album
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    final trimmed = name?.trim();
+                    if (trimmed == null || trimmed.isEmpty) return;
+                    if (PLAYLISTS.any((item) => item.name == trimmed)) {
+                      showTextOnSnackBar("歌单“$trimmed”已存在");
+                      return;
+                    }
+
+                    final targetPlaylist = Playlist(trimmed, {});
+                    targetPlaylist.addAudio(audio);
+                    PLAYLISTS.add(targetPlaylist);
+                    scheduleSavePlaylists();
+                    showTextOnSnackBar("已创建歌单“$trimmed”并添加当前歌曲");
+                  },
+                  leadingIcon: const Icon(Symbols.add),
+                  child: const Text("新建歌单并添加"),
+                ),
+                if (PLAYLISTS.isEmpty)
+                  const MenuItemButton(
+                    onPressed: null,
+                    child: Text("暂无歌单"),
+                  )
+                else
+                  ...List.generate(
+                    PLAYLISTS.length,
+                    (i) => MenuItemButton(
+                      onPressed: () {
+                        final added = PLAYLISTS[i].addAudio(audio);
+                        if (!added) {
+                          showTextOnSnackBar("歌曲“${audio.title}”已在歌单中");
+                          return;
+                        }
+
+                        showTextOnSnackBar(
+                          "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
+                        );
+                      },
+                      leadingIcon: const Icon(Symbols.queue_music),
+                      child: Text(PLAYLISTS[i].name),
+                    ),
+                  ),
+              ],
+              child: const Text("添加到歌单"),
+            ),
+            MenuItemButton(
+              onPressed: () {
+                context.push(app_paths.AUDIO_DETAIL_PAGE, extra: audio);
+              },
+              leadingIcon: const Icon(Symbols.info),
+              child: const Text("详细信息"),
+            ),
+            MenuItemButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => _AudioEditDialog(audio: audio),
+                );
+              },
+              leadingIcon: const Icon(Symbols.edit_note),
+              child: const Text("音乐编辑"),
+            ),
+          ],
+          builder: (context, controller, _) {
+            final textColor =
+                effectiveFocus ? scheme.primary : scheme.onSurface;
+            final placeholder = Icon(
+              Symbols.broken_image,
+              size: 48.0,
+              color: scheme.onSurface,
+            );
+
+            return Ink(
+              height: 64.0,
+              decoration: BoxDecoration(
+                color: multiSelectController == null
+                    ? (isNowPlaying
+                        ? scheme.primaryContainer.withValues(alpha: 0.35)
+                        : Colors.transparent)
+                    : multiSelectController!.selected.contains(audio)
+                        ? scheme.secondaryContainer
+                        : isNowPlaying
+                            ? scheme.primaryContainer.withValues(alpha: 0.35)
+                            : Colors.transparent,
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: InkWell(
+                focusColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(8.0),
+                onTap: () {
+                  if (controller.isOpen) {
+                    controller.close();
+                    return;
+                  }
+
+                  if (multiSelectController == null ||
+                      !multiSelectController!.enableMultiSelectView) {
+                    PlayService.instance.playbackService
+                        .play(audioIndex, playlist);
+                  } else {
+                    multiSelectController!.toggleSelectionWithIndex(
+                      index: audioIndex,
+                      item: audio,
+                      items: playlist,
+                      shiftPressed: MultiSelectController.isShiftPressed(),
+                    );
+                  }
+                },
+                onSecondaryTapDown: (details) {
+                  if (multiSelectController?.enableMultiSelectView == true) {
+                    return;
+                  }
+                  controller.open(
+                    position: details.localPosition.translate(0, -240),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Row(
                     children: [
-                      Text(
-                        audio.title,
-                        style: TextStyle(color: textColor, fontSize: 16),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      if (leading != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16.0),
+                          child: leading!,
+                        ),
+                      ScrollAwareFutureBuilder(
+                        future: () => audio.cover,
+                        builder: (context, snapshot) {
+                          if (snapshot.data == null) {
+                            return placeholder;
+                          }
+
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8.0),
+                            child: Image(
+                              image: snapshot.data!,
+                              width: 48.0,
+                              height: 48.0,
+                              errorBuilder: (_, __, ___) => placeholder,
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(width: 4.0),
-                      Text(
-                        "${audio.artist} - ${audio.album}",
-                        style: TextStyle(color: textColor),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 16.0),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              audio.title,
+                              style: TextStyle(color: textColor, fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 4.0),
+                            Text(
+                              showPlayCount
+                                  ? "${audio.artist} - ${audio.album} | ${audio.qualitySummary} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                  : "${audio.artist} - ${audio.album} | ${audio.qualitySummary}",
+                              style: TextStyle(color: textColor),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8.0),
+                      Text(
+                        Duration(seconds: audio.duration).toStringHMMSS(),
+                        style: TextStyle(
+                          color: effectiveFocus
+                              ? scheme.primary
+                              : scheme.onSurface,
+                        ),
+                      ),
+                      if (multiSelectController?.enableMultiSelectView == true)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Checkbox(
+                            value:
+                                multiSelectController!.selected.contains(audio),
+                            onChanged: (_) {
+                              multiSelectController!.toggleSelectionWithIndex(
+                                index: audioIndex,
+                                item: audio,
+                                items: playlist,
+                                shiftPressed:
+                                    MultiSelectController.isShiftPressed(),
+                              );
+                            },
+                          ),
+                        ),
+                      if (action != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: action!,
+                        ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8.0),
-                Text(
-                  Duration(seconds: audio.duration).toStringHMMSS(),
-                  style: TextStyle(
-                    color: focus ? scheme.primary : scheme.onSurface,
-                  ),
-                ),
-                if (action != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: action!,
-                  ),
-              ]),
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+}
+
+class _AudioEditDialog extends StatefulWidget {
+  const _AudioEditDialog({required this.audio});
+
+  final Audio audio;
+
+  @override
+  State<_AudioEditDialog> createState() => _AudioEditDialogState();
+}
+
+class _AudioEditDialogState extends State<_AudioEditDialog> {
+  late final titleController = TextEditingController(text: widget.audio.title);
+  late final artistController =
+      TextEditingController(text: widget.audio.artist);
+  late final albumController = TextEditingController(text: widget.audio.album);
+  late final Future<List<SongSearchResult>> _searchFuture =
+      uniSearch(widget.audio);
+  bool _busy = false;
+
+  Future<void> _saveOverride() async {
+    final title = titleController.text.trim();
+    final artist = artistController.text.trim();
+    final album = albumController.text.trim();
+    if (title.isEmpty || artist.isEmpty || album.isEmpty) {
+      showTextOnSnackBar("标题、艺术家、专辑不能为空");
+      return;
+    }
+
+    await AudioMetadataOverrideStore.instance.setOverride(
+      audio: widget.audio,
+      title: title,
+      artist: artist,
+      album: album,
+    );
+    AudioLibrary.instance.rebuildCollectionsFromCurrentFolders();
+    if (mounted) {
+      showTextOnSnackBar("已保存音频标签覆盖");
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _applyLyricSource(SongSearchResult result) async {
+    final source = switch (result.source) {
+      ResultSource.qq => LyricSourceType.qq,
+      ResultSource.kugou => LyricSourceType.kugou,
+      ResultSource.netease => LyricSourceType.netease,
+    };
+    LYRIC_SOURCES[widget.audio.path] = LyricSource(
+      source,
+      qqSongId: result.qqSongId,
+      kugouSongHash: result.kugouSongHash,
+      neteaseSongId: result.neteaseSongId,
+    );
+    await saveLyricSources();
+    showTextOnSnackBar("已设置在线歌词来源");
+  }
+
+  Future<void> _applyCover(SongSearchResult result) async {
+    final url = result.coverUrl;
+    if (url == null || url.isEmpty) {
+      showTextOnSnackBar("该匹配结果没有可用封面");
+      return;
+    }
+    setState(() {
+      _busy = true;
+    });
+    final cover = await OnlineCoverStore.instance.setCoverFromUrl(
+      audio: widget.audio,
+      url: url,
+    );
+    setState(() {
+      _busy = false;
+    });
+    if (cover == null) {
+      showTextOnSnackBar("在线封面应用失败");
+      return;
+    }
+    widget.audio.clearCoverCache();
+    showTextOnSnackBar("已应用在线封面");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Dialog(
+      insetPadding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: SizedBox(
+        width: 720,
+        height: 560,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "音乐编辑",
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: "标题",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: artistController,
+                      decoration: const InputDecoration(
+                        labelText: "艺术家",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: albumController,
+                      decoration: const InputDecoration(
+                        labelText: "专辑",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _saveOverride,
+                    icon: const Icon(Symbols.save),
+                    label: const Text("保存元信息覆盖"),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_busy)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "在线匹配结果",
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: FutureBuilder(
+                  future: _searchFuture,
+                  builder: (context, snapshot) {
+                    final result = snapshot.data;
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (result == null || result.isEmpty) {
+                      return const Center(child: Text("无在线匹配结果"));
+                    }
+                    return ListView.builder(
+                      itemCount: result.length,
+                      itemBuilder: (context, i) {
+                        final item = result[i];
+                        return ListTile(
+                          dense: true,
+                          title: Text("${item.title} - ${item.artists}"),
+                          subtitle: Text(
+                            "${item.album} | 匹配概率 ${(item.score * 100).toStringAsFixed(1)}%",
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              OutlinedButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _applyLyricSource(item),
+                                child: const Text("设歌词"),
+                              ),
+                              OutlinedButton(
+                                onPressed:
+                                    _busy ? null : () => _applyCover(item),
+                                child: const Text("设封面"),
+                              ),
+                              OutlinedButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () {
+                                        titleController.text = item.title;
+                                        artistController.text = item.artists;
+                                        albumController.text = item.album;
+                                      },
+                                child: const Text("填入到表单"),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("关闭"),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

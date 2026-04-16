@@ -1,9 +1,12 @@
-import 'package:coriander_player/utils.dart';
-import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/component/album_tile.dart';
 import 'package:coriander_player/component/artist_tile.dart';
+import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/play_count_store.dart';
 import 'package:coriander_player/src/rust/api/utils.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AudioDetailPage extends StatelessWidget {
@@ -67,12 +70,27 @@ class AudioDetailPage extends StatelessWidget {
                       ),
                   },
                 ),
-                Text(audio.title, style: styleTitle),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(audio.title, style: styleTitle),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: () {
+                        context.pushReplacement(
+                          app_paths.AUDIOS_PAGE,
+                          extra: audio,
+                        );
+                      },
+                      icon: const Icon(Symbols.my_location),
+                      label: const Text("定位到音乐列表"),
+                    ),
+                  ],
+                ),
               ],
             ),
             space,
-
-            /// artists
             _AudioDetailTile(
               title: "艺术家",
               detail: Wrap(
@@ -89,8 +107,6 @@ class AudioDetailPage extends StatelessWidget {
                 ),
               ),
             ),
-
-            /// album
             _AudioDetailTile(
               title: "专辑",
               detail: AlbumTile(album: album),
@@ -113,29 +129,33 @@ class AudioDetailPage extends StatelessWidget {
               title: "采样率",
               detail: Text("${audio.sampleRate} hz"),
             ),
-
-            /// path
+            _AudioDetailTile(
+              title: "播放次数",
+              detail: Text("${PlayCountStore.instance.get(audio)}"),
+            ),
             Wrap(
               spacing: 8.0,
               children: [
                 Text("路径", style: styleTitle),
                 TextButton(
                   onPressed: () async {
-                    final result = await showInExplorer(path: audio.path);
+                    final result = await showInExplorer(path: audio.mediaPath);
 
                     if (!result && context.mounted) {
                       showTextOnSnackBar("打开失败");
                     }
                   },
-                  child: const Text("在文件资源管理器中显示"),
+                  child: const Text("在资源管理器中显示"),
                 )
               ],
             ),
             const SizedBox(height: 8),
-            Text(audio.path, style: styleContent),
+            Text(audio.mediaPath, style: styleContent),
+            if (audio.isCueTrack) ...[
+              const SizedBox(height: 8),
+              Text("CUE 轨道标识：${audio.path}", style: styleContent),
+            ],
             space,
-
-            /// modified
             _AudioDetailTile(
               title: "修改时间",
               detail: Text(
@@ -144,8 +164,6 @@ class AudioDetailPage extends StatelessWidget {
                 ).toString(),
               ),
             ),
-
-            /// created
             _AudioDetailTile(
               title: "创建时间",
               detail: Text(

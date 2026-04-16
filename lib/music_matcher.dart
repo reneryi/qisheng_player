@@ -49,9 +49,19 @@ class SongSearchResult {
   /// for kugou result
   String? kugouSongHash;
 
+  String? coverUrl;
+
   SongSearchResult(
-      this.source, this.title, this.artists, this.album, this.score,
-      {this.qqSongId, this.neteaseSongId, this.kugouSongHash});
+    this.source,
+    this.title,
+    this.artists,
+    this.album,
+    this.score, {
+    this.qqSongId,
+    this.neteaseSongId,
+    this.kugouSongHash,
+    this.coverUrl,
+  });
 
   @override
   String toString() {
@@ -68,7 +78,7 @@ class SongSearchResult {
     final List singer = itemSong["singer"];
     final buffer = StringBuffer(singer.first["name"]);
     for (int i = 1; i < singer.length; ++i) {
-      buffer.write("、${singer[i]["name"]}");
+      buffer.write(" / ${singer[i]["name"]}");
     }
 
     final title = itemSong["name"] ?? "";
@@ -82,6 +92,9 @@ class SongSearchResult {
       album,
       _computeScore(audio, title, artists, album),
       qqSongId: itemSong["id"],
+      coverUrl: itemSong["album"]?["mid"] == null
+          ? null
+          : "https://y.qq.com/music/photo_new/T002R800x800M000${itemSong["album"]["mid"]}.jpg",
     );
   }
 
@@ -91,7 +104,7 @@ class SongSearchResult {
     final List artistList = song["artists"];
     final buffer = StringBuffer(artistList.first["name"]);
     for (int i = 1; i < artistList.length; ++i) {
-      buffer.write("、${artistList[i]["name"]}");
+      buffer.write(" / ${artistList[i]["name"]}");
     }
     final artists = buffer.toString();
 
@@ -104,6 +117,7 @@ class SongSearchResult {
       album,
       _computeScore(audio, title, artists, album),
       neteaseSongId: song["id"].toString(),
+      coverUrl: song["album"]?["picUrl"]?.toString(),
     );
   }
 
@@ -119,6 +133,7 @@ class SongSearchResult {
       album,
       _computeScore(audio, title, artists, album),
       kugouSongHash: info["hash"],
+      coverUrl: info["imgurl"]?.toString().replaceAll("{size}", "480"),
     );
   }
 }
@@ -176,7 +191,7 @@ Future<Lrc?> _getNeteaseUnsyncLyric(String neteaseSongId) async {
       return Lrc.fromLrcText(
         lrcText + lrcTrans,
         LrcSource.web,
-        separator: "┃",
+        separator: " | ",
       );
     }
   } catch (err, trace) {
@@ -225,9 +240,9 @@ Future<Lyric?> getOnlineLyric({
 }) async {
   Lyric? lyric;
   if (qqSongId != null) {
-    lyric = (await _getQQSyncLyric(qqSongId));
+    lyric = await _getQQSyncLyric(qqSongId);
   } else if (kugouSongHash != null) {
-    lyric = (await _getKugouSyncLyric(kugouSongHash));
+    lyric = await _getKugouSyncLyric(kugouSongHash);
   } else if (neteaseSongId != null) {
     lyric = await _getNeteaseUnsyncLyric(neteaseSongId);
   }

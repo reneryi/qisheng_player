@@ -1,11 +1,15 @@
 // ignore_for_file: camel_case_types
 
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/component/title_bar.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/online_cover_store.dart';
+import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/page/now_playing_page/component/current_playlist_view.dart';
 import 'package:coriander_player/page/now_playing_page/component/filled_icon_button_style.dart';
@@ -39,6 +43,7 @@ enum NowPlayingViewMode {
 final NOW_PLAYING_VIEW_MODE = ValueNotifier(
   AppPreference.instance.nowPlayingPagePref.nowPlayingViewMode,
 );
+final NOW_PLAYING_CONTROLS_VISIBLE = ValueNotifier(true);
 
 class NowPlayingPage extends StatefulWidget {
   const NowPlayingPage({super.key});
@@ -50,6 +55,7 @@ class NowPlayingPage extends StatefulWidget {
 class _NowPlayingPageState extends State<NowPlayingPage> {
   final playbackService = PlayService.instance.playbackService;
   ImageProvider<Object>? nowPlayingCover;
+  Timer? _hideControlsTimer;
 
   void updateCover() {
     playbackService.nowPlaying?.cover.then((cover) {
@@ -66,11 +72,22 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     super.initState();
     playbackService.addListener(updateCover);
     updateCover();
+    _onUserInteracted();
+  }
+
+  void _onUserInteracted() {
+    NOW_PLAYING_CONTROLS_VISIBLE.value = true;
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(seconds: 5), () {
+      NOW_PLAYING_CONTROLS_VISIBLE.value = false;
+    });
   }
 
   @override
   void dispose() {
     playbackService.removeListener(updateCover);
+    _hideControlsTimer?.cancel();
+    NOW_PLAYING_CONTROLS_VISIBLE.value = true;
     super.dispose();
   }
 
@@ -114,19 +131,24 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               child: const ColoredBox(color: Colors.transparent),
             ),
           ],
-          ChangeNotifierProvider.value(
-            value: PlayService.instance.playbackService,
-            builder: (context, _) {
-              return ResponsiveBuilder2(builder: (context, screenType) {
-                switch (screenType) {
-                  case ScreenType.small:
-                    return const _NowPlayingPage_Small();
-                  case ScreenType.medium:
-                  case ScreenType.large:
-                    return const _NowPlayingPage_Large();
-                }
-              });
-            },
+          Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _onUserInteracted(),
+            onPointerMove: (_) => _onUserInteracted(),
+            child: ChangeNotifierProvider.value(
+              value: PlayService.instance.playbackService,
+              builder: (context, _) {
+                return ResponsiveBuilder2(builder: (context, screenType) {
+                  switch (screenType) {
+                    case ScreenType.small:
+                      return const _NowPlayingPage_Small();
+                    case ScreenType.medium:
+                    case ScreenType.large:
+                      return const _NowPlayingPage_Large();
+                  }
+                });
+              },
+            ),
           ),
         ],
       ),
@@ -178,6 +200,82 @@ class _NowPlayingMoreAction extends StatelessWidget {
     return MenuAnchor(
       menuChildren: [
         SubmenuButton(
+          menuChildren: [
+            MenuItemButton(
+              onPressed: () async {
+                final controller = TextEditingController();
+                final name = await showDialog<String>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("新建歌单"),
+                    content: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: "歌单名称",
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (value) {
+                        Navigator.pop(context, value);
+                      },
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("取消"),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.pop(context, controller.text);
+                        },
+                        child: const Text("创建"),
+                      ),
+                    ],
+                  ),
+                );
+                final trimmed = name?.trim();
+                if (trimmed == null || trimmed.isEmpty) return;
+                if (PLAYLISTS.any((item) => item.name == trimmed)) {
+                  showTextOnSnackBar("歌单“$trimmed”已存在");
+                  return;
+                }
+                final playlist = Playlist(trimmed, {});
+                playlist.addAudio(nowPlaying);
+                PLAYLISTS.add(playlist);
+                scheduleSavePlaylists();
+                showTextOnSnackBar("已创建歌单“$trimmed”并添加当前歌曲");
+              },
+              leadingIcon: const Icon(Symbols.add),
+              child: const Text("新建歌单并添加"),
+            ),
+            if (PLAYLISTS.isEmpty)
+              const MenuItemButton(
+                onPressed: null,
+                child: Text("暂无歌单"),
+              )
+            else
+              ...List.generate(
+                PLAYLISTS.length,
+                (i) => MenuItemButton(
+                  onPressed: () {
+                    final added = PLAYLISTS[i].addAudio(nowPlaying);
+                    if (!added) {
+                      showTextOnSnackBar("歌曲“${nowPlaying.title}”已在歌单中");
+                      return;
+                    }
+                    showTextOnSnackBar(
+                      "已添加“${nowPlaying.title}”到歌单“${PLAYLISTS[i].name}”",
+                    );
+                  },
+                  leadingIcon: const Icon(Symbols.queue_music),
+                  child: Text(PLAYLISTS[i].name),
+                ),
+              ),
+          ],
+          leadingIcon: const Icon(Symbols.queue_music),
+          child: const Text("添加到歌单"),
+        ),
+        SubmenuButton(
           menuChildren: List.generate(
             nowPlaying.splitedArtists.length,
             (i) => MenuItemButton(
@@ -212,6 +310,48 @@ class _NowPlayingMoreAction extends StatelessWidget {
           leadingIcon: const Icon(Symbols.info),
           child: const Text("详细信息"),
         ),
+        MenuItemButton(
+          onPressed: () async {
+            if (nowPlaying.isCueTrack) {
+              showTextOnSnackBar("CUE 分轨不支持直接删除，请删除源文件。");
+              return;
+            }
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text("删除歌曲"),
+                content: Text("确定删除“${nowPlaying.title}”？该操作会删除本地文件。"),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text("取消"),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text("删除"),
+                  ),
+                ],
+              ),
+            );
+            if (confirm != true) return;
+
+            try {
+              final file = File(nowPlaying.mediaPath);
+              if (file.existsSync()) {
+                await file.delete();
+              }
+              AudioLibrary.instance.removeAudioByPath(nowPlaying.path);
+              OnlineCoverStore.instance.removeByPath(nowPlaying.path);
+              removeAudioFromAllPlaylistsByPath(nowPlaying.path);
+              playbackService.removeAudioFromPlaylistByPath(nowPlaying.path);
+              showTextOnSnackBar("已删除“${nowPlaying.title}”");
+            } catch (err) {
+              showTextOnSnackBar("删除失败：$err");
+            }
+          },
+          leadingIcon: const Icon(Symbols.delete),
+          child: const Text("删除歌曲"),
+        ),
       ],
       builder: (context, controller, _) => IconButton(
         tooltip: "更多",
@@ -243,12 +383,16 @@ class _DesktopLyricSwitch extends StatelessWidget {
           future: desktopLyricService.desktopLyric,
           builder: (context, snapshot) => IconButton(
             tooltip: "桌面歌词；现在：${snapshot.data == null ? "禁用" : "启用"}",
-            onPressed: snapshot.data == null
-                ? desktopLyricService.startDesktopLyric
-                : desktopLyricService.isLocked
-                    ? desktopLyricService.sendUnlockMessage
-                    : desktopLyricService.killDesktopLyric,
-            icon: snapshot.connectionState == ConnectionState.done
+            onPressed: !desktopLyricService.isStarting &&
+                    snapshot.connectionState == ConnectionState.done
+                ? snapshot.data == null
+                    ? desktopLyricService.startDesktopLyric
+                    : desktopLyricService.isLocked
+                        ? desktopLyricService.sendUnlockMessage
+                        : desktopLyricService.killDesktopLyric
+                : null,
+            icon: !desktopLyricService.isStarting &&
+                    snapshot.connectionState == ConnectionState.done
                 ? Icon(
                     desktopLyricService.isLocked ? Symbols.lock : Symbols.toast,
                     fill: snapshot.data == null ? 0 : 1,
@@ -294,7 +438,7 @@ class _NowPlayingVolDspSliderState extends State<_NowPlayingVolDspSlider> {
       menuChildren: [
         SliderTheme(
           data: const SliderThemeData(
-            showValueIndicator: ShowValueIndicator.always,
+            showValueIndicator: ShowValueIndicator.onDrag,
           ),
           child: ValueListenableBuilder(
             valueListenable: dragVolDsp,
@@ -483,7 +627,7 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
       children: [
         SliderTheme(
           data: const SliderThemeData(
-            showValueIndicator: ShowValueIndicator.always,
+            showValueIndicator: ShowValueIndicator.onDrag,
           ),
           child: StreamBuilder(
             stream: playbackService.playerStateStream,
@@ -639,22 +783,28 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              nowPlaying == null ? "Coriander Music" : nowPlaying.title,
-              maxLines: 1,
+            _MarqueeText(
+              text: nowPlaying == null ? "Coriander Music" : nowPlaying.title,
               style: TextStyle(
                 color: scheme.onSecondaryContainer,
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
               ),
             ),
-            Text(
-              nowPlaying == null
+            _MarqueeText(
+              text: nowPlaying == null
                   ? "Enjoy Music"
                   : "${nowPlaying.artist} - ${nowPlaying.album}",
-              maxLines: 1,
               style: TextStyle(color: scheme.onSecondaryContainer),
             ),
+            if (nowPlaying != null)
+              Text(
+                nowPlaying.qualitySummary,
+                style: TextStyle(
+                  color: scheme.onSecondaryContainer.withValues(alpha: 0.9),
+                  fontSize: 12,
+                ),
+              ),
             const SizedBox(height: 16),
             Expanded(
               child: Center(
@@ -694,6 +844,153 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
   @override
   void dispose() {
     playbackService.removeListener(updateCover);
+    super.dispose();
+  }
+}
+
+class _MarqueeText extends StatelessWidget {
+  const _MarqueeText({
+    required this.text,
+    required this.style,
+  });
+
+  final String text;
+  final TextStyle style;
+
+  String _sanitizeText(String value) {
+    final cleaned = value
+        // 移除控制字符、BOM、替代字符，避免滚动文本出现异常占位图形
+        .replaceAll(
+          RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF\uFFFD]'),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned.isEmpty ? " " : cleaned;
+  }
+
+  double _measureTextWidth(BuildContext context, String text) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    return painter.width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final displayText = _sanitizeText(text);
+        if (!constraints.hasBoundedWidth) {
+          return Text(displayText, maxLines: 1, style: style);
+        }
+        final textWidth = _measureTextWidth(context, displayText);
+        final availableWidth = constraints.maxWidth;
+        if (textWidth <= availableWidth) {
+          return Text(displayText, maxLines: 1, style: style);
+        }
+
+        return _MarqueeTextScrollable(
+          text: displayText,
+          style: style,
+          textWidth: textWidth,
+          gap: 56.0,
+          minDuration: const Duration(milliseconds: 4200),
+        );
+      },
+    );
+  }
+}
+
+class _MarqueeTextScrollable extends StatefulWidget {
+  const _MarqueeTextScrollable({
+    required this.text,
+    required this.style,
+    required this.textWidth,
+    required this.gap,
+    required this.minDuration,
+  });
+
+  final String text;
+  final TextStyle style;
+  final double textWidth;
+  final double gap;
+  final Duration minDuration;
+
+  @override
+  State<_MarqueeTextScrollable> createState() => _MarqueeTextScrollableState();
+}
+
+class _MarqueeTextScrollableState extends State<_MarqueeTextScrollable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Duration? _lastDuration;
+
+  Duration _resolveDuration() {
+    final distance = widget.textWidth + widget.gap;
+    final bySpeed = Duration(milliseconds: (distance * 45).round());
+    if (bySpeed > widget.minDuration) {
+      return bySpeed;
+    }
+    return widget.minDuration;
+  }
+
+  void _ensureAnimation() {
+    final duration = _resolveDuration();
+    if (_lastDuration == duration && _controller.isAnimating) return;
+    _lastDuration = duration;
+    _controller
+      ..duration = duration
+      ..repeat();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this);
+    _ensureAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MarqueeTextScrollable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _ensureAnimation();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final distance = widget.textWidth + widget.gap;
+          return Transform.translate(
+            offset: Offset(-distance * _controller.value, 0),
+            child: IgnorePointer(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(widget.text, style: widget.style, maxLines: 1),
+                    SizedBox(width: widget.gap),
+                    Text(widget.text, style: widget.style, maxLines: 1),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
     super.dispose();
   }
 }

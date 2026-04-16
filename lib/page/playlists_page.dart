@@ -1,12 +1,15 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as path;
 
 class PlaylistsPage extends StatefulWidget {
   const PlaylistsPage({super.key});
@@ -16,6 +19,66 @@ class PlaylistsPage extends StatefulWidget {
 }
 
 class _PlaylistsPageState extends State<PlaylistsPage> {
+  String _normalizePathKey(String input) =>
+      input.replaceAll('/', '\\').toLowerCase();
+
+  Future<void> importM3u(BuildContext context) async {
+    final picker = OpenFilePicker()
+      ..title = "导入播放列表"
+      ..filterSpecification = {
+        "播放列表": "*.m3u;*.m3u8",
+      };
+    final selected = picker.getFile();
+    if (selected == null) return;
+
+    final m3uPath = selected.path;
+    final m3uDir = path.dirname(m3uPath);
+    final m3uName = path.basenameWithoutExtension(m3uPath).trim();
+    final playlistName = m3uName.isEmpty ? "导入歌单" : m3uName;
+
+    final pathToAudio = <String, Audio>{
+      for (final audio in AudioLibrary.instance.audioCollection)
+        _normalizePathKey(audio.path): audio
+    };
+    final matchedAudios = <Audio>[];
+    final existed = <String>{};
+
+    final lines = selected.readAsLinesSync();
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+
+      final resolvedPath = path.isAbsolute(line) ? line : path.join(m3uDir, line);
+      final key = _normalizePathKey(path.normalize(resolvedPath));
+      final audio = pathToAudio[key];
+      if (audio == null) continue;
+      if (existed.add(audio.path)) {
+        matchedAudios.add(audio);
+      }
+    }
+
+    if (matchedAudios.isEmpty) {
+      showTextOnSnackBar("导入失败：未匹配到本地音乐库中的歌曲");
+      return;
+    }
+
+    String finalName = playlistName;
+    int suffix = 2;
+    while (PLAYLISTS.any((item) => item.name == finalName)) {
+      finalName = "$playlistName ($suffix)";
+      suffix++;
+    }
+
+    setState(() {
+      PLAYLISTS.add(Playlist(
+        finalName,
+        {for (final audio in matchedAudios) audio.path: audio},
+      ));
+    });
+    scheduleSavePlaylists();
+    showTextOnSnackBar("已导入歌单“$finalName”，共${matchedAudios.length}首");
+  }
+
   void newPlaylist(BuildContext context) async {
     final name = await showDialog<String>(
       context: context,
@@ -25,6 +88,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     setState(() {
       PLAYLISTS.add(Playlist(name, {}));
     });
+    scheduleSavePlaylists();
   }
 
   void editPlaylist(
@@ -39,6 +103,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     setState(() {
       playlist.name = name;
     });
+    scheduleSavePlaylists();
   }
 
   @override
@@ -74,6 +139,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
               tooltip: "删除",
               onPressed: () => setState(() {
                 PLAYLISTS.remove(PLAYLISTS[i]);
+                scheduleSavePlaylists();
               }),
               color: scheme.error,
               icon: const Icon(Symbols.delete),
@@ -88,13 +154,27 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
           extra: PLAYLISTS[i],
         ),
       ),
-      primaryAction: FilledButton.icon(
-        onPressed: () => newPlaylist(context),
-        icon: const Icon(Symbols.add),
-        label: const Text("新建歌单"),
-        style: const ButtonStyle(
-          fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
-        ),
+      primaryAction: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton.icon(
+            onPressed: () => importM3u(context),
+            icon: const Icon(Symbols.file_open),
+            label: const Text("导入M3U"),
+            style: const ButtonStyle(
+              fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: () => newPlaylist(context),
+            icon: const Icon(Symbols.add),
+            label: const Text("新建歌单"),
+            style: const ButtonStyle(
+              fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+            ),
+          ),
+        ],
       ),
       enableShufflePlay: false,
       enableSortMethod: true,

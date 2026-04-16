@@ -1,5 +1,6 @@
 // ignore_for_file: non_constant_identifier_names
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,17 +9,42 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/utils.dart';
 
 List<Playlist> PLAYLISTS = [];
+Timer? _playlistSaveDebounce;
+
+void scheduleSavePlaylists({Duration delay = const Duration(milliseconds: 200)}) {
+  _playlistSaveDebounce?.cancel();
+  _playlistSaveDebounce = Timer(delay, () {
+    unawaited(savePlaylists());
+  });
+}
+
+void removeAudioFromAllPlaylistsByPath(String path) {
+  bool changed = false;
+  for (final playlist in PLAYLISTS) {
+    changed = playlist.audios.remove(path) != null || changed;
+  }
+  if (changed) {
+    scheduleSavePlaylists();
+  }
+}
 
 Future<void> readPlaylists() async {
   try {
     final supportPath = (await getAppDataDir()).path;
     final playlistsPath = "$supportPath\\playlists.json";
 
+    PLAYLISTS.clear();
+    if (!File(playlistsPath).existsSync()) return;
+
+    final libraryAudios = <String, Audio>{
+      for (final audio in AudioLibrary.instance.audioCollection) audio.path: audio,
+    };
+
     final playlistsStr = File(playlistsPath).readAsStringSync();
     final List playlistsJson = json.decode(playlistsStr);
 
     for (Map item in playlistsJson) {
-      PLAYLISTS.add(Playlist.fromMap(item));
+      PLAYLISTS.add(Playlist.fromMap(item, libraryAudios: libraryAudios));
     }
   } catch (err, trace) {
     LOGGER.e(err, stackTrace: trace);
@@ -51,6 +77,37 @@ class Playlist {
 
   Playlist(this.name, this.audios);
 
+  bool containsAudio(Audio audio) => audios.containsKey(audio.path);
+
+  bool addAudio(Audio audio) {
+    if (audios.containsKey(audio.path)) return false;
+    audios[audio.path] = audio;
+    scheduleSavePlaylists();
+    return true;
+  }
+
+  bool removeAudioByPath(String path) {
+    final removed = audios.remove(path) != null;
+    if (removed) {
+      scheduleSavePlaylists();
+    }
+    return removed;
+  }
+
+  void applyCustomOrder(List<Audio> orderedAudios) {
+    final rebuilt = <String, Audio>{};
+    for (final item in orderedAudios) {
+      rebuilt[item.path] = item;
+    }
+    for (final entry in audios.entries) {
+      if (!rebuilt.containsKey(entry.key)) {
+        rebuilt[entry.key] = entry.value;
+      }
+    }
+    audios = rebuilt;
+    scheduleSavePlaylists();
+  }
+
   Map toMap() {
     final List<Map> audioMaps = [];
     for (var item in audios.values) {
@@ -59,11 +116,16 @@ class Playlist {
     return {"name": name, "audios": audioMaps};
   }
 
-  factory Playlist.fromMap(Map map) {
+  factory Playlist.fromMap(
+    Map map, {
+    Map<String, Audio>? libraryAudios,
+  }) {
     final Map<String, Audio> audios = {};
-    final List audioMaps = map["audios"];
+    final List audioMaps = map["audios"] ?? [];
     for (var item in audioMaps) {
-      final audio = Audio.fromMap(item);
+      final path = item["path"]?.toString();
+      if (path == null || path.isEmpty) continue;
+      final audio = libraryAudios?[path] ?? Audio.fromMap(item);
       audios[audio.path] = audio;
     }
     return Playlist(map["name"], audios);

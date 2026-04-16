@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/play_count_store.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/src/rust/api/smtc_flutter.dart';
@@ -33,6 +35,7 @@ class PlaybackService extends ChangeNotifier {
 
   late StreamSubscription _playerStateStreamSub;
   late StreamSubscription _smtcEventStreamSub;
+  late StreamSubscription<double> _rawPositionStreamSub;
 
   PlaybackService(this.playService) {
     _playerStateStreamSub = playerStateStream.listen((event) {
@@ -59,22 +62,30 @@ class PlaybackService extends ChangeNotifier {
       }
     });
 
-    positionStream.listen((progress) {
-      _smtc.updateTimeProperties(progress: (progress * 1000).floor());
-    });
+    _rawPositionStreamSub = _player.positionStream.listen(_handleRawPosition);
   }
 
   final _player = BassPlayer();
   final _smtc = SmtcFlutter();
   final _pref = AppPreference.instance.playbackPref;
+  final _positionStreamController = StreamController<double>.broadcast();
+  bool _cueAutoNextTriggered = false;
 
   late final _wasapiExclusive = ValueNotifier(_player.wasapiExclusive);
   ValueNotifier<bool> get wasapiExclusive => _wasapiExclusive;
+
+  late final _enableVolumeLeveling = ValueNotifier(_pref.enableVolumeLeveling);
+  ValueNotifier<bool> get enableVolumeLeveling => _enableVolumeLeveling;
+
+  late final _volumeLevelingPreampDb =
+      ValueNotifier(_pref.volumeLevelingPreampDb);
+  ValueNotifier<double> get volumeLevelingPreampDb => _volumeLevelingPreampDb;
 
   /// 独占模式
   void useExclusiveMode(bool exclusive) {
     if (_player.useExclusiveMode(exclusive)) {
       _wasapiExclusive.value = exclusive;
+      _applyOutputVolume(nowPlaying);
     }
   }
 
@@ -85,6 +96,7 @@ class PlaybackService extends ChangeNotifier {
 
   final ValueNotifier<List<Audio>> playlist = ValueNotifier([]);
   List<Audio> _playlistBackup = [];
+  int? _lastManualRandomSourceIndex;
 
   late final _playMode = ValueNotifier(_pref.playMode);
   ValueNotifier<PlayMode> get playMode => _playMode;
@@ -97,21 +109,112 @@ class PlaybackService extends ChangeNotifier {
   late final _shuffle = ValueNotifier(false);
   ValueNotifier<bool> get shuffle => _shuffle;
 
-  double get length => _player.length;
+  double _resolveNowPlayingLength() {
+    final audio = nowPlaying;
+    if (audio == null || !audio.isCueTrack) return _player.length;
 
-  double get position => _player.position;
+    final startSec = (audio.cueStartMs ?? 0) / 1000.0;
+    final endSec = (audio.cueEndMs ?? 0) / 1000.0;
+    final segmentLength = (endSec - startSec).clamp(0.0, double.infinity);
+    if (segmentLength > 0) return segmentLength;
+    if (audio.duration > 0) return audio.duration.toDouble();
+    return _player.length;
+  }
+
+  double _toDisplayPosition(double rawPosition) {
+    final audio = nowPlaying;
+    if (audio == null || !audio.isCueTrack) return rawPosition;
+
+    final startSec = (audio.cueStartMs ?? 0) / 1000.0;
+    final localPosition = rawPosition - startSec;
+    return localPosition.clamp(0.0, _resolveNowPlayingLength());
+  }
+
+  bool _shouldAutoNextCue(double rawPosition) {
+    final audio = nowPlaying;
+    if (audio == null || !audio.isCueTrack) return false;
+    final cueEndMs = audio.cueEndMs;
+    if (cueEndMs == null) return false;
+    return rawPosition >= (cueEndMs / 1000.0) - 0.02;
+  }
+
+  void _handleCueSegmentCompleted() {
+    final isForward = playMode.value == PlayMode.forward;
+    final isLast = _playlistIndex != null &&
+        playlist.value.isNotEmpty &&
+        _playlistIndex! >= playlist.value.length - 1;
+    if (isForward && isLast) {
+      final cueEndSec = (nowPlaying?.cueEndMs ?? 0) / 1000.0;
+      if (cueEndSec > 0) {
+        _player.seek(cueEndSec);
+      }
+      pause();
+      notifyListeners();
+      return;
+    }
+    _autoNextAudio();
+  }
+
+  void _handleRawPosition(double rawPosition) {
+    if (_shouldAutoNextCue(rawPosition)) {
+      if (!_cueAutoNextTriggered) {
+        _cueAutoNextTriggered = true;
+        _handleCueSegmentCompleted();
+      }
+      return;
+    }
+
+    _cueAutoNextTriggered = false;
+    final displayPosition = _toDisplayPosition(rawPosition);
+    _positionStreamController.add(displayPosition);
+    _smtc.updateTimeProperties(progress: (displayPosition * 1000).floor());
+  }
+
+  double get length => _resolveNowPlayingLength();
+
+  double get position => _toDisplayPosition(_player.position);
 
   PlayerState get playerState => _player.playerState;
 
-  double get volumeDsp => _player.volumeDsp;
+  double get volumeDsp => _pref.volumeDsp;
+
+  double _resolveOutputVolumeDsp(Audio? audio) {
+    final baseVolume = _pref.volumeDsp;
+    if (!_pref.enableVolumeLeveling) return baseVolume;
+
+    final gainDb = audio?.replayGainDb;
+    if (gainDb == null) return baseVolume;
+
+    final compensationDb = (-gainDb) + _pref.volumeLevelingPreampDb;
+    final scale = math.pow(10.0, compensationDb / 20.0).toDouble();
+    return (baseVolume * scale).clamp(0.05, 3.0);
+  }
+
+  void _applyOutputVolume(Audio? audio) {
+    _player.setVolumeDsp(_resolveOutputVolumeDsp(audio));
+  }
 
   /// 修改解码时的音量（不影响 Windows 系统音量）
   void setVolumeDsp(double volume) {
-    _player.setVolumeDsp(volume);
     _pref.volumeDsp = volume;
+    _applyOutputVolume(nowPlaying);
   }
 
-  Stream<double> get positionStream => _player.positionStream;
+  void setEnableVolumeLeveling(bool enabled) {
+    if (_pref.enableVolumeLeveling == enabled) return;
+    _pref.enableVolumeLeveling = enabled;
+    _enableVolumeLeveling.value = enabled;
+    _applyOutputVolume(nowPlaying);
+  }
+
+  void setVolumeLevelingPreampDb(double preampDb) {
+    final clipped = preampDb.clamp(-12.0, 12.0);
+    _pref.volumeLevelingPreampDb = clipped;
+    _volumeLevelingPreampDb.value = clipped;
+    _applyOutputVolume(nowPlaying);
+  }
+
+  Stream<double> get positionStream => _positionStreamController.stream;
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
 
@@ -126,12 +229,17 @@ class PlaybackService extends ChangeNotifier {
     try {
       _playlistIndex = audioIndex;
       nowPlaying = playlist[audioIndex];
-      _player.setSource(nowPlaying!.path);
-      setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
+      _cueAutoNextTriggered = false;
+      _player.setSource(nowPlaying!.mediaPath);
+      if (nowPlaying!.isCueTrack) {
+        _player.seek((nowPlaying!.cueStartMs ?? 0) / 1000.0);
+      }
+      _applyOutputVolume(nowPlaying);
 
       playService.lyricService.updateLyric();
 
       _player.start();
+      unawaited(PlayCountStore.instance.increase(nowPlaying!));
       notifyListeners();
       ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
 
@@ -141,7 +249,7 @@ class PlaybackService extends ChangeNotifier {
         artist: nowPlaying!.artist,
         album: nowPlaying!.album,
         duration: (length * 1000).floor(),
-        path: nowPlaying!.path,
+        path: nowPlaying!.mediaPath,
       );
 
       playService.desktopLyricService.canSendMessage.then((canSend) {
@@ -252,11 +360,49 @@ class PlaybackService extends ChangeNotifier {
     }
   }
 
+  void _nextAudio_shuffleRandom() {
+    if (_playlistIndex == null || playlist.value.isEmpty) return;
+
+    final currentIndex = _playlistIndex!;
+    final allIndexes = List<int>.generate(playlist.value.length, (i) => i);
+
+    // 随机切歌时默认不重复当前歌曲；列表较长时再额外避免“立刻回到上次来源”。
+    final blocked = <int>{currentIndex};
+    if (playlist.value.length > 2 && _lastManualRandomSourceIndex != null) {
+      blocked.add(_lastManualRandomSourceIndex!);
+    }
+
+    var candidates = allIndexes.where((i) => !blocked.contains(i)).toList();
+    if (candidates.isEmpty && playlist.value.length > 1) {
+      candidates = allIndexes.where((i) => i != currentIndex).toList();
+    }
+    if (candidates.isEmpty) {
+      _nextAudio_singleLoop();
+      return;
+    }
+
+    final randomIndex = candidates[math.Random().nextInt(candidates.length)];
+    _lastManualRandomSourceIndex = currentIndex;
+    _loadAndPlay(randomIndex, playlist.value);
+  }
+
   /// 手动下一曲时默认循环播放列表
-  void nextAudio() => _nextAudio_loop();
+  void nextAudio() {
+    if (shuffle.value) {
+      _nextAudio_shuffleRandom();
+      return;
+    }
+    _lastManualRandomSourceIndex = null;
+    _nextAudio_loop();
+  }
 
   /// 手动上一曲时默认循环播放列表
   void lastAudio() {
+    if (shuffle.value) {
+      _nextAudio_shuffleRandom();
+      return;
+    }
+    _lastManualRandomSourceIndex = null;
     if (_playlistIndex == null) return;
 
     int newIndex = _playlistIndex! - 1;
@@ -265,6 +411,69 @@ class PlaybackService extends ChangeNotifier {
     }
 
     _loadAndPlay(newIndex, playlist.value);
+  }
+
+  void reorderPlaylist(int oldIndex, int newIndex) {
+    if (playlist.value.isEmpty) return;
+    if (oldIndex < 0 || oldIndex >= playlist.value.length) return;
+    if (newIndex < 0 || newIndex >= playlist.value.length) return;
+    if (oldIndex == newIndex) return;
+
+    final updated = List<Audio>.from(playlist.value);
+    final moved = updated.removeAt(oldIndex);
+    updated.insert(newIndex, moved);
+    playlist.value = updated;
+
+    if (!shuffle.value) {
+      _playlistBackup = List.from(updated);
+    }
+
+    if (nowPlaying != null) {
+      _playlistIndex =
+          updated.indexWhere((audio) => audio.path == nowPlaying!.path);
+    }
+
+    notifyListeners();
+  }
+
+  void removeAudioFromPlaylistByPath(String path) {
+    if (playlist.value.isEmpty) return;
+    final updated = playlist.value
+        .where((audio) => audio.path != path)
+        .toList(growable: false);
+    if (updated.length == playlist.value.length) return;
+
+    final removedCurrent = nowPlaying?.path == path;
+    final oldCurrentPath = nowPlaying?.path;
+
+    playlist.value = updated;
+    if (!shuffle.value) {
+      _playlistBackup = List.from(updated);
+    } else {
+      _playlistBackup.removeWhere((audio) => audio.path == path);
+    }
+
+    if (updated.isEmpty) {
+      nowPlaying = null;
+      _playlistIndex = null;
+      _cueAutoNextTriggered = false;
+      pause();
+      notifyListeners();
+      return;
+    }
+
+    if (!removedCurrent) {
+      final index = updated.indexWhere((audio) => audio.path == oldCurrentPath);
+      _playlistIndex = index < 0 ? 0 : index;
+      notifyListeners();
+      return;
+    }
+
+    int targetIndex = playlistIndex;
+    if (targetIndex >= updated.length) {
+      targetIndex = updated.length - 1;
+    }
+    _loadAndPlay(targetIndex, updated);
   }
 
   /// 暂停
@@ -304,13 +513,22 @@ class PlaybackService extends ChangeNotifier {
   void playAgain() => _nextAudio_singleLoop();
 
   void seek(double position) {
-    _player.seek(position);
+    final audio = nowPlaying;
+    if (audio != null && audio.isCueTrack) {
+      final cueStartSec = (audio.cueStartMs ?? 0) / 1000.0;
+      _cueAutoNextTriggered = false;
+      _player.seek(cueStartSec + position.clamp(0.0, length));
+    } else {
+      _player.seek(position);
+    }
     playService.lyricService.findCurrLyricLine();
   }
 
   void close() {
     _playerStateStreamSub.cancel();
     _smtcEventStreamSub.cancel();
+    _rawPositionStreamSub.cancel();
+    _positionStreamController.close();
     _player.free();
     _smtc.close();
   }

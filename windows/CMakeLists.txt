@@ -1,4 +1,4 @@
-# Project-level configuration.
+﻿# Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
 project(coriander_player LANGUAGES CXX)
 
@@ -106,3 +106,15 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Copy optional local BASS runtime binaries into the app folder.
+# Put required dlls under <repo>/BASS (not committed) for local development.
+set(BASS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../BASS")
+if(EXISTS "${BASS_SOURCE_DIR}/bass.dll")
+  install(DIRECTORY "${BASS_SOURCE_DIR}/"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/BASS"
+    COMPONENT Runtime
+    FILES_MATCHING PATTERN "*.dll")
+else()
+  message(WARNING "BASS runtime dlls not found at ${BASS_SOURCE_DIR}. Playback features will be unavailable.")
+endif()

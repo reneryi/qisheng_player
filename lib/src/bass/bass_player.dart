@@ -34,13 +34,18 @@ enum PlayerState {
   unknown,
 }
 
-const BASS_PLUGINS = [
-  "BASS\\bassape.dll",
-  "BASS\\bassdsd.dll",
-  "BASS\\bassflac.dll",
-  "BASS\\bassmidi.dll",
-  "BASS\\bassopus.dll",
-  "BASS\\basswv.dll"
+const BASS_REQUIRED_PLUGINS = [
+  "bassape.dll",
+  "bassdsd.dll",
+  "bassflac.dll",
+  "bassmidi.dll",
+  "bassopus.dll",
+  "basswv.dll",
+];
+
+/// 可选插件：缺失时不阻断启动，但具备时会扩展格式支持（如 DTS）。
+const BASS_OPTIONAL_PLUGINS = [
+  "bass_aac.dll",
 ];
 
 class BassPlayer {
@@ -59,6 +64,7 @@ class BassPlayer {
   final _positionStreamController = StreamController<double>.broadcast();
   final _playerStateStreamController =
       StreamController<PlayerState>.broadcast();
+  bool _completionEmitted = false;
 
   /// audio's length in seconds
   double get length => _fstream == null
@@ -116,6 +122,18 @@ class BassPlayer {
   Stream<PlayerState> get playerStateStream =>
       _playerStateStreamController.stream;
 
+  bool _isStreamAtEnd() {
+    if (_fstream == null) return false;
+
+    final streamLen =
+        _bass.BASS_ChannelGetLength(_fstream!, BASS.BASS_POS_BYTE);
+    if (streamLen <= 0) return false;
+
+    final streamPos =
+        _bass.BASS_ChannelGetPosition(_fstream!, BASS.BASS_POS_BYTE);
+    return streamPos >= streamLen;
+  }
+
   Timer _getPositionUpdater() {
     return Timer.periodic(
       const Duration(milliseconds: 33),
@@ -123,7 +141,10 @@ class BassPlayer {
         _positionStreamController.add(position);
 
         /// check if the channel has completed
-        if (playerState == PlayerState.stopped) {
+        if (!_completionEmitted &&
+            playerState == PlayerState.stopped &&
+            _isStreamAtEnd()) {
+          _completionEmitted = true;
           _playerStateStreamController.add(PlayerState.completed);
         }
       },
@@ -182,44 +203,102 @@ class BassPlayer {
     }
   }
 
+  void _loadBassPlugin(
+    String bassDir,
+    String pluginName, {
+    required bool required,
+  }) {
+    final pluginPath = path.join(bassDir, pluginName);
+    if (!File(pluginPath).existsSync()) {
+      if (required) {
+        throw FormatException("Missing required BASS plugin: $pluginPath");
+      }
+      LOGGER.w("[bass plugin] optional plugin missing: $pluginPath");
+      return;
+    }
+
+    final pluginPathP = pluginPath.toNativeUtf16() as ffi.Pointer<ffi.Char>;
+    final hplugin = _bass.BASS_PluginLoad(pluginPathP, BASS.BASS_UNICODE);
+    ffi.malloc.free(pluginPathP);
+
+    if (hplugin != 0) return;
+
+    final errCode = _bass.BASS_ErrorGetCode();
+    if (!required) {
+      LOGGER.w(
+        "[bass plugin] optional plugin load failed($errCode): $pluginPath",
+      );
+      return;
+    }
+
+    switch (errCode) {
+      case BASS.BASS_ERROR_FILEOPEN:
+        throw FormatException("The plugin could not be opened: $pluginPath");
+      case BASS.BASS_ERROR_FILEFORM:
+        throw FormatException("The file is not a plugin: $pluginPath");
+      case BASS.BASS_ERROR_VERSION:
+        throw FormatException(
+          "The plugin requires a different BASS version: $pluginPath",
+        );
+      case BASS.BASS_ERROR_ALREADY:
+        throw FormatException("The plugin is already loaded: $pluginPath");
+      default:
+        throw FormatException(
+          "Failed to load plugin($errCode): $pluginPath",
+        );
+    }
+  }
+
   /// load bass.dll from the exe's path\\BASS
   /// ensure that there's bass.dll at path of .exe\\BASS
   /// leave the device's output freq as it is
   BassPlayer() {
-    final bassLibPath = path.join(
-      path.dirname(Platform.resolvedExecutable),
-      "BASS",
-      "bass.dll",
-    );
-    _bassLib = ffi.DynamicLibrary.open(bassLibPath);
+    final exeDir = path.dirname(Platform.resolvedExecutable);
+    final bassDir = path.join(exeDir, "BASS");
+
+    final bassLibPath = path.join(bassDir, "bass.dll");
+    if (!File(bassLibPath).existsSync()) {
+      throw ArgumentError(
+        "Missing BASS runtime: $bassLibPath. "
+        "Please put required BASS dlls in: $bassDir",
+      );
+    }
+
+    try {
+      _bassLib = ffi.DynamicLibrary.open(bassLibPath);
+    } catch (err) {
+      throw ArgumentError(
+        "Failed to load dynamic library '$bassLibPath'. "
+        "This usually means missing dependency dlls in '$bassDir'. "
+        "Original error: $err",
+      );
+    }
     _bass = BASS.Bass(_bassLib);
 
-    final bassWasapiLibPath = path.join(
-      path.dirname(Platform.resolvedExecutable),
-      "BASS",
-      "basswasapi.dll",
-    );
-    _bassWasapiLib = ffi.DynamicLibrary.open(bassWasapiLibPath);
+    final bassWasapiLibPath = path.join(bassDir, "basswasapi.dll");
+    if (!File(bassWasapiLibPath).existsSync()) {
+      throw ArgumentError(
+        "Missing BASS runtime: $bassWasapiLibPath. "
+        "Please put required BASS dlls in: $bassDir",
+      );
+    }
+
+    try {
+      _bassWasapiLib = ffi.DynamicLibrary.open(bassWasapiLibPath);
+    } catch (err) {
+      throw ArgumentError(
+        "Failed to load dynamic library '$bassWasapiLibPath'. "
+        "Original error: $err",
+      );
+    }
     _bassWasapi = BASS.BassWasapi(_bassWasapiLib);
 
     // load add-ons to avoid using os codec or support more format
-    for (final plugin in BASS_PLUGINS) {
-      final pluginPathP = plugin.toNativeUtf16() as ffi.Pointer<ffi.Char>;
-      final hplugin = _bass.BASS_PluginLoad(pluginPathP, BASS.BASS_UNICODE);
-
-      if (hplugin == 0) {
-        switch (_bass.BASS_ErrorGetCode()) {
-          case BASS.BASS_ERROR_FILEOPEN:
-            throw const FormatException("The file could not be opened.");
-          case BASS.BASS_ERROR_FILEFORM:
-            throw const FormatException("The file is not a plugin.");
-          case BASS.BASS_ERROR_VERSION:
-            throw const FormatException(
-                "The plugin requires a different BASS version.");
-          case BASS.BASS_ERROR_ALREADY:
-            throw const FormatException("The plugin is already loaded.");
-        }
-      }
+    for (final plugin in BASS_REQUIRED_PLUGINS) {
+      _loadBassPlugin(bassDir, plugin, required: true);
+    }
+    for (final plugin in BASS_OPTIONAL_PLUGINS) {
+      _loadBassPlugin(bassDir, plugin, required: false);
     }
 
     try {
@@ -232,6 +311,7 @@ class BassPlayer {
   /// true: 操作成功；false: 操作失败
   bool useExclusiveMode(bool exclusive) {
     final prevState = wasapiExclusive;
+    final prevPlayerState = playerState;
     try {
       final lastPos = position;
       if (prevState) {
@@ -243,7 +323,9 @@ class BassPlayer {
         setSource(_fPath!);
         setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
         seek(lastPos);
-        start();
+        if (prevPlayerState == PlayerState.playing) {
+          start();
+        }
       }
       return true;
     } catch (err) {
@@ -278,6 +360,7 @@ class BassPlayer {
     if (handle != 0) {
       _fstream = handle;
       _fPath = path;
+      _completionEmitted = false;
     } else {
       _fstream = null;
       _fPath = null;
@@ -394,6 +477,7 @@ class BassPlayer {
   }
 
   void _start_wasapiExclusive() {
+    _positionUpdater?.cancel();
     _bassWasapiInit();
 
     if (_bassWasapi.BASS_WASAPI_Start() == BASS.FALSE) {
@@ -406,6 +490,7 @@ class BassPlayer {
           throw const FormatException("Some other mystery problem!");
       }
     }
+    _completionEmitted = false;
     _playerStateStreamController.add(playerState);
     _positionUpdater = _getPositionUpdater();
   }
@@ -419,6 +504,7 @@ class BassPlayer {
     if (wasapiExclusive) {
       return _start_wasapiExclusive();
     }
+    _positionUpdater?.cancel();
     if (_bass.BASS_ChannelStart(_fstream!) == 0) {
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_HANDLE:
@@ -433,6 +519,7 @@ class BassPlayer {
       }
     }
 
+    _completionEmitted = false;
     _playerStateStreamController.add(playerState);
     _positionUpdater = _getPositionUpdater();
   }
@@ -497,6 +584,10 @@ class BassPlayer {
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException("Some other mystery problem!");
       }
+    }
+
+    if (!_isStreamAtEnd()) {
+      _completionEmitted = false;
     }
   }
 

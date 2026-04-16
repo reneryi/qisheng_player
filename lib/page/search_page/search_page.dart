@@ -19,26 +19,77 @@ class UnionSearchResult {
 
     final queryInLowerCase = query.toLowerCase();
     final library = AudioLibrary.instance;
+    final audioKeys = <String>{};
+    final artistKeys = <String>{};
+    final albumKeys = <String>{};
+
+    void addAudio(Audio audio) {
+      if (audioKeys.add(audio.path)) {
+        result.audios.add(audio);
+      }
+    }
+
+    void addArtist(Artist artist) {
+      if (artistKeys.add(artist.name)) {
+        result.artists.add(artist);
+      }
+    }
+
+    void addAlbum(Album album) {
+      if (albumKeys.add(album.name)) {
+        result.album.add(album);
+      }
+    }
 
     for (int i = 0; i < library.audioCollection.length; i++) {
-      if (library.audioCollection[i].title
-          .toLowerCase()
-          .contains(queryInLowerCase)) {
-        result.audios.add(library.audioCollection[i]);
+      final audio = library.audioCollection[i];
+      final titleMatched = audio.title.toLowerCase().contains(queryInLowerCase);
+      final artistMatched =
+          audio.artist.toLowerCase().contains(queryInLowerCase);
+      final albumMatched = audio.album.toLowerCase().contains(queryInLowerCase);
+
+      if (titleMatched || artistMatched || albumMatched) {
+        addAudio(audio);
       }
     }
 
     for (Artist item in library.artistCollection.values) {
       if (item.name.toLowerCase().contains(queryInLowerCase)) {
-        result.artists.add(item);
+        addArtist(item);
+        for (final work in item.works) {
+          addAudio(work);
+        }
+        for (final album in item.albumsMap.values) {
+          addAlbum(album);
+        }
       }
     }
 
     for (Album item in library.albumCollection.values) {
       if (item.name.toLowerCase().contains(queryInLowerCase)) {
-        result.album.add(item);
+        addAlbum(item);
+        for (final work in item.works) {
+          addAudio(work);
+        }
+        for (final artist in item.artistsMap.values) {
+          addArtist(artist);
+        }
       }
     }
+
+    for (final audio in result.audios) {
+      for (final artistName in audio.splitedArtists) {
+        final artist = library.artistCollection[artistName];
+        if (artist != null) {
+          addArtist(artist);
+        }
+      }
+      final album = library.albumCollection[audio.album];
+      if (album != null) {
+        addAlbum(album);
+      }
+    }
+
     return result;
   }
 }

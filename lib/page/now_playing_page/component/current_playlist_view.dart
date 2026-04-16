@@ -53,14 +53,25 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
           ),
           Expanded(
             child: ListenableBuilder(
-              listenable: playbackService.shuffle,
+              listenable: playbackService,
               builder: (context, _) {
-                return ListView.builder(
-                  controller: scrollController,
+                return ReorderableListView.builder(
+                  scrollController: scrollController,
+                  buildDefaultDragHandles: false,
                   itemCount: playbackService.playlist.value.length,
                   itemExtent: 56.0,
+                  onReorder: (oldIndex, newIndex) {
+                    if (newIndex > oldIndex) {
+                      newIndex -= 1;
+                    }
+                    playbackService.reorderPlaylist(oldIndex, newIndex);
+                  },
                   itemBuilder: (context, index) {
-                    return _PlaylistViewItem(index: index);
+                    final item = playbackService.playlist.value[index];
+                    return _PlaylistViewItem(
+                      key: ValueKey(item.path),
+                      index: index,
+                    );
                   },
                 );
               },
@@ -80,7 +91,7 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
 }
 
 class _PlaylistViewItem extends StatelessWidget {
-  const _PlaylistViewItem({required this.index});
+  const _PlaylistViewItem({super.key, required this.index});
 
   final int index;
 
@@ -89,24 +100,40 @@ class _PlaylistViewItem extends StatelessWidget {
     var playbackService = PlayService.instance.playbackService;
     final item = playbackService.playlist.value[index];
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8.0),
-      onTap: () {
-        playbackService.playIndexOfPlaylist(index);
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: DefaultTextStyle(
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: scheme.onSecondaryContainer, fontSize: 14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item.title),
-              Text("${item.artist} - ${item.album}"),
-            ],
+    return ReorderableDelayedDragStartListener(
+      index: index,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8.0),
+        onTap: () {
+          playbackService.playIndexOfPlaylist(index);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: DefaultTextStyle(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: scheme.onSecondaryContainer, fontSize: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.title),
+                      Text("${item.artist} - ${item.album}"),
+                    ],
+                  ),
+                ),
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Icon(
+                    Icons.drag_indicator_rounded,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{self},
     io::{self, Cursor, Write},
     path::{Path, PathBuf},
@@ -31,6 +31,7 @@ static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
     // 通过 Windows 系统支持
     "asf" => false, "wma" => false,
     "aac" => true, "adts" => true,
+    "dts" => false,
     "m4a" => true,
     "ac3" => false,
     "amr" => false, "3ga" => false,
@@ -44,6 +45,8 @@ static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
     "ape" => true,
 };
 
+const CURRENT_INDEX_VERSION: u64 = 112;
+
 pub struct IndexActionState {
     /// completed / total
     pub progress: f64,
@@ -52,17 +55,158 @@ pub struct IndexActionState {
     pub message: String,
 }
 
-#[derive(Debug)]
+fn normalize_path_for_key(path: impl AsRef<Path>) -> String {
+    let path = path.as_ref();
+    let normalized = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .replace('/', "\\");
+
+    normalized
+        .trim_end_matches('\\')
+        .to_ascii_lowercase()
+        .to_string()
+}
+
+fn normalize_text_for_key(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+fn file_size_for_identity(path: &str) -> u64 {
+    fs::metadata(path).map(|value| value.len()).unwrap_or(0)
+}
+
+fn build_audio_identity_key(
+    title: &str,
+    artist: &str,
+    album: &str,
+    disc: u32,
+    track: u32,
+    duration: u64,
+    bitrate: u32,
+    sample_rate: u32,
+    cue_start_ms: u64,
+    cue_end_ms: u64,
+    file_size: u64,
+    file_name: &str,
+) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+        normalize_text_for_key(title),
+        normalize_text_for_key(artist),
+        normalize_text_for_key(album),
+        disc,
+        track,
+        duration,
+        bitrate,
+        sample_rate,
+        cue_start_ms,
+        cue_end_ms,
+        file_size,
+        normalize_text_for_key(file_name),
+    )
+}
+
+fn audio_identity_key_from_audio(audio: &Audio) -> String {
+    let source_or_path = audio.source_path.as_deref().unwrap_or(&audio.path);
+    let file_size = file_size_for_identity(source_or_path);
+    let file_name = Path::new(source_or_path)
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    build_audio_identity_key(
+        &audio.title,
+        &audio.artist,
+        &audio.album,
+        audio.disc.unwrap_or(0),
+        audio.track.unwrap_or(0),
+        audio.duration,
+        audio.bitrate.unwrap_or(0),
+        audio.sample_rate.unwrap_or(0),
+        audio.cue_start_ms.unwrap_or(0),
+        audio.cue_end_ms.unwrap_or(0),
+        file_size,
+        &file_name,
+    )
+}
+
+fn audio_identity_key_from_json(audio: &serde_json::Value) -> String {
+    let path = audio["path"].as_str().unwrap_or_default();
+    let source_or_path = audio["source_path"].as_str().unwrap_or(path);
+    let file_size = file_size_for_identity(source_or_path);
+    let file_name = Path::new(source_or_path)
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    build_audio_identity_key(
+        audio["title"].as_str().unwrap_or_default(),
+        audio["artist"].as_str().unwrap_or_default(),
+        audio["album"].as_str().unwrap_or_default(),
+        audio["disc"].as_u64().unwrap_or(0) as u32,
+        audio["track"].as_u64().unwrap_or(0) as u32,
+        audio["duration"].as_u64().unwrap_or(0),
+        audio["bitrate"].as_u64().unwrap_or(0) as u32,
+        audio["sample_rate"].as_u64().unwrap_or(0) as u32,
+        audio["cue_start_ms"].as_u64().unwrap_or(0),
+        audio["cue_end_ms"].as_u64().unwrap_or(0),
+        file_size,
+        &file_name,
+    )
+}
+
+fn is_unknown_text(value: &str) -> bool {
+    value.trim().is_empty() || value.trim() == "UNKNOWN"
+}
+
+fn sanitize_metadata_text(value: &str, fallback: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "UNKNOWN" {
+        return fallback.to_string();
+    }
+
+    let has_garbled = trimmed.contains('\u{FFFD}') || trimmed.contains("锟斤拷");
+    let mut cleaned = trimmed
+        .chars()
+        .filter(|ch| *ch != '\u{FFFD}' && *ch != '\u{FEFF}' && !ch.is_control())
+        .collect::<String>();
+    if has_garbled {
+        cleaned = cleaned.replace("锟斤拷", "");
+    }
+    let cleaned = cleaned.trim();
+    if cleaned.is_empty() {
+        fallback.to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+fn is_cue_path(path: impl AsRef<Path>) -> bool {
+    let ext = path
+        .as_ref()
+        .extension()
+        .map(|value| value.to_ascii_lowercase().to_string_lossy().to_string());
+    matches!(ext.as_deref(), Some("cue"))
+}
+
+#[derive(Debug, Clone)]
 struct Audio {
     title: String,
     artist: String,
     album: String,
+    disc: Option<u32>,
     track: Option<u32>,
     /// in secs
     duration: u64,
     /// kbps
     bitrate: Option<u32>,
     sample_rate: Option<u32>,
+    replay_gain_db: Option<f64>,
+    source_path: Option<String>,
+    cue_start_ms: Option<u64>,
+    cue_end_ms: Option<u64>,
     /// absolute path
     path: String,
     /// secs since UNIX_EPOCH
@@ -80,10 +224,15 @@ impl Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: "UNKNOWN".to_string(),
             album: "UNKNOWN".to_string(),
+            disc: None,
             track: None,
             duration: 0,
             bitrate: None,
             sample_rate: None,
+            replay_gain_db: None,
+            source_path: None,
+            cue_start_ms: None,
+            cue_end_ms: None,
             path: path.to_string_lossy().to_string(),
             modified: 0,
             created: 0,
@@ -96,15 +245,328 @@ impl Audio {
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
+            "disc": self.disc,
             "track": self.track,
             "duration": self.duration,
             "bitrate": self.bitrate,
             "sample_rate": self.sample_rate,
+            "replay_gain_db": self.replay_gain_db,
+            "source_path": self.source_path,
+            "cue_start_ms": self.cue_start_ms,
+            "cue_end_ms": self.cue_end_ms,
             "path": self.path,
             "modified": self.modified,
             "created": self.created,
             "by": self.by
         })
+    }
+
+    fn merge_missing_fields(mut primary: Self, fallback: Self) -> Self {
+        if is_unknown_text(&primary.title) && !is_unknown_text(&fallback.title) {
+            primary.title = fallback.title;
+        }
+        if is_unknown_text(&primary.artist) && !is_unknown_text(&fallback.artist) {
+            primary.artist = fallback.artist;
+        }
+        if is_unknown_text(&primary.album) && !is_unknown_text(&fallback.album) {
+            primary.album = fallback.album;
+        }
+        if primary.disc.unwrap_or(0) == 0 && fallback.disc.unwrap_or(0) > 0 {
+            primary.disc = fallback.disc;
+        }
+        if primary.track.unwrap_or(0) == 0 && fallback.track.unwrap_or(0) > 0 {
+            primary.track = fallback.track;
+        }
+        if primary.duration == 0 && fallback.duration > 0 {
+            primary.duration = fallback.duration;
+        }
+        if primary.bitrate.unwrap_or(0) == 0 && fallback.bitrate.unwrap_or(0) > 0 {
+            primary.bitrate = fallback.bitrate;
+        }
+        if primary.sample_rate.unwrap_or(0) == 0 && fallback.sample_rate.unwrap_or(0) > 0 {
+            primary.sample_rate = fallback.sample_rate;
+        }
+        if primary.replay_gain_db.is_none() && fallback.replay_gain_db.is_some() {
+            primary.replay_gain_db = fallback.replay_gain_db;
+        }
+        if primary.source_path.is_none() && fallback.source_path.is_some() {
+            primary.source_path = fallback.source_path;
+        }
+        if primary.cue_start_ms.is_none() && fallback.cue_start_ms.is_some() {
+            primary.cue_start_ms = fallback.cue_start_ms;
+        }
+        if primary.cue_end_ms.is_none() && fallback.cue_end_ms.is_some() {
+            primary.cue_end_ms = fallback.cue_end_ms;
+        }
+
+        match (primary.by.as_deref(), fallback.by.as_deref()) {
+            (Some(a), Some(b)) if a != b => {
+                primary.by = Some(format!("{}+{}", a, b));
+            }
+            (None, Some(b)) => {
+                primary.by = Some(b.to_string());
+            }
+            _ => {}
+        }
+
+        primary
+    }
+
+    fn parse_replay_gain_db(value: &str) -> Option<f64> {
+        let mut number = String::new();
+        let mut started = false;
+        for ch in value.chars() {
+            if ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '+' {
+                number.push(ch);
+                started = true;
+            } else if started {
+                break;
+            }
+        }
+        if number.is_empty() {
+            return None;
+        }
+
+        number.parse::<f64>().ok()
+    }
+
+    fn parse_cue_value(line: &str, key: &str) -> Option<String> {
+        let rest = line.strip_prefix(key)?.trim();
+        if rest.is_empty() {
+            return None;
+        }
+        if let Some(start) = rest.find('"') {
+            let right = &rest[start + 1..];
+            if let Some(end) = right.find('"') {
+                return Some(right[..end].to_string());
+            }
+        }
+        Some(rest.to_string())
+    }
+
+    fn parse_cue_timestamp_to_frames(value: &str) -> Option<u64> {
+        let mut parts = value.trim().split(':');
+        let minute = parts.next()?.trim().parse::<u64>().ok()?;
+        let second = parts.next()?.trim().parse::<u64>().ok()?;
+        let frame = parts.next()?.trim().parse::<u64>().ok()?;
+        Some((minute * 60 + second) * 75 + frame)
+    }
+
+    fn read_from_cue_path(cue_path: impl AsRef<Path>) -> Vec<Self> {
+        let cue_path = cue_path.as_ref();
+        let cue_text = match fs::read_to_string(cue_path) {
+            Ok(value) => value,
+            Err(err) => {
+                log_to_dart(format!("{:?}: {}", cue_path, err));
+                return vec![];
+            }
+        };
+
+        #[derive(Clone)]
+        struct CueTrack {
+            file_path: PathBuf,
+            track: u32,
+            title: Option<String>,
+            performer: Option<String>,
+            start_frames: u64,
+        }
+
+        let parent = cue_path.parent().unwrap_or(Path::new(""));
+        let mut album_title: Option<String> = None;
+        let mut album_performer: Option<String> = None;
+        let mut current_file_path: Option<PathBuf> = None;
+        let mut current_track_no: Option<u32> = None;
+        let mut current_track_title: Option<String> = None;
+        let mut current_track_performer: Option<String> = None;
+        let mut current_track_start_frames: Option<u64> = None;
+        let mut tracks: Vec<CueTrack> = vec![];
+
+        fn push_current_track(
+            tracks: &mut Vec<CueTrack>,
+            current_file_path: &Option<PathBuf>,
+            current_track_no: Option<u32>,
+            current_track_title: &Option<String>,
+            current_track_performer: &Option<String>,
+            current_track_start_frames: Option<u64>,
+        ) {
+            if let (Some(file_path), Some(track_no), Some(start_frames)) = (
+                current_file_path.clone(),
+                current_track_no,
+                current_track_start_frames,
+            ) {
+                tracks.push(CueTrack {
+                    file_path,
+                    track: track_no,
+                    title: current_track_title.clone(),
+                    performer: current_track_performer.clone(),
+                    start_frames,
+                });
+            }
+        }
+
+        for raw_line in cue_text.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Some(file_value) = Self::parse_cue_value(line, "FILE") {
+                push_current_track(
+                    &mut tracks,
+                    &current_file_path,
+                    current_track_no,
+                    &current_track_title,
+                    &current_track_performer,
+                    current_track_start_frames,
+                );
+                current_track_no = None;
+                current_track_title = None;
+                current_track_performer = None;
+                current_track_start_frames = None;
+
+                let file_path = if Path::new(&file_value).is_absolute() {
+                    PathBuf::from(file_value)
+                } else {
+                    parent.join(file_value)
+                };
+                current_file_path = Some(file_path);
+                continue;
+            }
+
+            if line.starts_with("TRACK ") {
+                push_current_track(
+                    &mut tracks,
+                    &current_file_path,
+                    current_track_no,
+                    &current_track_title,
+                    &current_track_performer,
+                    current_track_start_frames,
+                );
+                current_track_title = None;
+                current_track_performer = None;
+                current_track_start_frames = None;
+
+                let segment = line.trim_start_matches("TRACK ").trim();
+                let track_no = segment
+                    .split_whitespace()
+                    .next()
+                    .and_then(|value| value.parse::<u32>().ok());
+                current_track_no = track_no;
+                continue;
+            }
+
+            if let Some(index_segment) = line.strip_prefix("INDEX 01 ") {
+                current_track_start_frames = Self::parse_cue_timestamp_to_frames(index_segment);
+                continue;
+            }
+
+            if let Some(title) = Self::parse_cue_value(line, "TITLE") {
+                if current_track_no.is_some() {
+                    current_track_title = Some(title);
+                } else {
+                    album_title = Some(title);
+                }
+                continue;
+            }
+
+            if let Some(performer) = Self::parse_cue_value(line, "PERFORMER") {
+                if current_track_no.is_some() {
+                    current_track_performer = Some(performer);
+                } else {
+                    album_performer = Some(performer);
+                }
+                continue;
+            }
+        }
+        push_current_track(
+            &mut tracks,
+            &current_file_path,
+            current_track_no,
+            &current_track_title,
+            &current_track_performer,
+            current_track_start_frames,
+        );
+
+        if tracks.is_empty() {
+            return vec![];
+        }
+
+        let mut source_cache: HashMap<String, Audio> = HashMap::new();
+        let mut result: Vec<Audio> = vec![];
+        for (i, track) in tracks.iter().enumerate() {
+            let source_key = normalize_path_for_key(&track.file_path);
+            let source_audio = if let Some(cached) = source_cache.get(&source_key) {
+                cached.clone()
+            } else {
+                let Some(value) = Self::read_from_path(&track.file_path) else {
+                    continue;
+                };
+                source_cache.insert(source_key.clone(), value.clone());
+                value
+            };
+
+            let source_total_frames = source_audio.duration.saturating_mul(75);
+            if source_total_frames == 0 {
+                continue;
+            }
+
+            let start_frames = track
+                .start_frames
+                .min(source_total_frames.saturating_sub(1));
+            let next_same_file_start = tracks
+                .iter()
+                .skip(i + 1)
+                .find(|next| normalize_path_for_key(&next.file_path) == source_key)
+                .map(|next| next.start_frames);
+            let mut end_frames = next_same_file_start.unwrap_or(source_total_frames);
+            if end_frames > source_total_frames {
+                end_frames = source_total_frames;
+            }
+            if end_frames <= start_frames {
+                continue;
+            }
+
+            let cue_start_ms = start_frames.saturating_mul(1000) / 75;
+            let cue_end_ms = end_frames.saturating_mul(1000) / 75;
+            let mut duration = (cue_end_ms.saturating_sub(cue_start_ms)) / 1000;
+            if duration == 0 {
+                duration = 1;
+            }
+
+            let title = track
+                .title
+                .clone()
+                .unwrap_or_else(|| format!("Track {:02}", track.track));
+            let artist = track
+                .performer
+                .clone()
+                .or_else(|| album_performer.clone())
+                .unwrap_or_else(|| source_audio.artist.clone());
+            let album = album_title
+                .clone()
+                .unwrap_or_else(|| source_audio.album.clone());
+
+            result.push(Audio {
+                title,
+                artist,
+                album,
+                disc: source_audio.disc,
+                track: Some(track.track),
+                duration,
+                bitrate: source_audio.bitrate,
+                sample_rate: source_audio.sample_rate,
+                replay_gain_db: source_audio.replay_gain_db,
+                source_path: Some(source_audio.path.clone()),
+                cue_start_ms: Some(cue_start_ms),
+                cue_end_ms: Some(cue_end_ms),
+                path: format!("{}#CUE:{}:{}", source_audio.path, track.track, start_frames),
+                modified: source_audio.modified,
+                created: source_audio.created,
+                by: Some("CUE".to_string()),
+            });
+        }
+
+        result
     }
 
     /// 不支持：None  
@@ -113,8 +575,12 @@ impl Audio {
     /// 再不能的话：title: filename 代替
     fn read_from_path(path: impl AsRef<Path>) -> Option<Self> {
         let path = path.as_ref();
-        let lofty_support: bool =
-            *SUPPORT_FORMAT.get(&path.extension()?.to_ascii_lowercase().to_string_lossy())?;
+        let extension = path
+            .extension()?
+            .to_ascii_lowercase()
+            .to_string_lossy()
+            .to_string();
+        let lofty_support: bool = *SUPPORT_FORMAT.get(extension.as_str())?;
 
         let file_metadata = match fs::metadata(path) {
             Ok(val) => val,
@@ -136,32 +602,54 @@ impl Audio {
             .unwrap_or(Duration::ZERO)
             .as_secs();
 
-        if lofty_support {
-            if let Some(value) = Self::read_by_lofty(path, modified, created) {
-                return Some(value);
+        let win_audio = Self::read_by_win_music_properties(path, modified, created).ok();
+
+        // WAV/WAVE 优先使用 Windows 系统属性读取标签，Lofty 仅用于补全缺失字段。
+        if extension == "wav" || extension == "wave" {
+            if let Some(win) = win_audio.clone() {
+                if let Some(lofty) = Self::read_by_lofty(path, modified, created) {
+                    return Some(Self::merge_missing_fields(win, lofty));
+                }
+                return Some(win);
             }
 
-            match Self::read_by_win_music_properties(path, modified, created) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    log_to_dart(format!("{:?}: {}", path, err));
-                    return Self::new_with_path(path, None);
-                }
+            if let Some(lofty) = Self::read_by_lofty(path, modified, created) {
+                return Some(lofty);
             }
+
+            return Self::new_with_path(path, None);
+        }
+
+        if lofty_support {
+            if let Some(lofty) = Self::read_by_lofty(path, modified, created) {
+                if let Some(win) = win_audio {
+                    return Some(Self::merge_missing_fields(lofty, win));
+                }
+                return Some(lofty);
+            }
+
+            if let Some(win) = win_audio {
+                return Some(win);
+            }
+
+            return Self::new_with_path(path, None);
         } else {
-            match Self::read_by_win_music_properties(path, modified, created) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    log_to_dart(format!("{:?}: {}", path, err));
-                    return Self::new_with_path(path, None);
-                }
+            if let Some(win) = win_audio {
+                return Some(win);
             }
+
+            return Self::new_with_path(path, None);
         }
     }
 
     /// 使用 lofty 获取音乐标签。只在文件名不正确、没有标签或包含不支持的编码时返回 None
     fn read_by_lofty(path: impl AsRef<Path>, modified: u64, created: u64) -> Option<Self> {
         let path = path.as_ref();
+        let fallback_title = path
+            .file_stem()
+            .or_else(|| path.file_name())
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| "UNKNOWN".to_string());
         let tagged_file = match lofty::read_from_path(path) {
             Ok(val) => val,
             Err(err) => {
@@ -178,25 +666,37 @@ impl Audio {
         {
             let artist_strs: Vec<_> = tag.get_strings(&ItemKey::TrackArtist).collect();
             let artist = if artist_strs.is_empty() {
-                std::borrow::Cow::Borrowed("UNKNOWN").to_string()
+                "UNKNOWN".to_string()
             } else {
                 artist_strs.join("/")
             };
+            let artist = sanitize_metadata_text(&artist, "UNKNOWN");
+            let replay_gain_db = tag
+                .get_strings(&ItemKey::ReplayGainTrackGain)
+                .find_map(Self::parse_replay_gain_db);
+
+            let title_raw = tag
+                .title()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| fallback_title.clone());
+            let album_raw = tag
+                .album()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "UNKNOWN".to_string());
 
             return Some(Audio {
-                title: tag
-                    .title()
-                    .unwrap_or(path.file_name()?.to_string_lossy())
-                    .to_string(),
+                title: sanitize_metadata_text(&title_raw, &fallback_title),
                 artist,
-                album: tag
-                    .album()
-                    .unwrap_or(std::borrow::Cow::Borrowed("UNKNOWN"))
-                    .to_string(),
+                album: sanitize_metadata_text(&album_raw, "UNKNOWN"),
+                disc: tag.disk(),
                 track: tag.track(),
                 duration: properties.duration().as_secs(),
                 bitrate: properties.audio_bitrate(),
                 sample_rate: properties.sample_rate(),
+                replay_gain_db,
+                source_path: None,
+                cue_start_ms: None,
+                cue_end_ms: None,
                 path: path.to_string_lossy().to_string(),
                 modified,
                 created,
@@ -208,10 +708,15 @@ impl Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
             album: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
+            disc: None,
             track: None,
             duration: properties.duration().as_secs(),
             bitrate: properties.audio_bitrate(),
             sample_rate: properties.sample_rate(),
+            replay_gain_db: None,
+            source_path: None,
+            cue_start_ms: None,
+            cue_end_ms: None,
             path: path.to_string_lossy().to_string(),
             modified,
             created,
@@ -241,6 +746,8 @@ impl Audio {
         if title.is_empty() {
             title = storage_file.Name()?.to_string();
         }
+        let fallback_title = storage_file.Name()?.to_string();
+        title = sanitize_metadata_text(&title, &fallback_title);
 
         let mut artist = music_properties
             .Artist()
@@ -249,6 +756,7 @@ impl Audio {
         if artist.is_empty() {
             artist = "UNKNOWN".to_string();
         }
+        artist = sanitize_metadata_text(&artist, "UNKNOWN");
 
         let mut album = music_properties
             .Album()
@@ -257,15 +765,21 @@ impl Audio {
         if album.is_empty() {
             album = "UNKNOWN".to_string();
         }
+        album = sanitize_metadata_text(&album, "UNKNOWN");
 
         Ok(Audio {
             title,
             artist,
             album,
+            disc: None,
             track: Some(music_properties.TrackNumber()?),
             duration: duration.as_secs(),
             bitrate: Some(music_properties.Bitrate()? / 1000),
             sample_rate: None,
+            replay_gain_db: None,
+            source_path: None,
+            cue_start_ms: None,
+            cue_end_ms: None,
             path: path.to_string_lossy().to_string(),
             modified,
             created,
@@ -313,26 +827,52 @@ impl AudioFolder {
 
         let mut audios: Vec<Audio> = vec![];
         let mut latest: u64 = 0;
-
-        for item in dir {
-            let entry = match item {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-
+        let entries: Vec<_> = dir.filter_map(|item| item.ok()).collect();
+        let mut cue_source_paths: HashSet<String> = HashSet::new();
+        for entry in &entries {
             let file_type = match entry.file_type() {
                 Ok(value) => value,
                 Err(_) => continue,
             };
+            if !file_type.is_file() {
+                continue;
+            }
+            if !is_cue_path(entry.path()) {
+                continue;
+            }
 
-            if file_type.is_file() {
-                if let Some(audio_item) = Audio::read_from_path(entry.path()) {
-                    if audio_item.created > latest {
-                        latest = audio_item.created;
-                    }
-
-                    audios.push(audio_item);
+            let cue_tracks = Audio::read_from_cue_path(entry.path());
+            for cue_track in cue_tracks {
+                if let Some(source_path) = &cue_track.source_path {
+                    cue_source_paths.insert(normalize_path_for_key(source_path));
                 }
+                if cue_track.created > latest {
+                    latest = cue_track.created;
+                }
+                audios.push(cue_track);
+            }
+        }
+
+        for entry in entries {
+            let file_type = match entry.file_type() {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            if !file_type.is_file() {
+                continue;
+            }
+            if is_cue_path(entry.path()) {
+                continue;
+            }
+            if cue_source_paths.contains(&normalize_path_for_key(entry.path())) {
+                continue;
+            }
+
+            if let Some(audio_item) = Audio::read_from_path(entry.path()) {
+                if audio_item.created > latest {
+                    latest = audio_item.created;
+                }
+                audios.push(audio_item);
             }
         }
 
@@ -386,15 +926,9 @@ impl AudioFolder {
         let mut audios: Vec<Audio> = vec![];
         let mut latest: u64 = 0;
 
-        for item in dir {
-            let entry = match item {
-                Ok(value) => value,
-                Err(err) => {
-                    log_to_dart(err.to_string());
-                    continue;
-                }
-            };
-
+        let entries: Vec<_> = dir.filter_map(|item| item.ok()).collect();
+        let mut file_entries = vec![];
+        for entry in &entries {
             let file_type = match entry.file_type() {
                 Ok(value) => value,
                 Err(err) => {
@@ -413,11 +947,40 @@ impl AudioFolder {
                     scaned_folders,
                     sink,
                 );
-            } else if let Some(metadata) = Audio::read_from_path(entry.path()) {
+            } else if file_type.is_file() {
+                file_entries.push(entry.path());
+            }
+        }
+
+        let mut cue_source_paths: HashSet<String> = HashSet::new();
+        for file_path in &file_entries {
+            if !is_cue_path(file_path) {
+                continue;
+            }
+
+            for cue_track in Audio::read_from_cue_path(file_path) {
+                if let Some(source_path) = &cue_track.source_path {
+                    cue_source_paths.insert(normalize_path_for_key(source_path));
+                }
+                if cue_track.created > latest {
+                    latest = cue_track.created;
+                }
+                audios.push(cue_track);
+            }
+        }
+
+        for file_path in file_entries {
+            if is_cue_path(&file_path) {
+                continue;
+            }
+            if cue_source_paths.contains(&normalize_path_for_key(&file_path)) {
+                continue;
+            }
+
+            if let Some(metadata) = Audio::read_from_path(&file_path) {
                 if metadata.created > latest {
                     latest = metadata.created;
                 }
-
                 audios.push(metadata);
             }
         }
@@ -446,6 +1009,71 @@ impl AudioFolder {
 
         Ok(())
     }
+}
+
+fn dedup_audio_folders_by_path(audio_folders: &mut Vec<AudioFolder>) {
+    let mut seen_audio_paths: HashSet<String> = HashSet::new();
+    let mut seen_audio_identities: HashSet<String> = HashSet::new();
+    for folder in audio_folders.iter_mut() {
+        folder.audios.retain(|audio| {
+            let path_key = normalize_path_for_key(&audio.path);
+            let identity_key = audio_identity_key_from_audio(audio);
+            if seen_audio_paths.contains(&path_key) || seen_audio_identities.contains(&identity_key)
+            {
+                return false;
+            }
+            seen_audio_paths.insert(path_key);
+            seen_audio_identities.insert(identity_key);
+            true
+        });
+
+        folder.latest = folder
+            .audios
+            .iter()
+            .map(|audio| audio.created)
+            .max()
+            .unwrap_or(0);
+    }
+
+    audio_folders.retain(|folder| !folder.audios.is_empty());
+}
+
+fn dedup_index_folders_json_by_path(folders: &mut Vec<serde_json::Value>) {
+    let mut seen_audio_paths: HashSet<String> = HashSet::new();
+    let mut seen_audio_identities: HashSet<String> = HashSet::new();
+    for folder in folders.iter_mut() {
+        let audios = match folder["audios"].as_array_mut() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        audios.retain(|audio| {
+            let path = audio["path"].as_str().unwrap_or_default();
+            let path_key = normalize_path_for_key(path);
+            let identity_key = audio_identity_key_from_json(audio);
+            if seen_audio_paths.contains(&path_key) || seen_audio_identities.contains(&identity_key)
+            {
+                return false;
+            }
+            seen_audio_paths.insert(path_key);
+            seen_audio_identities.insert(identity_key);
+            true
+        });
+
+        let latest = audios
+            .iter()
+            .filter_map(|audio| audio["created"].as_u64())
+            .max()
+            .unwrap_or(0);
+        folder["latest"] = serde_json::json!(latest);
+    }
+
+    folders.retain(|folder| {
+        folder["audios"]
+            .as_array()
+            .map(|audios| !audios.is_empty())
+            .unwrap_or(false)
+    });
 }
 
 fn _get_picture_by_windows(path: &String) -> Result<Vec<u8>, windows::core::Error> {
@@ -598,12 +1226,14 @@ pub fn build_index_from_folders_recursively(
         );
     }
 
+    dedup_audio_folders_by_path(&mut audio_folders);
+
     let mut audio_folders_json: Vec<serde_json::Value> = vec![];
     for item in &audio_folders {
         audio_folders_json.push(item.to_json_value());
     }
     let json_value = serde_json::json!({
-        "version": 110,
+        "version": CURRENT_INDEX_VERSION,
         "folders": audio_folders_json,
     });
 
@@ -638,7 +1268,7 @@ fn _update_index_below_1_1_0(
     }
     fs::File::create(index_path)?.write_all(
         serde_json::json!({
-            "version": 110,
+            "version": CURRENT_INDEX_VERSION,
             "folders": audio_folders_json,
         })
         .to_string()
@@ -672,35 +1302,34 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
         return Ok(_update_index_below_1_1_0(&index, &index_path, &sink)?);
     }
 
+    let force_refresh_all = version.unwrap_or(0) < CURRENT_INDEX_VERSION;
     let folders = index["folders"].as_array_mut().unwrap();
-    // 删除访问不到的文件夹的记录
-    folders.retain(|item| {
-        let path = item["path"].as_str().unwrap();
 
+    // 删除访问不到的文件夹记录
+    folders.retain(|item| {
+        let path = item["path"].as_str().unwrap_or_default();
         Path::new(path).exists()
     });
 
-    let mut updated = 0;
-    let total = folders.len();
+    let total = if folders.is_empty() { 1 } else { folders.len() };
+    let mut updated = 0usize;
+    for folder_item in folders.iter_mut() {
+        let folder_path = folder_item["path"].as_str().unwrap_or_default().to_string();
+        if folder_path.is_empty() {
+            updated += 1;
+            continue;
+        }
 
-    for folder_item in folders {
-        let folder_path = folder_item["path"].as_str().unwrap().to_string();
-        let latest = folder_item["latest"].as_u64().unwrap();
-        let old_folder_modified = folder_item["modified"].as_u64().unwrap();
+        let old_folder_modified = folder_item["modified"].as_u64().unwrap_or(0);
+        let new_folder_modified = fs::metadata(&folder_path)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let need_refresh = force_refresh_all || new_folder_modified > old_folder_modified;
 
-        let new_folder_modified = match fs::metadata(&folder_path) {
-            Ok(value) => match value.modified() {
-                Ok(value) => value
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or(Duration::ZERO)
-                    .as_secs(),
-                Err(_) => continue,
-            },
-            Err(_) => continue,
-        };
-
-        // 跳过没有被修改的文件夹
-        if new_folder_modified <= old_folder_modified {
+        if !need_refresh {
             updated += 1;
             continue;
         }
@@ -710,81 +1339,16 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
             message: String::from("正在更新 ") + &folder_path,
         });
 
-        folder_item["modified"] = serde_json::json!(new_folder_modified);
-
-        // 删除访问不到的文件的记录
-        let audios = folder_item["audios"].as_array_mut().unwrap();
-        audios.retain(|item| {
-            let path = item["path"].as_str().unwrap();
-
-            Path::new(path).exists()
-        });
-
-        for audio_item in &mut *audios {
-            let old_audio_modified = audio_item["modified"].as_u64().unwrap();
-            let audio_path = audio_item["path"].as_str().unwrap();
-            let new_audio_modified = match fs::metadata(&audio_path) {
-                Ok(value) => match value.modified() {
-                    Ok(value) => value
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or(Duration::ZERO)
-                        .as_secs(),
-                    Err(_) => continue,
-                },
-                Err(_) => continue,
-            };
-            // 跳过没有被修改的文件
-            if new_audio_modified <= old_audio_modified {
-                continue;
+        match AudioFolder::read_from_folder(&folder_path) {
+            Ok(refreshed_folder) => {
+                *folder_item = refreshed_folder.to_json_value();
             }
-
-            // 重新读取被修改的音乐文件的标签并更新
-            if let Some(modified_audio) = Audio::read_from_path(Path::new(audio_path)) {
-                *audio_item = modified_audio.to_json_value();
+            Err(_) => {
+                folder_item["modified"] = serde_json::json!(new_folder_modified);
+                folder_item["latest"] = serde_json::json!(0);
+                folder_item["audios"] = serde_json::json!([]);
             }
         }
-
-        // 添加新增的音乐文件
-        let mut new_latest: u64 = latest;
-        let dir = match fs::read_dir(folder_path) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        for entry in dir {
-            let entry = match entry {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            let file_type = match entry.file_type() {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            if file_type.is_dir() {
-                continue;
-            }
-
-            let entry_created = match entry.metadata() {
-                Ok(value) => match value.created() {
-                    Ok(value) => value
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or(Duration::ZERO)
-                        .as_secs(),
-                    Err(_) => continue,
-                },
-                Err(_) => continue,
-            };
-            if entry_created > latest {
-                if let Some(new_audio) = Audio::read_from_path(entry.path()) {
-                    if entry_created > new_latest {
-                        new_latest = entry_created;
-                    }
-
-                    audios.push(new_audio.to_json_value());
-                }
-            }
-        }
-
-        folder_item["latest"] = serde_json::json!(new_latest);
 
         updated += 1;
         let _ = sink.add(IndexActionState {
@@ -793,7 +1357,9 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
         });
     }
 
-    fs::File::create(index_path)?.write_all(index.to_string().as_bytes())?;
+    dedup_index_folders_json_by_path(folders);
+    index["version"] = serde_json::json!(CURRENT_INDEX_VERSION);
 
+    fs::File::create(index_path)?.write_all(index.to_string().as_bytes())?;
     Ok(())
 }

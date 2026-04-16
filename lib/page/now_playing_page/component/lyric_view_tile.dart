@@ -68,6 +68,7 @@ class _SyncLineContent extends StatelessWidget {
     final lyricFontSize = lyricViewController.lyricFontSize;
     final translationFontSize = lyricViewController.translationFontSize;
     final alignment = lyricViewController.lyricTextAlign;
+    final showTranslation = lyricViewController.showTranslation;
 
     if (!isMainLine) {
       if (syncLine.words.isEmpty) {
@@ -77,7 +78,7 @@ class _SyncLineContent extends StatelessWidget {
       final List<Text> contents = [
         buildPrimaryText(syncLine.content, scheme, alignment, lyricFontSize),
       ];
-      if (syncLine.translation != null) {
+      if (showTranslation && syncLine.translation != null) {
         contents.add(buildSecondaryText(
           syncLine.translation!,
           scheme,
@@ -130,8 +131,8 @@ class _SyncLineContent extends StatelessWidget {
                           colors: [
                             scheme.primary,
                             scheme.primary,
-                            scheme.primary.withOpacity(0.10),
-                            scheme.primary.withOpacity(0.10),
+                            scheme.primary.withValues(alpha: 0.10),
+                            scheme.primary.withValues(alpha: 0.10),
                           ],
                           stops: [0, progress, progress, 1],
                         ).createShader(bounds);
@@ -153,7 +154,7 @@ class _SyncLineContent extends StatelessWidget {
         },
       )
     ];
-    if (syncLine.translation != null) {
+    if (showTranslation && syncLine.translation != null) {
       contents.add(buildSecondaryText(
         syncLine.translation!,
         scheme,
@@ -235,18 +236,21 @@ class _LrcLineContent extends StatelessWidget {
     final lyricFontSize = lyricViewController.lyricFontSize;
     final translationFontSize = lyricViewController.translationFontSize;
     final alignment = lyricViewController.lyricTextAlign;
+    final showTranslation = lyricViewController.showTranslation;
 
     final splited = lrcLine.content.split("┃");
     final List<Text> contents = [
       buildPrimaryText(splited.first, scheme, alignment, lyricFontSize),
     ];
-    for (var i = 1; i < splited.length; i++) {
-      contents.add(buildSecondaryText(
-        splited[i],
-        scheme,
-        alignment,
-        translationFontSize,
-      ));
+    if (showTranslation) {
+      for (var i = 1; i < splited.length; i++) {
+        contents.add(buildSecondaryText(
+          splited[i],
+          scheme,
+          alignment,
+          translationFontSize,
+        ));
+      }
     }
 
     return Padding(
@@ -343,14 +347,14 @@ class LyricTransitionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    circlePaint1.color = scheme.onSecondaryContainer.withOpacity(
-      0.05 + min(controller.progress * 3, 1) * 0.95,
+    circlePaint1.color = scheme.onSecondaryContainer.withValues(
+      alpha: 0.05 + min(controller.progress * 3, 1) * 0.95,
     );
-    circlePaint2.color = scheme.onSecondaryContainer.withOpacity(
-      0.05 + min(max(controller.progress - 1 / 3, 0) * 3, 1) * 0.95,
+    circlePaint2.color = scheme.onSecondaryContainer.withValues(
+      alpha: 0.05 + min(max(controller.progress - 1 / 3, 0) * 3, 1) * 0.95,
     );
-    circlePaint3.color = scheme.onSecondaryContainer.withOpacity(
-      0.05 + min(max(controller.progress - 2 / 3, 0) * 3, 1) * 0.95,
+    circlePaint3.color = scheme.onSecondaryContainer.withValues(
+      alpha: 0.05 + min(max(controller.progress - 2 / 3, 0) * 3, 1) * 0.95,
     );
 
     final rWithFactor = radius + controller.sizeFactor;

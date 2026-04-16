@@ -180,16 +180,56 @@ class Lrc extends Lyric {
 
   /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
   /// 以及相同目录相同文件名的 .lrc 外挂歌词（utf-8 or utf-16）
+  static Lrc _clipToCueSegment(Audio belongTo, Lrc lyric) {
+    if (!belongTo.isCueTrack) return lyric;
+
+    final cueStartMs = belongTo.cueStartMs ?? 0;
+    final cueEndMs =
+        belongTo.cueEndMs ?? (cueStartMs + belongTo.duration * 1000);
+    if (cueEndMs <= cueStartMs) return lyric;
+
+    final sourceLines = lyric.lines.whereType<LrcLine>().toList();
+    final clippedLines = <LrcLine>[];
+    for (final line in sourceLines) {
+      final lineStartMs = line.start.inMilliseconds;
+      if (lineStartMs < cueStartMs || lineStartMs >= cueEndMs) continue;
+
+      clippedLines.add(LrcLine(
+        Duration(milliseconds: lineStartMs - cueStartMs),
+        line.content,
+        isBlank: line.isBlank,
+      ));
+    }
+
+    if (clippedLines.isEmpty) return lyric;
+
+    for (var i = 0; i < clippedLines.length - 1; i++) {
+      clippedLines[i].length =
+          clippedLines[i + 1].start - clippedLines[i].start;
+    }
+    final tailMs =
+        cueEndMs - cueStartMs - clippedLines.last.start.inMilliseconds;
+    clippedLines.last.length = Duration(milliseconds: max(tailMs, 0));
+
+    return Lrc(clippedLines, lyric.source);
+  }
+
+  /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
+  /// 以及相同目录相同文件名的 .lrc 外挂歌词（utf-8 or utf-16）
   static Future<Lrc?> fromAudioPath(
     Audio belongTo, {
     String? separator = "┃",
   }) async {
-    Lrc? lyric = await getLyricFromPath(path: belongTo.path).then((value) {
+    Lrc? lyric = await getLyricFromPath(path: belongTo.mediaPath).then((value) {
       if (value == null) {
         return null;
       }
       return Lrc.fromLrcText(value, LrcSource.local, separator: separator);
     });
+
+    if (lyric != null) {
+      lyric = _clipToCueSegment(belongTo, lyric);
+    }
 
     return lyric;
   }

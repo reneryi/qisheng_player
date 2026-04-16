@@ -22,11 +22,14 @@ String _toHexString(int dec) {
   return hex;
 }
 
+int _toColorByte(double channel) =>
+    (channel * 255.0).round().clamp(0, 255).toInt();
+
 extension RGBHexString on Color {
   String toRGBHexString() {
-    final redHex = _toHexString(red);
-    final greenHex = _toHexString(green);
-    final blueHex = _toHexString(blue);
+    final redHex = _toHexString(_toColorByte(r));
+    final greenHex = _toHexString(_toColorByte(g));
+    final blueHex = _toHexString(_toColorByte(b));
 
     return "#$redHex$greenHex$blueHex";
   }
@@ -42,8 +45,72 @@ Color? fromRGBHexString(String rgbHexStr) {
 }
 
 Map<String, String> _pinyinCache = {};
+Map<String, String> _localeSortKeyCache = {};
 
 extension PinyinCompare on String {
+  static final Set<String> _ignorableSymbols = {
+    ' ',
+    '\t',
+    '\r',
+    '\n',
+    '-',
+    '_',
+    '.',
+    ',',
+    '/',
+    '\\',
+    '|',
+    '(',
+    ')',
+    '[',
+    ']',
+    '{',
+    '}',
+    '+',
+    '=',
+    '*',
+    '&',
+    '^',
+    '%',
+    r'$',
+    '#',
+    '@',
+    '!',
+    '?',
+    '~',
+    '`',
+    ':',
+    ';',
+    '"',
+    "'",
+    '<',
+    '>',
+    '，',
+    '。',
+    '、',
+    '《',
+    '》',
+    '？',
+    '！',
+    '：',
+    '；',
+    '（',
+    '）',
+    '【',
+    '】',
+    '“',
+    '”',
+    '‘',
+    '’',
+    '·',
+  };
+
+  static bool _isAsciiLetterOrDigit(int codeUnit) {
+    return (codeUnit >= 48 && codeUnit <= 57) ||
+        (codeUnit >= 65 && codeUnit <= 90) ||
+        (codeUnit >= 97 && codeUnit <= 122);
+  }
+
   /// convert str to pinyin, cache it when it hasn't been converted;
   String _getPinyin() {
     final cachedPinyin = _pinyinCache[this];
@@ -72,18 +139,65 @@ extension PinyinCompare on String {
     return pinyin;
   }
 
+  /// 统一中英文和常见符号的比较键，避免中英文被分段排序。
+  String toLocaleSortKey() {
+    final cached = _localeSortKeyCache[this];
+    if (cached != null) return cached;
+
+    final trimmed = trim();
+    if (trimmed.isEmpty) {
+      _localeSortKeyCache[this] = "";
+      return "";
+    }
+
+    final buffer = StringBuffer();
+    for (final rune in trimmed.runes) {
+      final char = String.fromCharCode(rune);
+      if (ChineseHelper.isChinese(char)) {
+        final pinyin = PinyinHelper.convertToPinyinArray(
+          char,
+          PinyinFormat.WITHOUT_TONE,
+        ).firstOrNull;
+        buffer.write((pinyin ?? char).toLowerCase());
+        continue;
+      }
+
+      if (_ignorableSymbols.contains(char)) continue;
+
+      if (char.length == 1 && _isAsciiLetterOrDigit(char.codeUnitAt(0))) {
+        buffer.write(char.toLowerCase());
+        continue;
+      }
+
+      buffer.write(char.toLowerCase());
+    }
+
+    final key = buffer.toString();
+    final resolved = key.isEmpty ? trimmed.toLowerCase() : key;
+    _localeSortKeyCache[this] = resolved;
+    return resolved;
+  }
+
   /// Compares this string to [other] with pinyin first, else use the ordering of the code units.
   ///
   /// Returns a negative value if `this` is ordered before `other`,
   /// a positive value if `this` is ordered after `other`,
   /// or zero if `this` and `other` are equivalent.
   int localeCompareTo(String other) {
+    final thisSortKey = toLocaleSortKey();
+    final otherSortKey = other.toLocaleSortKey();
+    final sortKeyResult = thisSortKey.compareTo(otherSortKey);
+    if (sortKeyResult != 0) return sortKeyResult;
+
     final thisContainsChinese = ChineseHelper.containsChinese(this);
     final otherContainsChinese = ChineseHelper.containsChinese(other);
 
     final thisCmpStr = thisContainsChinese ? this._getPinyin() : this;
     final otherCmpStr = otherContainsChinese ? other._getPinyin() : other;
-
+    final thisNormalized = thisCmpStr.toLowerCase();
+    final otherNormalized = otherCmpStr.toLowerCase();
+    final normalizedResult = thisNormalized.compareTo(otherNormalized);
+    if (normalizedResult != 0) return normalizedResult;
     return thisCmpStr.compareTo(otherCmpStr);
   }
 }

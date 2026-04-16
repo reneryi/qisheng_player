@@ -18,6 +18,14 @@ class AlbumDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final secondaryContent = List<Audio>.from(album.works);
+    int compareByDiscTrack(Audio a, Audio b) {
+      final discCompare = a.disc.compareTo(b.disc);
+      if (discCompare != 0) return discCompare;
+      final trackCompare = a.track.compareTo(b.track);
+      if (trackCompare != 0) return trackCompare;
+      return a.title.localeCompareTo(b.title);
+    }
+
     final multiSelectController = MultiSelectController<Audio>();
 
     return UniDetailPage<Album, Audio, Artist>(
@@ -31,7 +39,11 @@ class AlbumDetailPage extends StatelessWidget {
       secondaryContent: secondaryContent,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
           AudioTile(
-        leading: Text(audio.track < 10 ? "0${audio.track}" : "${audio.track}"),
+        leading: Text(
+          audio.disc > 0
+              ? "${audio.disc.toString().padLeft(2, "0")}-${audio.track.toString().padLeft(2, "0")}"
+              : audio.track.toString().padLeft(2, "0"),
+        ),
         audioIndex: i,
         playlist: secondaryContent,
         multiSelectController: multiSelectController,
@@ -51,6 +63,10 @@ class AlbumDetailPage extends StatelessWidget {
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
+        DeleteSelectedAudios(
+          multiSelectController: multiSelectController,
+          contentList: secondaryContent,
+        ),
         MultiSelectSelectOrClearAll(
           multiSelectController: multiSelectController,
           contentList: secondaryContent,
@@ -92,10 +108,10 @@ class AlbumDetailPage extends StatelessWidget {
           method: (list, order) {
             switch (order) {
               case SortOrder.ascending:
-                list.sort((a, b) => a.track.compareTo(b.track));
+                list.sort(compareByDiscTrack);
                 break;
               case SortOrder.decending:
-                list.sort((a, b) => b.track.compareTo(a.track));
+                list.sort((a, b) => compareByDiscTrack(b, a));
                 break;
             }
           },

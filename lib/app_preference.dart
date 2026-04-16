@@ -7,6 +7,7 @@ import 'package:coriander_player/page/now_playing_page/page.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/playback_service.dart';
 import 'package:coriander_player/utils.dart';
+import 'package:flutter/services.dart';
 
 class PagePreference {
   int sortMethod;
@@ -31,12 +32,14 @@ class PagePreference {
 class NowPlayingPagePreference {
   NowPlayingViewMode nowPlayingViewMode;
   LyricTextAlign lyricTextAlign;
+  bool showTranslation;
   double lyricFontSize;
   double translationFontSize;
 
   NowPlayingPagePreference(
     this.nowPlayingViewMode,
     this.lyricTextAlign,
+    this.showTranslation,
     this.lyricFontSize,
     this.translationFontSize,
   );
@@ -44,6 +47,7 @@ class NowPlayingPagePreference {
   Map toMap() => {
         "nowPlayingViewMode": nowPlayingViewMode.name,
         "lyricTextAlign": lyricTextAlign.name,
+        "showTranslation": showTranslation,
         "lyricFontSize": lyricFontSize,
         "translationFontSize": translationFontSize,
       };
@@ -53,6 +57,7 @@ class NowPlayingPagePreference {
       NowPlayingViewMode.fromString(map["nowPlayingViewMode"]) ??
           NowPlayingViewMode.withLyric,
       LyricTextAlign.fromString(map["lyricTextAlign"]) ?? LyricTextAlign.left,
+      map["showTranslation"] ?? true,
       map["lyricFontSize"] ?? 22.0,
       map["translationFontSize"] ?? 18.0,
     );
@@ -62,18 +67,156 @@ class NowPlayingPagePreference {
 class PlaybackPreference {
   PlayMode playMode;
   double volumeDsp;
+  bool enableVolumeLeveling;
+  double volumeLevelingPreampDb;
 
-  PlaybackPreference(this.playMode, this.volumeDsp);
+  PlaybackPreference(
+    this.playMode,
+    this.volumeDsp,
+    this.enableVolumeLeveling,
+    this.volumeLevelingPreampDb,
+  );
 
   Map toMap() => {
         "playMode": playMode.name,
         "volumeDsp": volumeDsp,
+        "enableVolumeLeveling": enableVolumeLeveling,
+        "volumeLevelingPreampDb": volumeLevelingPreampDb,
       };
 
   factory PlaybackPreference.fromMap(Map map) => PlaybackPreference(
         PlayMode.fromString(map["playMode"]) ?? PlayMode.forward,
         map["volumeDsp"] ?? 1.0,
+        map["enableVolumeLeveling"] ?? false,
+        (map["volumeLevelingPreampDb"] as num?)?.toDouble() ?? 0.0,
       );
+}
+
+class DesktopLyricPreference {
+  /// 退出前桌面歌词是否处于开启状态
+  bool enabled;
+
+  /// 退出前桌面歌词是否锁定
+  bool locked;
+
+  /// 桌面歌词偏好主题色
+  int? primary;
+  int? surfaceContainer;
+  int? onSurface;
+  double? windowLeft;
+  double? windowTop;
+
+  DesktopLyricPreference(
+    this.enabled,
+    this.locked,
+    this.primary,
+    this.surfaceContainer,
+    this.onSurface,
+    this.windowLeft,
+    this.windowTop,
+  );
+
+  Map toMap() => {
+        "enabled": enabled,
+        "locked": locked,
+        "primary": primary,
+        "surfaceContainer": surfaceContainer,
+        "onSurface": onSurface,
+        "windowLeft": windowLeft,
+        "windowTop": windowTop,
+      };
+
+  factory DesktopLyricPreference.fromMap(Map map) => DesktopLyricPreference(
+        map["enabled"] ?? false,
+        map["locked"] ?? false,
+        map["primary"],
+        map["surfaceContainer"],
+        map["onSurface"],
+        (map["windowLeft"] as num?)?.toDouble(),
+        (map["windowTop"] as num?)?.toDouble(),
+      );
+}
+
+class HotkeyBindingPreference {
+  int keyId;
+  List<String> modifiers;
+
+  HotkeyBindingPreference(this.keyId, this.modifiers);
+
+  Map<String, dynamic> toMap() => {
+        "keyId": keyId,
+        "modifiers": modifiers,
+      };
+
+  factory HotkeyBindingPreference.fromMap(Map map) => HotkeyBindingPreference(
+        (map["keyId"] as num?)?.toInt() ??
+            PhysicalKeyboardKey.space.usbHidUsage,
+        (map["modifiers"] as List?)?.map((e) => e.toString()).toList() ?? [],
+      );
+}
+
+class HotkeyPreference {
+  Map<String, HotkeyBindingPreference> bindings;
+
+  HotkeyPreference(this.bindings);
+
+  static HotkeyPreference defaults() => HotkeyPreference({
+        "playPause": HotkeyBindingPreference(
+          PhysicalKeyboardKey.space.usbHidUsage,
+          const [],
+        ),
+        "previous": HotkeyBindingPreference(
+          PhysicalKeyboardKey.arrowLeft.usbHidUsage,
+          const [],
+        ),
+        "next": HotkeyBindingPreference(
+          PhysicalKeyboardKey.arrowRight.usbHidUsage,
+          const [],
+        ),
+        "volumeUp": HotkeyBindingPreference(
+          PhysicalKeyboardKey.arrowUp.usbHidUsage,
+          const [],
+        ),
+        "volumeDown": HotkeyBindingPreference(
+          PhysicalKeyboardKey.arrowDown.usbHidUsage,
+          const [],
+        ),
+        "mute": HotkeyBindingPreference(
+          PhysicalKeyboardKey.keyM.usbHidUsage,
+          const ["alt"],
+        ),
+        "toggleDesktopLyric": HotkeyBindingPreference(
+          PhysicalKeyboardKey.keyM.usbHidUsage,
+          const ["control"],
+        ),
+        "toggleMainWindow": HotkeyBindingPreference(
+          PhysicalKeyboardKey.keyH.usbHidUsage,
+          const ["control"],
+        ),
+        "goBack": HotkeyBindingPreference(
+          PhysicalKeyboardKey.escape.usbHidUsage,
+          const [],
+        ),
+        "quit": HotkeyBindingPreference(
+          PhysicalKeyboardKey.keyQ.usbHidUsage,
+          const ["control"],
+        ),
+      });
+
+  Map<String, dynamic> toMap() => {
+        for (final entry in bindings.entries) entry.key: entry.value.toMap(),
+      };
+
+  factory HotkeyPreference.fromMap(Map map) {
+    final base = HotkeyPreference.defaults();
+    for (final entry in map.entries) {
+      if (entry.value is Map && base.bindings.containsKey(entry.key)) {
+        base.bindings[entry.key] =
+            HotkeyBindingPreference.fromMap(entry.value as Map);
+      }
+    }
+    return base;
+  }
 }
 
 class AppPreference {
@@ -105,10 +248,15 @@ class AppPreference {
 
   int startPage = 0;
 
-  var playbackPref = PlaybackPreference(PlayMode.forward, 1.0);
+  var playbackPref = PlaybackPreference(PlayMode.forward, 0.2, false, 0.0);
+
+  var desktopLyricPref =
+      DesktopLyricPreference(false, false, null, null, null, null, null);
 
   var nowPlayingPagePref = NowPlayingPagePreference(
-      NowPlayingViewMode.withLyric, LyricTextAlign.left, 22.0, 18.0);
+      NowPlayingViewMode.withLyric, LyricTextAlign.left, true, 22.0, 18.0);
+
+  var hotkeyPref = HotkeyPreference.defaults();
 
   Future<void> save() async {
     try {
@@ -127,7 +275,9 @@ class AppPreference {
         "playlistDetailPagePref": playlistDetailPagePref.toMap(),
         "startPage": startPage,
         "playbackPref": playbackPref.toMap(),
+        "desktopLyricPref": desktopLyricPref.toMap(),
         "nowPlayingPagePref": nowPlayingPagePref.toMap(),
+        "hotkeyPref": hotkeyPref.toMap(),
       };
 
       final prefJson = json.encode(prefMap);
@@ -170,10 +320,55 @@ class AppPreference {
         prefMap["playlistDetailPagePref"],
       );
       instance.startPage = prefMap["startPage"];
-      instance.playbackPref =
+      final loadedPlaybackPref =
           PlaybackPreference.fromMap(prefMap["playbackPref"]);
-      instance.nowPlayingPagePref =
+      // Normalize historical startup-at-100% volume bug once.
+      final needNormalizeVolume = loadedPlaybackPref.volumeDsp >= 0.999;
+      final normalizedVolume = needNormalizeVolume
+          ? 0.2
+          : loadedPlaybackPref.volumeDsp.clamp(0.0, 1.0);
+      instance.playbackPref
+        ..playMode = loadedPlaybackPref.playMode
+        ..volumeDsp = normalizedVolume
+        ..enableVolumeLeveling = loadedPlaybackPref.enableVolumeLeveling
+        ..volumeLevelingPreampDb = loadedPlaybackPref.volumeLevelingPreampDb;
+
+      final loadedDesktopLyricPref = DesktopLyricPreference.fromMap(
+        prefMap["desktopLyricPref"] ?? {},
+      );
+      instance.desktopLyricPref
+        ..enabled = loadedDesktopLyricPref.enabled
+        ..locked = loadedDesktopLyricPref.locked
+        ..primary = loadedDesktopLyricPref.primary
+        ..surfaceContainer = loadedDesktopLyricPref.surfaceContainer
+        ..onSurface = loadedDesktopLyricPref.onSurface
+        ..windowLeft = loadedDesktopLyricPref.windowLeft
+        ..windowTop = loadedDesktopLyricPref.windowTop;
+
+      final loadedNowPlayingPref =
           NowPlayingPagePreference.fromMap(prefMap["nowPlayingPagePref"]);
+      instance.nowPlayingPagePref
+        ..nowPlayingViewMode = loadedNowPlayingPref.nowPlayingViewMode
+        ..lyricTextAlign = loadedNowPlayingPref.lyricTextAlign
+        ..showTranslation = loadedNowPlayingPref.showTranslation
+        ..lyricFontSize = loadedNowPlayingPref.lyricFontSize
+        ..translationFontSize = loadedNowPlayingPref.translationFontSize;
+
+      instance.hotkeyPref = HotkeyPreference.fromMap(
+        prefMap["hotkeyPref"] ?? {},
+      );
+      bool needNormalizeMuteHotkey = false;
+      final muteBinding = instance.hotkeyPref.bindings["mute"];
+      if (muteBinding != null &&
+          muteBinding.keyId == PhysicalKeyboardKey.keyM.usbHidUsage &&
+          muteBinding.modifiers.isEmpty) {
+        muteBinding.modifiers = ["alt"];
+        needNormalizeMuteHotkey = true;
+      }
+
+      if (needNormalizeVolume || needNormalizeMuteHotkey) {
+        await instance.save();
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }

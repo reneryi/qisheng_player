@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -65,18 +66,25 @@ class _LyricHorizontalScrollAreaState
 
   var currContent = "Enjoy Music";
 
+  String _lineText(LyricLine line) {
+    final showTranslation =
+        AppPreference.instance.nowPlayingPagePref.showTranslation;
+    if (line is LrcLine) {
+      if (showTranslation) return line.content;
+      return line.content.split("┃").first;
+    }
+    if (line is SyncLyricLine) {
+      if (!showTranslation || line.translation == null) return line.content;
+      return "${line.content}┃${line.translation}";
+    }
+    return "Enjoy Music";
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.lyric.lines.isNotEmpty) {
-      final first = widget.lyric.lines.first;
-      if (first is LrcLine) {
-        currContent = first.content;
-      } else if (first is SyncLyricLine) {
-        currContent = first.translation == null
-            ? first.content
-            : "${first.content}┃${first.translation}";
-      }
+      currContent = _lineText(widget.lyric.lines.first);
     }
 
     lyricLineStreamSubscription = lyricService.lyricLineStream.listen((line) {
@@ -84,13 +92,7 @@ class _LyricHorizontalScrollAreaState
       final currLine = widget.lyric.lines[line];
 
       setState(() {
-        if (currLine is LrcLine) {
-          currContent = currLine.content;
-        } else if (currLine is SyncLyricLine) {
-          currContent = currLine.translation == null
-              ? currLine.content
-              : "${currLine.content}┃${currLine.translation}";
-        }
+        currContent = _lineText(currLine);
       });
 
       /// 减去启动延时和滚动结束停留时间

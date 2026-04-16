@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -25,6 +28,10 @@ class PageScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final backgroundVisible = _hasValidCustomBackground();
+    final surfaceColor = backgroundVisible
+        ? scheme.surface.withValues(alpha: 0.88)
+        : scheme.surface;
 
     return ResponsiveBuilder(builder: (context, screenType) {
       List<Widget> rowChildren;
@@ -105,7 +112,7 @@ class PageScaffold extends StatelessWidget {
       }
 
       return ColoredBox(
-        color: scheme.surface,
+        color: surfaceColor,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 16.0,
@@ -127,6 +134,12 @@ class PageScaffold extends StatelessWidget {
         ),
       );
     });
+  }
+
+  bool _hasValidCustomBackground() {
+    final path = AppSettings.instance.backgroundImagePath;
+    if (path == null || path.isEmpty) return false;
+    return File(path).existsSync();
   }
 
   Expanded onlyTitle(ColorScheme scheme) {

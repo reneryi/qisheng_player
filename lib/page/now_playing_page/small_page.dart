@@ -90,24 +90,39 @@ class _NowPlayingPage_SmallState extends State<_NowPlayingPage_Small> {
               ],
             ),
           ),
-          const SizedBox(height: 8.0),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: _NowPlayingSlider(),
-          ),
-          const SizedBox(height: 8.0),
-          const _NowPlayingMainControls(),
-          const SizedBox(height: 8.0),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NowPlayingShuffleSwitch(),
-              _NowPlayingPlayModeSwitch(),
-              _NowPlayingVolDspSlider(),
-              _ExclusiveModeSwitch(),
-              _DesktopLyricSwitch(),
-              _NowPlayingMoreAction(),
-            ],
+          ValueListenableBuilder(
+            valueListenable: NOW_PLAYING_CONTROLS_VISIBLE,
+            builder: (context, visible, _) => IgnorePointer(
+              ignoring: !visible,
+              child: AnimatedOpacity(
+                opacity: visible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 8.0),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: _NowPlayingSlider(),
+                    ),
+                    SizedBox(height: 8.0),
+                    _NowPlayingMainControls(),
+                    SizedBox(height: 8.0),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _NowPlayingShuffleSwitch(),
+                        _NowPlayingPlayModeSwitch(),
+                        _NowPlayingVolDspSlider(),
+                        _ExclusiveModeSwitch(),
+                        _DesktopLyricSwitch(),
+                        _NowPlayingMoreAction(),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           )
         ],
       ),
@@ -145,9 +160,11 @@ class _NowPlayingSmallViewSwitchState
             opacity: visible ? 1.0 : 0.0,
             child: InkWell(
               borderRadius: BorderRadius.circular(16.0),
-              hoverColor: scheme.onSecondaryContainer.withOpacity(0.08),
-              highlightColor: scheme.onSecondaryContainer.withOpacity(0.12),
-              splashColor: scheme.onSecondaryContainer.withOpacity(0.12),
+              hoverColor: scheme.onSecondaryContainer.withValues(alpha: 0.08),
+              highlightColor:
+                  scheme.onSecondaryContainer.withValues(alpha: 0.12),
+              splashColor:
+                  scheme.onSecondaryContainer.withValues(alpha: 0.12),
               onTap: widget.onTap,
               onHover: (hasEntered) {
                 setState(() {

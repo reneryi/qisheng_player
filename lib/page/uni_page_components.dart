@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/online_cover_store.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -68,7 +71,7 @@ class SortMethodComboBox<T> extends StatelessWidget {
             borderRadius: borderRadius,
             color: scheme.secondaryContainer,
             child: InkWell(
-              hoverColor: scheme.onSecondaryContainer.withOpacity(0.08),
+              hoverColor: scheme.onSecondaryContainer.withValues(alpha: 0.08),
               borderRadius: borderRadius,
               onTap: () {
                 if (menuController.isOpen) {
@@ -152,49 +155,278 @@ class AddAllToPlaylist extends StatelessWidget {
 
   final MultiSelectController<Audio> multiSelectController;
 
+  Future<String?> _showCreatePlaylistDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("创建歌单"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "歌单名称",
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) {
+            Navigator.pop(context, value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context, controller.text);
+            },
+            child: const Text("创建"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Playlist?> _pickTargetPlaylist(BuildContext context) async {
+    if (PLAYLISTS.isEmpty) {
+      final createdName = await _showCreatePlaylistDialog(context);
+      final trimmed = createdName?.trim();
+      if (trimmed == null || trimmed.isEmpty) return null;
+      if (PLAYLISTS.any((item) => item.name == trimmed)) {
+        showTextOnSnackBar("歌单“$trimmed”已存在");
+        return null;
+      }
+      final playlist = Playlist(trimmed, {});
+      PLAYLISTS.add(playlist);
+      scheduleSavePlaylists();
+      return playlist;
+    }
+
+    return showDialog<Playlist>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("选择歌单"),
+        content: SizedBox(
+          width: 360,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: PLAYLISTS.length,
+            itemBuilder: (context, index) {
+              final playlist = PLAYLISTS[index];
+              return ListTile(
+                leading: const Icon(Symbols.queue_music),
+                title: Text(playlist.name),
+                onTap: () => Navigator.pop(context, playlist),
+              );
+            },
+            separatorBuilder: (_, __) => const Divider(height: 1),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () async {
+              final createdName = await _showCreatePlaylistDialog(context);
+              final trimmed = createdName?.trim();
+              if (trimmed == null || trimmed.isEmpty) return;
+              if (PLAYLISTS.any((item) => item.name == trimmed)) {
+                showTextOnSnackBar("歌单“$trimmed”已存在");
+                return;
+              }
+              final playlist = Playlist(trimmed, {});
+              PLAYLISTS.add(playlist);
+              scheduleSavePlaylists();
+              if (context.mounted) {
+                Navigator.pop(context, playlist);
+              }
+            },
+            icon: const Icon(Symbols.add),
+            label: const Text("创建歌单"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleAddToPlaylist(BuildContext context) async {
+    if (multiSelectController.selected.isEmpty) {
+      showTextOnSnackBar("请先选择歌曲");
+      return;
+    }
+
+    final targetPlaylist = await _pickTargetPlaylist(context);
+    if (targetPlaylist == null) return;
+
+    int addedCount = 0;
+    int existedCount = 0;
+    for (final audio in multiSelectController.selected) {
+      if (targetPlaylist.addAudio(audio)) {
+        addedCount++;
+      } else {
+        existedCount++;
+      }
+    }
+
+    if (addedCount == 0 && existedCount > 0) {
+      showTextOnSnackBar("所选歌曲已存在于歌单“${targetPlaylist.name}”");
+      return;
+    }
+    if (existedCount > 0) {
+      showTextOnSnackBar(
+        "已添加$addedCount首到“${targetPlaylist.name}”，$existedCount首已存在",
+      );
+      return;
+    }
+    showTextOnSnackBar("成功将$addedCount首添加到歌单“${targetPlaylist.name}”");
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MenuAnchor(
-      style: MenuStyle(
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        ),
+    return FilledButton.icon(
+      onPressed: () => _handleAddToPlaylist(context),
+      icon: const Icon(Symbols.add),
+      label: const Text("添加到歌单"),
+      style: const ButtonStyle(
+        fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
       ),
-      menuChildren: List.generate(
-        PLAYLISTS.length,
-        (i) => MenuItemButton(
-          style: const ButtonStyle(
-            padding: WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 20),
-            ),
+    );
+  }
+}
+
+enum _DeleteSelectedMode {
+  removeOnly,
+  removeAndDeleteSource,
+}
+
+class DeleteSelectedAudios extends StatelessWidget {
+  const DeleteSelectedAudios({
+    super.key,
+    required this.multiSelectController,
+    required this.contentList,
+  });
+
+  final MultiSelectController<Audio> multiSelectController;
+  final List<Audio> contentList;
+
+  Future<_DeleteSelectedMode?> _confirmDelete(
+    BuildContext context,
+    int count,
+  ) {
+    return showDialog<_DeleteSelectedMode>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("删除选中歌曲"),
+        content: Text(
+          "已选择$count首歌曲。\n"
+          "删除源文件：会删除磁盘上的音乐文件。\n"
+          "仅从播放器移除：不会删除磁盘文件。",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
           ),
-          onPressed: () {
-            for (var item in multiSelectController.selected) {
-              if (!PLAYLISTS[i].audios.containsKey(item.path)) {
-                PLAYLISTS[i].audios[item.path] = item;
-              }
-            }
-            showTextOnSnackBar(
-              "成功将${multiSelectController.selected.length}首添加到歌单“${PLAYLISTS[i].name}”",
-            );
-          },
-          child: Text(PLAYLISTS[i].name),
-        ),
+          FilledButton.tonal(
+            onPressed: () =>
+                Navigator.pop(context, _DeleteSelectedMode.removeOnly),
+            child: const Text("仅从播放器移除"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              _DeleteSelectedMode.removeAndDeleteSource,
+            ),
+            child: const Text("删除源文件"),
+          ),
+        ],
       ),
-      builder: (context, controller, _) => FilledButton.icon(
-        onPressed: () {
-          if (controller.isOpen) {
-            controller.close();
-          } else {
-            controller.open();
+    );
+  }
+
+  Future<void> _deleteSelected(BuildContext context) async {
+    final selected = List<Audio>.from(multiSelectController.selected);
+    if (selected.isEmpty) {
+      showTextOnSnackBar("请先选择歌曲");
+      return;
+    }
+
+    final mode = await _confirmDelete(context, selected.length);
+    if (mode == null) return;
+
+    final pathsToRemove = <String>{};
+    final failedMediaPaths = <String>{};
+
+    if (mode == _DeleteSelectedMode.removeAndDeleteSource) {
+      final mediaPaths = selected.map((audio) => audio.mediaPath).toSet();
+      final deletedMediaPaths = <String>{};
+      for (final mediaPath in mediaPaths) {
+        try {
+          final file = File(mediaPath);
+          if (file.existsSync()) {
+            await file.delete();
           }
-        },
-        icon: const Icon(Symbols.add),
-        label: const Text("添加到歌单"),
-        style: const ButtonStyle(
-          fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
-        ),
+          deletedMediaPaths.add(mediaPath);
+        } catch (_) {
+          failedMediaPaths.add(mediaPath);
+        }
+      }
+
+      if (deletedMediaPaths.isNotEmpty) {
+        for (final audio in AudioLibrary.instance.audioCollection) {
+          if (deletedMediaPaths.contains(audio.mediaPath)) {
+            pathsToRemove.add(audio.path);
+          }
+        }
+      }
+    } else {
+      pathsToRemove.addAll(selected.map((audio) => audio.path));
+    }
+
+    if (pathsToRemove.isEmpty) {
+      if (failedMediaPaths.isNotEmpty) {
+        showTextOnSnackBar("删除失败：${failedMediaPaths.length}个源文件无法删除");
+      }
+      return;
+    }
+
+    AudioLibrary.instance.removeAudiosByPaths(pathsToRemove);
+    for (final path in pathsToRemove) {
+      OnlineCoverStore.instance.removeByPath(path);
+      removeAudioFromAllPlaylistsByPath(path);
+      PlayService.instance.playbackService.removeAudioFromPlaylistByPath(path);
+    }
+    contentList.removeWhere((audio) => pathsToRemove.contains(audio.path));
+
+    multiSelectController.clear();
+    multiSelectController.useMultiSelectView(false);
+
+    final modeText = mode == _DeleteSelectedMode.removeAndDeleteSource
+        ? "已删除源文件并移除"
+        : "已从播放器移除";
+    if (failedMediaPaths.isNotEmpty) {
+      showTextOnSnackBar(
+        "$modeText ${pathsToRemove.length} 首，${failedMediaPaths.length} 个源文件删除失败",
+      );
+      return;
+    }
+    showTextOnSnackBar("$modeText ${pathsToRemove.length} 首歌曲");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton.filled(
+      tooltip: "删除选中歌曲",
+      onPressed: () => _deleteSelected(context),
+      style: ButtonStyle(
+        backgroundColor: WidgetStatePropertyAll(scheme.error),
+        foregroundColor: WidgetStatePropertyAll(scheme.onError),
       ),
+      icon: const Icon(Symbols.delete),
     );
   }
 }

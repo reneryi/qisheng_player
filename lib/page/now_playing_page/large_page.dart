@@ -33,43 +33,58 @@ class _NowPlayingPage_Large extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16.0),
-          const _NowPlayingSlider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _NowPlayingShuffleSwitch(),
-                      spacer,
-                      _NowPlayingPlayModeSwitch(),
-                      spacer,
-                      _NowPlayingVolDspSlider(),
-                      spacer,
-                      _ExclusiveModeSwitch(),
-                    ],
-                  ),
+          ValueListenableBuilder(
+            valueListenable: NOW_PLAYING_CONTROLS_VISIBLE,
+            builder: (context, visible, _) => IgnorePointer(
+              ignoring: !visible,
+              child: AnimatedOpacity(
+                opacity: visible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 16.0),
+                    _NowPlayingSlider(),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _NowPlayingShuffleSwitch(),
+                                spacer,
+                                _NowPlayingPlayModeSwitch(),
+                                spacer,
+                                _NowPlayingVolDspSlider(),
+                                spacer,
+                                _ExclusiveModeSwitch(),
+                              ],
+                            ),
+                          ),
+                          _NowPlayingMainControls(),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _NowPlayingLargeViewSwitch(),
+                                spacer,
+                                _DesktopLyricSwitch(),
+                                spacer,
+                                _NowPlayingMoreAction(),
+                              ],
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                _NowPlayingMainControls(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _NowPlayingLargeViewSwitch(),
-                      spacer,
-                      _DesktopLyricSwitch(),
-                      spacer,
-                      _NowPlayingMoreAction(),
-                    ],
-                  ),
-                )
-              ],
+              ),
             ),
           ),
         ],

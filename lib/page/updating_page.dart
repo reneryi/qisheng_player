@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/online_cover_store.dart';
+import 'package:coriander_player/library/play_count_store.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
@@ -57,6 +59,8 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       AudioLibrary.initFromIndex(),
       readPlaylists(),
       readLyricSources(),
+      PlayCountStore.instance.read(),
+      OnlineCoverStore.instance.read(),
     ]);
     _subscription?.cancel();
     final ctx = context;

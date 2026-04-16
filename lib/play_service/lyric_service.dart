@@ -21,19 +21,15 @@ class LyricService extends ChangeNotifier {
       currLyricFuture.then((value) {
         if (value == null) return;
         if (_nextLyricLine >= value.lines.length) return;
-
-        if ((pos * 1000) > value.lines[_nextLyricLine].start.inMilliseconds) {
+        final posInMs = (pos * 1000).round();
+        bool changed = false;
+        while (_nextLyricLine < value.lines.length &&
+            posInMs > value.lines[_nextLyricLine].start.inMilliseconds) {
           _nextLyricLine += 1;
-
-          final currLineIndex = _nextLyricLine - 1;
-          _lyricLineStreamController.add(currLineIndex);
-
-          playService.desktopLyricService.canSendMessage.then((canSend) {
-            if (!canSend) return;
-
-            final currLine = value.lines[currLineIndex];
-            playService.desktopLyricService.sendLyricLineMessage(currLine);
-          });
+          changed = true;
+        }
+        if (changed) {
+          _notifyCurrentLyricLine(value);
         }
       });
     });
@@ -47,6 +43,8 @@ class LyricService extends ChangeNotifier {
   /// 下一行歌词
   int _nextLyricLine = 0;
 
+  int get currentLyricLineIndex => max(_nextLyricLine - 1, 0);
+
   late final StreamController<int> _lyricLineStreamController =
       StreamController.broadcast(onListen: () {
     _lyricLineStreamController.add(_nextLyricLine);
@@ -58,6 +56,7 @@ class LyricService extends ChangeNotifier {
   void findCurrLyricLine() {
     currLyricFuture.then((value) {
       if (value == null) return;
+      if (value.lines.isEmpty) return;
 
       final next = value.lines.indexWhere(
         (element) =>
@@ -65,13 +64,37 @@ class LyricService extends ChangeNotifier {
             playService.playbackService.position,
       );
       _nextLyricLine = next == -1 ? value.lines.length : next;
-      _lyricLineStreamController.add(max(_nextLyricLine - 1, 0));
+      _notifyCurrentLyricLine(value);
+    });
+  }
+
+  void _notifyCurrentLyricLine(Lyric lyric) {
+    if (lyric.lines.isEmpty) return;
+    final currLineIndex =
+        currentLyricLineIndex.clamp(0, lyric.lines.length - 1).toInt();
+    _lyricLineStreamController.add(currLineIndex);
+
+    playService.desktopLyricService.canSendMessage.then((canSend) {
+      if (!canSend) return;
+
+      playService.desktopLyricService
+          .sendLyricLineMessage(lyric.lines[currLineIndex]);
+    });
+  }
+
+  void refreshCurrentLyricLine() {
+    currLyricFuture.then((value) {
+      if (value == null) return;
+      _notifyCurrentLyricLine(value);
     });
   }
 
   Future<Lyric?> _getLyricDefault(bool localFirst) async {
     final nowPlaying = _getNowPlaying();
     if (nowPlaying == null) return Future.value(null);
+    if (nowPlaying.isCueTrack) {
+      return Lrc.fromAudioPath(nowPlaying);
+    }
 
     if (localFirst) {
       return (await Lrc.fromAudioPath(nowPlaying)) ??
@@ -90,6 +113,16 @@ class LyricService extends ChangeNotifier {
 
     currLyricFuture.ignore();
 
+    if (nowPlaying.isCueTrack) {
+      currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+      currLyricFuture.then((value) {
+        _nextLyricLine = 0;
+        findCurrLyricLine();
+      });
+      notifyListeners();
+      return;
+    }
+
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
     if (lyricSource == null) {
       currLyricFuture = _getLyricDefault(AppSettings.instance.localLyricFirst);
@@ -107,6 +140,7 @@ class LyricService extends ChangeNotifier {
 
     currLyricFuture.then((value) {
       _nextLyricLine = 0;
+      findCurrLyricLine();
     });
 
     notifyListeners();
@@ -131,6 +165,15 @@ class LyricService extends ChangeNotifier {
     if (nowPlaying == null) return;
 
     currLyricFuture.ignore();
+
+    if (nowPlaying.isCueTrack) {
+      currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+      currLyricFuture.then((value) {
+        findCurrLyricLine();
+      });
+      notifyListeners();
+      return;
+    }
 
     currLyricFuture = getMostMatchedLyric(nowPlaying);
     currLyricFuture.then((value) {

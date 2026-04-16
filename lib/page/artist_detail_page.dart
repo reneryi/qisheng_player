@@ -50,6 +50,10 @@ class ArtistDetailPage extends StatelessWidget {
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
+        DeleteSelectedAudios(
+          multiSelectController: multiSelectController,
+          contentList: secondaryContent,
+        ),
         MultiSelectSelectOrClearAll(
           multiSelectController: multiSelectController,
           contentList: secondaryContent,

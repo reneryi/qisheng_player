@@ -32,6 +32,10 @@ class FolderDetailPage extends StatelessWidget {
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
+        DeleteSelectedAudios(
+          multiSelectController: multiSelectController,
+          contentList: contentList,
+        ),
         MultiSelectSelectOrClearAll(
           multiSelectController: multiSelectController,
           contentList: contentList,

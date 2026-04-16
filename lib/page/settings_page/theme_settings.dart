@@ -6,6 +6,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/page/settings_page/theme_picker_dialog.dart';
 import 'package:coriander_player/theme_provider.dart';
+import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
@@ -26,7 +27,7 @@ class ThemeSelector extends StatelessWidget {
           if (seedColor == null) return;
 
           ThemeProvider.instance.applyTheme(seedColor: seedColor);
-          AppSettings.instance.defaultTheme = seedColor.value;
+          AppSettings.instance.defaultTheme = seedColor.toARGB32();
           await AppSettings.instance.saveSettings();
         },
         label: const Text("主题选择器"),
@@ -276,6 +277,102 @@ class _FontSelector extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class BackgroundImageSettings extends StatefulWidget {
+  const BackgroundImageSettings({super.key});
+
+  @override
+  State<BackgroundImageSettings> createState() =>
+      _BackgroundImageSettingsState();
+}
+
+class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBackground = settings.backgroundImagePath != null &&
+        settings.backgroundImagePath!.isNotEmpty;
+
+    return Column(
+      children: [
+        SettingsTile(
+          description: "自定义背景",
+          action: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: () async {
+                  final picker = OpenFilePicker()
+                    ..title = "选择背景图片"
+                    ..filterSpecification = {
+                      "图片": "*.png;*.jpg;*.jpeg;*.bmp;*.webp",
+                    };
+                  final file = picker.getFile();
+                  if (file == null) return;
+
+                  setState(() {
+                    settings.backgroundImagePath = file.path;
+                  });
+                  settings.notifyBackgroundChanged();
+                  await settings.saveSettings();
+                },
+                icon: const Icon(Symbols.image),
+                label: Text(hasBackground ? "更换背景" : "选择背景"),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: hasBackground
+                    ? () async {
+                        setState(() {
+                          settings.backgroundImagePath = null;
+                        });
+                        settings.notifyBackgroundChanged();
+                        await settings.saveSettings();
+                      }
+                    : null,
+                icon: const Icon(Symbols.delete),
+                label: const Text("清除"),
+              ),
+            ],
+          ),
+        ),
+        SettingsTile(
+          description: "背景透明度",
+          action: SizedBox(
+            width: 260,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    min: 0.0,
+                    max: 0.6,
+                    value: settings.backgroundImageOpacity,
+                    onChanged: hasBackground
+                        ? (value) async {
+                            setState(() {
+                              settings.backgroundImageOpacity = value;
+                            });
+                            settings.notifyBackgroundChanged();
+                            await settings.saveSettings();
+                          }
+                        : null,
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    "${(settings.backgroundImageOpacity * 100).round()}%",
+                    textAlign: TextAlign.end,
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
