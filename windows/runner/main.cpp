@@ -17,6 +17,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+  HANDLE single_instance_mutex =
+      CreateMutexW(nullptr, FALSE, L"Local\\CorianderPlayerSingleInstance");
+  const DWORD single_instance_error = GetLastError();
+  if (single_instance_mutex != nullptr &&
+      (single_instance_error == ERROR_ALREADY_EXISTS ||
+       single_instance_error == ERROR_ACCESS_DENIED)) {
+    const UINT activate_window_message =
+        RegisterWindowMessage(L"CorianderPlayerActivateMainWindow");
+    if (activate_window_message != 0) {
+      AllowSetForegroundWindow(ASFW_ANY);
+      PostMessage(HWND_BROADCAST, activate_window_message, 0, 0);
+    }
+
+    CloseHandle(single_instance_mutex);
+    ::CoUninitialize();
+    return EXIT_SUCCESS;
+  }
+
   flutter::DartProject project(L"data");
   project.set_ui_thread_policy(flutter::UIThreadPolicy::RunOnSeparateThread);
 
@@ -37,6 +55,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
+  }
+
+  if (single_instance_mutex != nullptr) {
+    CloseHandle(single_instance_mutex);
   }
 
   ::CoUninitialize();

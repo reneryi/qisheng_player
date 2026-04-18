@@ -65,6 +65,15 @@ class BassPlayer {
   final _playerStateStreamController =
       StreamController<PlayerState>.broadcast();
   bool _completionEmitted = false;
+  PlayerState? _lastEmittedPlayerState;
+
+  void _emitPlayerState(PlayerState state) {
+    if (_lastEmittedPlayerState == state) {
+      return;
+    }
+    _lastEmittedPlayerState = state;
+    _playerStateStreamController.add(state);
+  }
 
   /// audio's length in seconds
   double get length => _fstream == null
@@ -140,13 +149,19 @@ class BassPlayer {
       (timer) {
         _positionStreamController.add(position);
 
+        final currentState = playerState;
+
         /// check if the channel has completed
-        if (!_completionEmitted &&
-            playerState == PlayerState.stopped &&
-            _isStreamAtEnd()) {
+        if (currentState == PlayerState.stopped && _isStreamAtEnd()) {
+          if (_completionEmitted) {
+            return;
+          }
           _completionEmitted = true;
-          _playerStateStreamController.add(PlayerState.completed);
+          _emitPlayerState(PlayerState.completed);
+          return;
         }
+
+        _emitPlayerState(currentState);
       },
     );
   }
@@ -491,7 +506,7 @@ class BassPlayer {
       }
     }
     _completionEmitted = false;
-    _playerStateStreamController.add(playerState);
+    _emitPlayerState(playerState);
     _positionUpdater = _getPositionUpdater();
   }
 
@@ -520,13 +535,13 @@ class BassPlayer {
     }
 
     _completionEmitted = false;
-    _playerStateStreamController.add(playerState);
+    _emitPlayerState(playerState);
     _positionUpdater = _getPositionUpdater();
   }
 
   void _pause_wasapiExclusive() {
     if (_bassWasapi.BASS_WASAPI_Stop(BASS.FALSE) == BASS.TRUE) {
-      _playerStateStreamController.add(playerState);
+      _emitPlayerState(playerState);
       _positionUpdater?.cancel();
     }
   }
@@ -553,7 +568,7 @@ class BassPlayer {
       }
     }
 
-    _playerStateStreamController.add(playerState);
+    _emitPlayerState(playerState);
     _positionUpdater?.cancel();
   }
 

@@ -124,6 +124,8 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {
   taskbar_button_created_message_ =
       RegisterWindowMessage(L"TaskbarButtonCreated");
+  activate_window_message_ =
+      RegisterWindowMessage(L"CorianderPlayerActivateMainWindow");
 }
 
 FlutterWindow::~FlutterWindow() {}
@@ -145,6 +147,7 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  AddTrayIcon();
   media_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -275,6 +278,23 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (activate_window_message_ != 0 && message == activate_window_message_) {
+    allow_close_ = false;
+    if (!IsWindowVisible(GetHandle())) {
+      RestoreFromTray();
+      return 0;
+    }
+
+    if (IsIconic(GetHandle())) {
+      ShowWindow(GetHandle(), SW_RESTORE);
+    } else {
+      ShowWindow(GetHandle(), SW_SHOW);
+    }
+    SetForegroundWindow(GetHandle());
+    was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
+    return 0;
+  }
+
   if (taskbar_button_created_message_ != 0 &&
       message == taskbar_button_created_message_) {
     thumb_buttons_added_ = false;
@@ -398,7 +418,6 @@ void FlutterWindow::RestoreFromTray() {
       restore_maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
   SetForegroundWindow(GetHandle());
   was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
-  RemoveTrayIcon();
   PostMessage(GetHandle(), kRefreshThumbButtonsMessage, 0, 0);
 }
 

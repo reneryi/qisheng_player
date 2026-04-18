@@ -70,6 +70,7 @@ class FlutterWindow : public Win32Window {
   // The project to run.
   flutter::DartProject project_;
   UINT taskbar_button_created_message_ = 0;
+  UINT activate_window_message_ = 0;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

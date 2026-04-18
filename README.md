@@ -153,6 +153,18 @@ cd ../..
 
 `bass.dll` · `bassape.dll` · `bassdsd.dll` · `bassflac.dll` · `bassmidi.dll` · `bassopus.dll` · `basswv.dll` · `basswasapi.dll` · `bass_aac.dll`
 
+### 打包安装程序与压缩包
+
+```bash
+# 在完成 release 构建后执行
+powershell -ExecutionPolicy Bypass -File tools/package_release_windows.ps1
+```
+
+产物输出目录：`build/release_artifacts`
+
+- `coriander_player-<version>-windows-x64.zip`：便携压缩包
+- `coriander_player-<version>-windows-x64-installer.exe`：安装程序（安装到 `%LOCALAPPDATA%\Coriander Player`）
+
 ## 🔄 CI / CD
 
 GitHub Actions 工作流 ([`.github/workflows/windows_ci.yml`](.github/workflows/windows_ci.yml)) 覆盖：
