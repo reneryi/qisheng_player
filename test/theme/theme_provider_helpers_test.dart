@@ -1,3 +1,4 @@
+import 'package:coriander_player/theme/album_palette.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,5 +43,20 @@ void main() {
 
     expect(
         darkTint.computeLuminance(), greaterThan(lightTint.computeLuminance()));
+  });
+
+  test('AlbumPalette.fromColors fills missing roles from earlier colors', () {
+    final palette = AlbumPalette.fromColors(
+      const [
+        Color(0xFF112233),
+        Color(0xFF445566),
+      ],
+      fallback: const Color(0xFFABCDEF),
+    );
+
+    expect(palette.primary, const Color(0xFF112233));
+    expect(palette.secondary, const Color(0xFF445566));
+    expect(palette.accent, const Color(0xFF445566));
+    expect(palette.muted, const Color(0xFF445566));
   });
 }

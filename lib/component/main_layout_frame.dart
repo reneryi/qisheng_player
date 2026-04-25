@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/component/ui/liquid_gradient_background.dart';
 import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:flutter/material.dart';
@@ -103,106 +104,78 @@ class _MainLayoutBackground extends StatelessWidget {
     final chrome = context.chrome;
     final theme = context.watch<ThemeProvider>();
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        AnimatedContainer(
-          duration: context.motion.pageTransitionDuration,
-          curve: context.motion.normal,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: theme.backgroundGradient,
-            ),
-          ),
-        ),
-        IgnorePointer(
-          child: Stack(
-            children: [
-              _BackgroundGlow(
-                alignment: const Alignment(-0.86, -0.94),
-                size: 560,
-                color: theme.dominantColor.withValues(alpha: 0.2),
-              ),
-              _BackgroundGlow(
-                alignment: const Alignment(0.94, 0.86),
-                size: 460,
-                color: theme.glassTint.withValues(alpha: 0.14),
-              ),
-            ],
-          ),
-        ),
-        ValueListenableBuilder<int>(
-          valueListenable: AppSettings.instance.backgroundVersion,
-          builder: (context, _, __) {
-            final bgPath = AppSettings.instance.backgroundImagePath;
-            if (bgPath == null || bgPath.isEmpty) {
-              return const SizedBox.shrink();
-            }
+    return ValueListenableBuilder<int>(
+      valueListenable: AppSettings.instance.backgroundVersion,
+      builder: (context, _, __) {
+        final file = _resolveBackgroundFile();
+        final hasCustomBackground = file != null;
 
-            final file = File(bgPath);
-            if (!file.existsSync()) {
-              return const SizedBox.shrink();
-            }
-
-            return IgnorePointer(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Opacity(
-                    opacity: AppSettings.instance.backgroundImageOpacity,
-                    child: Image.file(
-                      file,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
-                  ),
-                  ColoredBox(
-                    color: Color.alphaBlend(
-                      theme.glassTint.withValues(alpha: 0.12),
-                      chrome.windowScrim,
-                    ),
-                  ),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              child: LiquidGradientBackground(
+                backgroundColors: theme.backgroundGradient,
+                paletteColors: [
+                  ...theme.albumPalette.colors,
+                  theme.glassTint,
                 ],
+                effectsLevel: theme.uiEffectsLevel,
+                tintOnly: hasCustomBackground,
+                transitionDuration: context.motion.pageTransitionDuration,
+                transitionCurve: context.motion.normal,
               ),
-            );
-          },
-        ),
-      ],
+            ),
+            if (file != null)
+              _UserBackgroundImage(
+                file: file,
+                tint: Color.alphaBlend(
+                  theme.glassTint.withValues(alpha: 0.1),
+                  chrome.windowScrim,
+                ),
+              ),
+          ],
+        );
+      },
     );
+  }
+
+  File? _resolveBackgroundFile() {
+    final bgPath = AppSettings.instance.backgroundImagePath;
+    if (bgPath == null || bgPath.isEmpty) return null;
+
+    final file = File(bgPath);
+    if (!file.existsSync()) return null;
+    return file;
   }
 }
 
-class _BackgroundGlow extends StatelessWidget {
-  const _BackgroundGlow({
-    required this.alignment,
-    required this.size,
-    required this.color,
+class _UserBackgroundImage extends StatelessWidget {
+  const _UserBackgroundImage({
+    required this.file,
+    required this.tint,
   });
 
-  final Alignment alignment;
-  final double size;
-  final Color color;
+  final File file;
+  final Color tint;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: IgnorePointer(
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                color,
-                color.withValues(alpha: color.a * 0.32),
-                Colors.transparent,
-              ],
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Opacity(
+              opacity: AppSettings.instance.backgroundImageOpacity,
+              child: Image.file(
+                file,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
             ),
-          ),
+            ColoredBox(color: tint),
+          ],
         ),
       ),
     );

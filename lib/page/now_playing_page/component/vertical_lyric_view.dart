@@ -163,10 +163,19 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
           targetContext,
           alignment: 0.25,
           duration: context.motion.lyricScrollDuration,
-          curve: context.motion.normal,
+          curve: context.motion.emphasized,
         );
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _VerticalLyricScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lyric == widget.lyric) return;
+    _lastSafeIndex = null;
+    _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _initLyricView();
   }
 
   void _seekToLyricLine(int i) {
@@ -180,15 +189,20 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     return List.generate(
       widget.lyric.lines.length,
       (i) {
-        double opacity = 1.0;
-        if ((mainLine >= 1 && i <= mainLine - 1) ||
-            (mainLine < widget.lyric.lines.length - 1 && i >= mainLine + 1)) {
-          opacity = 0.18;
-        }
+        final isCurrent = i == mainLine;
+        final isPast = i < mainLine;
+        final distance = (i - mainLine).abs();
+        final opacity = isCurrent
+            ? 1.0
+            : isPast
+                ? (0.42 - distance * 0.045).clamp(0.22, 0.42).toDouble()
+                : (0.34 - distance * 0.04).clamp(0.16, 0.34).toDouble();
         return LyricViewTile(
           key: i == mainLine ? currentLyricTileKey : null,
           line: widget.lyric.lines[i],
           opacity: opacity,
+          isCurrentLine: isCurrent,
+          isPastLine: isPast,
           onTap: () => _seekToLyricLine(i),
         );
       },
@@ -218,7 +232,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
           targetContext,
           alignment: 0.25,
           duration: context.motion.lyricScrollDuration,
-          curve: context.motion.normal,
+          curve: context.motion.emphasized,
         );
       }
     });
@@ -226,21 +240,23 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      key: LYRIC_VIEW_KEY,
-      controller: scrollController,
-      slivers: [
-        const SliverFillRemaining(),
-        SliverToBoxAdapter(
-          child: RepaintBoundary(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: lyricTiles,
+    return RepaintBoundary(
+      child: CustomScrollView(
+        key: LYRIC_VIEW_KEY,
+        controller: scrollController,
+        slivers: [
+          const SliverFillRemaining(),
+          SliverToBoxAdapter(
+            child: RepaintBoundary(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: lyricTiles,
+              ),
             ),
           ),
-        ),
-        const SliverFillRemaining(),
-      ],
+          const SliverFillRemaining(),
+        ],
+      ),
     );
   }
 

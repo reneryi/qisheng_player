@@ -18,7 +18,7 @@ class AlbumsPage extends StatelessWidget {
       subtitle: "${contentList.length} 张专辑",
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) =>
-          AlbumTile(album: item),
+          AlbumTile(album: item, enableHero: true),
       enableShufflePlay: false,
       enableSortMethod: true,
       enableSortOrder: true,

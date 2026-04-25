@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/navigation_state.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/page/uni_page_components.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,7 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
     this.sortMethods,
     this.multiSelectController,
     this.multiSelectViewActions,
+    this.primaryPicHeroTag,
   });
 
   final PagePreference pref;
@@ -44,6 +46,7 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
 
   /// 用来展示内容图片，较高清
   final Future<ImageProvider?> primaryPic;
+  final String? primaryPicHeroTag;
 
   /// 当作毛玻璃的背景，较模糊
   final Future<ImageProvider?> backgroundPic;
@@ -169,6 +172,7 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
               pic: widget.primaryPic,
               backgroundPic: widget.backgroundPic,
               picShape: widget.picShape,
+              heroTag: widget.primaryPicHeroTag,
               title: widget.title,
               subtitle: widget.subtitle,
               actions: actions,
@@ -251,6 +255,7 @@ class _UniDetailPageHeader extends StatelessWidget {
     required this.pic,
     required this.backgroundPic,
     required this.picShape,
+    this.heroTag,
     required this.title,
     required this.subtitle,
     this.multiSelectController,
@@ -261,6 +266,7 @@ class _UniDetailPageHeader extends StatelessWidget {
   final Future<ImageProvider?> pic;
   final Future<ImageProvider?> backgroundPic;
   final PicShape picShape;
+  final String? heroTag;
 
   final String title;
   final String subtitle;
@@ -309,36 +315,56 @@ class _UniDetailPageHeader extends StatelessWidget {
                     size: 200.0,
                     color: scheme.onSurface,
                   );
-                  return switch (snapshot.connectionState) {
-                    ConnectionState.done => snapshot.data == null
-                        ? placeholder
-                        : switch (picShape) {
-                            PicShape.oval => ClipOval(
-                                child: Image(
-                                  image: snapshot.data!,
-                                  width: 200.0,
-                                  height: 200.0,
-                                  errorBuilder: (_, __, ___) => placeholder,
-                                ),
-                              ),
-                            PicShape.rrect => ClipRRect(
-                                borderRadius: BorderRadius.circular(8.0),
-                                child: Image(
-                                  image: snapshot.data!,
-                                  width: 200.0,
-                                  height: 200.0,
-                                  errorBuilder: (_, __, ___) => placeholder,
-                                ),
-                              ),
-                          },
-                    _ => const SizedBox(
-                        width: 200,
-                        height: 200,
-                        child: Center(
-                          child: CircularProgressIndicator(),
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  if (snapshot.data == null) return placeholder;
+
+                  final artwork = switch (picShape) {
+                    PicShape.oval => ClipOval(
+                        child: Image(
+                          image: snapshot.data!,
+                          width: 200.0,
+                          height: 200.0,
+                          errorBuilder: (_, __, ___) => placeholder,
+                        ),
+                      ),
+                    PicShape.rrect => ClipRRect(
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: Image(
+                          image: snapshot.data!,
+                          width: 200.0,
+                          height: 200.0,
+                          errorBuilder: (_, __, ___) => placeholder,
                         ),
                       ),
                   };
+                  final tag = heroTag;
+                  if (tag == null) return artwork;
+
+                  return ValueListenableBuilder<AlbumArtworkHeroTransition?>(
+                    valueListenable:
+                        AppNavigationState.instance.albumArtworkHeroTransition,
+                    child: artwork,
+                    builder: (context, _, child) {
+                      final navigation = AppNavigationState.instance;
+                      if (!navigation.canBuildAlbumArtworkHero(tag: tag)) {
+                        return child!;
+                      }
+
+                      return Hero(
+                        tag: tag,
+                        transitionOnUserGestures: true,
+                        child: child!,
+                      );
+                    },
+                  );
                 },
               ),
               const SizedBox(width: 16.0),

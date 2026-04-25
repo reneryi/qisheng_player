@@ -901,6 +901,20 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant _CenteredLyricView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lyric == widget.lyric) return;
+    _currentLineIndex = widget.lyric.lines.isEmpty
+        ? 0
+        : lyricService.currentLyricLineIndex
+            .clamp(0, widget.lyric.lines.length - 1)
+            .toInt();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToLine(_currentLineIndex, animated: false);
+    });
+  }
+
   String _primaryText(LyricLine line) {
     if (line is SyncLyricLine) {
       return line.content;
@@ -967,103 +981,139 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
       scrollController.animateTo(
         resolved,
         duration: context.motion.lyricScrollDuration,
-        curve: context.motion.normal,
+        curve: context.motion.emphasized,
       );
       return;
     }
     scrollController.jumpTo(resolved);
   }
 
+  double _lineOpacity({required int index, required bool isCurrent}) {
+    if (isCurrent) return 1;
+    final distance = (index - _currentLineIndex).abs();
+    if (index < _currentLineIndex) {
+      return (0.5 - distance * 0.055).clamp(0.24, 0.5).toDouble();
+    }
+    return (0.38 - distance * 0.05).clamp(0.18, 0.38).toDouble();
+  }
+
+  Color _lineColor(
+    ColorScheme scheme, {
+    required int index,
+    required bool isCurrent,
+  }) {
+    if (isCurrent) return scheme.onSurface;
+    return scheme.onSurface.withValues(
+      alpha: index < _currentLineIndex ? 0.78 : 0.62,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final inactiveColor = Colors.white.withValues(alpha: 0.58);
+    final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Scrollbar(
-        controller: scrollController,
-        thumbVisibility: true,
-        child: ListView.builder(
+    return RepaintBoundary(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Scrollbar(
           controller: scrollController,
-          padding: EdgeInsets.symmetric(
-            vertical: _verticalPadding,
-            horizontal: widget.compact ? 12 : 20,
-          ),
-          itemCount: widget.lyric.lines.length,
-          itemBuilder: (context, index) {
-            final line = widget.lyric.lines[index];
-            final isCurrent = index == _currentLineIndex;
-            final translation = _translationText(line);
+          thumbVisibility: true,
+          child: ListView.builder(
+            controller: scrollController,
+            padding: EdgeInsets.symmetric(
+              vertical: _verticalPadding,
+              horizontal: widget.compact ? 12 : 20,
+            ),
+            itemCount: widget.lyric.lines.length,
+            itemBuilder: (context, index) {
+              final line = widget.lyric.lines[index];
+              final isCurrent = index == _currentLineIndex;
+              final translation = _translationText(line);
+              final lineColor = _lineColor(
+                scheme,
+                index: index,
+                isCurrent: isCurrent,
+              );
 
-            return AnimatedOpacity(
-              duration: motion.controlTransitionDuration,
-              curve: motion.fast,
-              opacity: isCurrent ? 1 : 0.9,
-              child: AnimatedScale(
+              return AnimatedOpacity(
                 duration: motion.controlTransitionDuration,
-                curve: motion.normal,
-                scale: isCurrent ? 1 : 0.985,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () {
-                    playbackService.seek(line.start.inMilliseconds / 1000.0);
-                  },
-                  child: AnimatedPadding(
-                    duration: motion.controlTransitionDuration,
-                    curve: motion.normal,
-                    padding: EdgeInsets.symmetric(
-                      vertical: isCurrent ? 14 : 10,
-                      horizontal: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        AnimatedDefaultTextStyle(
-                          duration: motion.controlTransitionDuration,
-                          curve: motion.normal,
-                          style: TextStyle(
-                            color: isCurrent ? Colors.white : inactiveColor,
-                            fontSize: isCurrent
-                                ? _primaryFontSize
-                                : _secondaryFontSize,
-                            fontWeight:
-                                isCurrent ? FontWeight.w700 : FontWeight.w400,
-                            height: 1.2,
-                          ),
-                          textAlign: TextAlign.center,
-                          child: Text(
-                            _primaryText(line),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        if (_showTranslation(line)) ...[
-                          const SizedBox(height: 8),
+                curve: motion.fast,
+                opacity: _lineOpacity(index: index, isCurrent: isCurrent),
+                child: AnimatedScale(
+                  duration: motion.controlTransitionDuration,
+                  curve: motion.normal,
+                  scale: isCurrent ? 1 : 0.982,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: () {
+                      playbackService.seek(line.start.inMilliseconds / 1000.0);
+                    },
+                    child: AnimatedPadding(
+                      duration: motion.controlTransitionDuration,
+                      curve: motion.normal,
+                      padding: EdgeInsets.symmetric(
+                        vertical: isCurrent ? 16 : 10,
+                        horizontal: 12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
                           AnimatedDefaultTextStyle(
                             duration: motion.controlTransitionDuration,
-                            curve: motion.fast,
+                            curve: motion.normal,
                             style: TextStyle(
-                              color: isCurrent
-                                  ? Colors.white.withValues(alpha: 0.72)
-                                  : inactiveColor.withValues(alpha: 0.76),
-                              fontSize: _translationFontSize,
-                              fontWeight: FontWeight.w400,
-                              height: 1.25,
+                              color: lineColor,
+                              fontSize: isCurrent
+                                  ? _primaryFontSize
+                                  : _secondaryFontSize,
+                              fontWeight:
+                                  isCurrent ? FontWeight.w800 : FontWeight.w500,
+                              height: 1.18,
+                              shadows: isCurrent
+                                  ? [
+                                      Shadow(
+                                        color: scheme.primary
+                                            .withValues(alpha: 0.34),
+                                        blurRadius: 18,
+                                      ),
+                                    ]
+                                  : null,
                             ),
                             textAlign: TextAlign.center,
                             child: Text(
-                              translation,
+                              _primaryText(line),
                               textAlign: TextAlign.center,
                             ),
                           ),
+                          if (_showTranslation(line)) ...[
+                            const SizedBox(height: 8),
+                            AnimatedDefaultTextStyle(
+                              duration: motion.controlTransitionDuration,
+                              curve: motion.fast,
+                              style: TextStyle(
+                                color: isCurrent
+                                    ? scheme.onSurface.withValues(alpha: 0.74)
+                                    : lineColor.withValues(alpha: 0.74),
+                                fontSize: _translationFontSize,
+                                fontWeight: FontWeight.w400,
+                                height: 1.25,
+                              ),
+                              textAlign: TextAlign.center,
+                              child: Text(
+                                translation,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

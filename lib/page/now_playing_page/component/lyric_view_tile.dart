@@ -11,18 +11,26 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 class LyricViewTile extends StatelessWidget {
-  const LyricViewTile(
-      {super.key, required this.line, required this.opacity, this.onTap});
+  const LyricViewTile({
+    super.key,
+    required this.line,
+    required this.opacity,
+    this.isCurrentLine = false,
+    this.isPastLine = false,
+    this.onTap,
+  });
 
   final LyricLine line;
   final double opacity;
+  final bool isCurrentLine;
+  final bool isPastLine;
   final void Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
     final lyricViewController = context.watch<LyricViewController>();
     final motion = context.motion;
-    final isMainLine = opacity == 1.0;
+    final isMainLine = isCurrentLine || opacity == 1.0;
     return Align(
       alignment: switch (lyricViewController.lyricTextAlign) {
         LyricTextAlign.left => Alignment.centerLeft,
@@ -42,18 +50,25 @@ class LyricViewTile extends StatelessWidget {
             LyricTextAlign.center => Alignment.center,
             LyricTextAlign.right => Alignment.centerRight,
           },
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12.0),
-            child: line is SyncLyricLine
-                ? _SyncLineContent(
-                    syncLine: line as SyncLyricLine,
-                    isMainLine: isMainLine,
-                  )
-                : _LrcLineContent(
-                    lrcLine: line as LrcLine,
-                    isMainLine: isMainLine,
-                  ),
+          child: AnimatedPadding(
+            duration: motion.controlTransitionDuration,
+            curve: motion.normal,
+            padding: EdgeInsets.symmetric(vertical: isMainLine ? 4 : 0),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14.0),
+              child: line is SyncLyricLine
+                  ? _SyncLineContent(
+                      syncLine: line as SyncLyricLine,
+                      isMainLine: isMainLine,
+                      isPastLine: isPastLine,
+                    )
+                  : _LrcLineContent(
+                      lrcLine: line as LrcLine,
+                      isMainLine: isMainLine,
+                      isPastLine: isPastLine,
+                    ),
+            ),
           ),
         ),
       ),
@@ -62,10 +77,15 @@ class LyricViewTile extends StatelessWidget {
 }
 
 class _SyncLineContent extends StatelessWidget {
-  const _SyncLineContent({required this.syncLine, required this.isMainLine});
+  const _SyncLineContent({
+    required this.syncLine,
+    required this.isMainLine,
+    required this.isPastLine,
+  });
 
   final SyncLyricLine syncLine;
   final bool isMainLine;
+  final bool isPastLine;
 
   @override
   Widget build(BuildContext context) {
@@ -154,10 +174,10 @@ class _SyncLineContent extends StatelessWidget {
                       },
                       child: Text(
                         syncLine.words[i].content,
-                        style: TextStyle(
-                          color: scheme.primary,
-                          fontSize: lyricFontSize,
-                          fontWeight: FontWeight.bold,
+                        style: _primaryStyle(
+                          scheme,
+                          lyricFontSize,
+                          isMainLine: true,
                         ),
                       ),
                     ),
@@ -204,9 +224,11 @@ class _SyncLineContent extends StatelessWidget {
         LyricTextAlign.right => TextAlign.right,
       },
       style: TextStyle(
-        color: scheme.onSecondaryContainer,
+        color: scheme.onSecondaryContainer.withValues(
+          alpha: isPastLine ? 0.88 : 0.72,
+        ),
         fontSize: fontSize,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -224,16 +246,56 @@ class _SyncLineContent extends StatelessWidget {
         LyricTextAlign.center => TextAlign.center,
         LyricTextAlign.right => TextAlign.right,
       },
-      style: TextStyle(color: scheme.onSecondaryContainer, fontSize: fontSize),
+      style: TextStyle(
+        color: scheme.onSecondaryContainer.withValues(
+          alpha: isPastLine ? 0.7 : 0.58,
+        ),
+        fontSize: fontSize,
+        height: 1.24,
+      ),
+    );
+  }
+
+  TextStyle _primaryStyle(
+    ColorScheme scheme,
+    double fontSize, {
+    required bool isMainLine,
+  }) {
+    if (!isMainLine) {
+      return TextStyle(
+        color: scheme.onSecondaryContainer.withValues(
+          alpha: isPastLine ? 0.88 : 0.72,
+        ),
+        fontSize: fontSize,
+        fontWeight: FontWeight.w500,
+      );
+    }
+
+    return TextStyle(
+      color: scheme.onSecondaryContainer,
+      fontSize: fontSize + 4,
+      fontWeight: FontWeight.w800,
+      height: 1.16,
+      shadows: [
+        Shadow(
+          color: scheme.primary.withValues(alpha: 0.34),
+          blurRadius: 16,
+        ),
+      ],
     );
   }
 }
 
 class _LrcLineContent extends StatelessWidget {
-  const _LrcLineContent({required this.lrcLine, required this.isMainLine});
+  const _LrcLineContent({
+    required this.lrcLine,
+    required this.isMainLine,
+    required this.isPastLine,
+  });
 
   final LrcLine lrcLine;
   final bool isMainLine;
+  final bool isPastLine;
 
   @override
   Widget build(BuildContext context) {
@@ -295,9 +357,22 @@ class _LrcLineContent extends StatelessWidget {
         LyricTextAlign.right => TextAlign.right,
       },
       style: TextStyle(
-        color: scheme.onSecondaryContainer,
-        fontSize: fontSize,
-        fontWeight: FontWeight.bold,
+        color: isMainLine
+            ? scheme.onSecondaryContainer
+            : scheme.onSecondaryContainer.withValues(
+                alpha: isPastLine ? 0.88 : 0.72,
+              ),
+        fontSize: isMainLine ? fontSize + 4 : fontSize,
+        fontWeight: isMainLine ? FontWeight.w800 : FontWeight.w500,
+        height: isMainLine ? 1.16 : 1.22,
+        shadows: isMainLine
+            ? [
+                Shadow(
+                  color: scheme.primary.withValues(alpha: 0.34),
+                  blurRadius: 16,
+                ),
+              ]
+            : null,
       ),
     );
   }
@@ -315,7 +390,15 @@ class _LrcLineContent extends StatelessWidget {
         LyricTextAlign.center => TextAlign.center,
         LyricTextAlign.right => TextAlign.right,
       },
-      style: TextStyle(color: scheme.onSecondaryContainer, fontSize: fontSize),
+      style: TextStyle(
+        color: isMainLine
+            ? scheme.onSecondaryContainer.withValues(alpha: 0.76)
+            : scheme.onSecondaryContainer.withValues(
+                alpha: isPastLine ? 0.7 : 0.58,
+              ),
+        fontSize: fontSize,
+        height: 1.24,
+      ),
     );
   }
 }

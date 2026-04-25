@@ -12,6 +12,10 @@ const int BASS_ERROR_START = 9;
 
 const int BASS_SAMPLE_FLOAT = 256;
 
+const int BASS_DATA_FFT256 = 2147483648;
+
+const int BASS_DATA_FFT512 = 2147483649;
+
 const int BASS_ERROR_POSITION = 7;
 
 const int BASS_ERROR_NOPLAY = 24;
@@ -242,6 +246,25 @@ class Bass {
           'BASS_ChannelSetAttribute');
   late final _BASS_ChannelSetAttribute =
       _BASS_ChannelSetAttributePtr.asFunction<int Function(int, int, double)>();
+
+  int BASS_ChannelGetData(
+    int handle,
+    ffi.Pointer<ffi.Void> buffer,
+    int length,
+  ) {
+    return _BASS_ChannelGetData(
+      handle,
+      buffer,
+      length,
+    );
+  }
+
+  late final _BASS_ChannelGetDataPtr = _lookup<
+          ffi
+          .NativeFunction<DWORD Function(DWORD, ffi.Pointer<ffi.Void>, DWORD)>>(
+      'BASS_ChannelGetData');
+  late final _BASS_ChannelGetData = _BASS_ChannelGetDataPtr.asFunction<
+      int Function(int, ffi.Pointer<ffi.Void>, int)>();
 
   int BASS_StreamCreateFile(
     int mem,

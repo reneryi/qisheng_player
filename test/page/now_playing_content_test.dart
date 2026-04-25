@@ -90,4 +90,49 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(Scrollbar), findsWidgets);
   });
+
+  testWidgets('NowPlayingContentView handles rapid lyric line changes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Rapid Song',
+      artist: 'Rapid Artist',
+      album: 'Rapid Album',
+      path: r'E:\Music\rapid-now-playing.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: audio,
+      queue: [audio, ...buildLongQueue()],
+    );
+    final lyric = FakeLyricController(
+      Lrc(buildLongLrcLines(), LrcSource.local),
+    );
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: lyric,
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const NowPlayingContentView(
+          compact: false,
+          styleMode: NowPlayingStyleMode.immersive,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    lyric
+      ..emitLine(3)
+      ..emitLine(12)
+      ..emitLine(8)
+      ..emitLine(200);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/lyric/lrc.dart';
@@ -10,6 +9,7 @@ import 'package:coriander_player/play_service/lyric_service.dart';
 import 'package:coriander_player/play_service/playback_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -145,11 +145,13 @@ class FakePlaybackController extends PlaybackController {
         _playlist = ValueNotifier<List<Audio>>(queue),
         _playMode = ValueNotifier<PlayMode>(PlayMode.loop),
         _volume = ValueNotifier<double>(0.5),
+        _audioSpectrum = ValueNotifier<List<double>>(const []),
         _playerState = initialState;
 
   final ValueNotifier<List<Audio>> _playlist;
   final ValueNotifier<PlayMode> _playMode;
   final ValueNotifier<double> _volume;
+  final ValueNotifier<List<double>> _audioSpectrum;
   final StreamController<double> _positionController =
       StreamController<double>.broadcast();
   final StreamController<PlayerState> _stateController =
@@ -193,6 +195,13 @@ class FakePlaybackController extends PlaybackController {
 
   @override
   ValueNotifier<PlayMode> get playMode => _playMode;
+
+  @override
+  ValueListenable<List<double>> get audioSpectrum => _audioSpectrum;
+
+  void setAudioSpectrum(List<double> spectrum) {
+    _audioSpectrum.value = List<double>.from(spectrum);
+  }
 
   @override
   void lastAudio() {}
@@ -266,6 +275,7 @@ class FakePlaybackController extends PlaybackController {
     _playlist.dispose();
     _playMode.dispose();
     _volume.dispose();
+    _audioSpectrum.dispose();
     super.dispose();
   }
 }

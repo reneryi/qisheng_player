@@ -42,7 +42,10 @@ class HorizontalLyricView extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     "Enjoy Music",
-                    style: TextStyle(color: scheme.onSecondaryContainer),
+                    style: TextStyle(
+                      color: scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               );
@@ -78,6 +81,7 @@ class _LyricHorizontalScrollAreaState
   final waitFor = const Duration(milliseconds: 300);
   final scrollController = ScrollController();
   late StreamSubscription lyricLineStreamSubscription;
+  Timer? _pendingScrollTimer;
 
   var currContent = "Enjoy Music";
   var _scrollGeneration = 0;
@@ -113,6 +117,7 @@ class _LyricHorizontalScrollAreaState
           currContent = _lineText(currLine);
         });
         final generation = ++_scrollGeneration;
+        _pendingScrollTimer?.cancel();
 
         late final Duration lastTime;
         if (currLine is LrcLine) {
@@ -129,14 +134,14 @@ class _LyricHorizontalScrollAreaState
           if (scrollController.position.maxScrollExtent > 0) {
             if (lastTime.isNegative) return;
 
-            Future.delayed(waitFor, () {
+            _pendingScrollTimer = Timer(waitFor, () {
               if (!mounted || generation != _scrollGeneration) return;
               if (!scrollController.hasClients) return;
 
               scrollController.animateTo(
                 scrollController.position.maxScrollExtent,
                 duration: lastTime,
-                curve: Curves.linear,
+                curve: Curves.easeOutCubic,
               );
             });
           }
@@ -146,25 +151,68 @@ class _LyricHorizontalScrollAreaState
   }
 
   @override
+  void didUpdateWidget(covariant _LyricHorizontalScrollArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lyric == widget.lyric) return;
+    _scrollGeneration++;
+    _pendingScrollTimer?.cancel();
+    currContent = widget.lyric.lines.isEmpty
+        ? "Enjoy Music"
+        : _lineText(widget.lyric.lines.first);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) return;
+      scrollController.jumpTo(0);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: SingleChildScrollView(
-        controller: scrollController,
-        scrollDirection: Axis.horizontal,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: AnimatedSwitcher(
-            duration: motion.microInteractionDuration,
-            switchInCurve: motion.normal,
-            switchOutCurve: motion.fast,
-            child: Text(
-              currContent,
-              key: ValueKey(currContent),
-              style: TextStyle(color: scheme.onSecondaryContainer),
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: SingleChildScrollView(
+          controller: scrollController,
+          scrollDirection: Axis.horizontal,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AnimatedSwitcher(
+              duration: motion.controlTransitionDuration,
+              switchInCurve: motion.normal,
+              switchOutCurve: motion.fast,
+              transitionBuilder: (child, animation) {
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: motion.normal,
+                  reverseCurve: motion.fast,
+                );
+                return FadeTransition(
+                  opacity: curved,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.02, 0),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  ),
+                );
+              },
+              child: Text(
+                currContent,
+                key: ValueKey(currContent),
+                style: TextStyle(
+                  color: scheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      color: scheme.primary.withValues(alpha: 0.22),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -175,6 +223,7 @@ class _LyricHorizontalScrollAreaState
   @override
   void dispose() {
     _scrollGeneration++;
+    _pendingScrollTimer?.cancel();
     super.dispose();
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();

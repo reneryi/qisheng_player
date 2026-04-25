@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_metadata_override_store.dart';
@@ -239,6 +240,7 @@ class Audio {
   Future<ImageProvider?>? _coverFuture;
   Future<ImageProvider?>? _mediumCoverFuture;
   Future<ImageProvider?>? _largeCoverFuture;
+  Future<Uint8List?>? _coverBytesFuture;
 
   /// 以“、”和“/”分割艺术家，会把名称中带有这些符号的艺术家分割。
   /// 暂时想不到别的方法。
@@ -375,10 +377,24 @@ class Audio {
     return future;
   }
 
+  /// 读取音乐文件中的原始封面字节，供调色板提取使用。
+  Future<Uint8List?> get coverBytes {
+    final existingFuture = _coverBytesFuture;
+    if (existingFuture != null) return existingFuture;
+
+    final future = getOriginalPictureFromPath(path: mediaPath).then((pic) {
+      if (pic == null || pic.isEmpty) return null;
+      return pic;
+    });
+    _coverBytesFuture = future;
+    return future;
+  }
+
   void clearCoverCache() {
     _coverFuture = null;
     _mediumCoverFuture = null;
     _largeCoverFuture = null;
+    _coverBytesFuture = null;
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片

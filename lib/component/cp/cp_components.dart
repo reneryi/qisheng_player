@@ -63,6 +63,12 @@ class CpMotionPressable extends StatefulWidget {
     this.selected = false,
     this.enabled = true,
     this.semanticLabel,
+    this.hoverScale = 1.0,
+    this.pressScale = 0.992,
+    this.hoverShadow = false,
+    this.selectedGlow = false,
+    this.hoverShadowOpacity,
+    this.selectedGlowOpacity,
   });
 
   final Widget child;
@@ -73,6 +79,12 @@ class CpMotionPressable extends StatefulWidget {
   final bool selected;
   final bool enabled;
   final String? semanticLabel;
+  final double hoverScale;
+  final double pressScale;
+  final bool hoverShadow;
+  final bool selectedGlow;
+  final double? hoverShadowOpacity;
+  final double? selectedGlowOpacity;
 
   @override
   State<CpMotionPressable> createState() => _CpMotionPressableState();
@@ -92,11 +104,17 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
     final radius =
         widget.borderRadius ?? BorderRadius.circular(surfaces.radiusLg);
     final active = _hovered || widget.selected;
+    final scale = _pressed
+        ? widget.pressScale
+        : _hovered
+            ? widget.hoverScale
+            : 1.0;
     final background = widget.selected
         ? scheme.primary.withValues(alpha: 0.13)
         : _hovered
             ? scheme.onSurface.withValues(alpha: 0.055)
             : Colors.transparent;
+    final shadows = _buildShadows(context);
 
     return MouseRegion(
       cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
@@ -118,7 +136,7 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
           selected: widget.selected,
           label: widget.semanticLabel,
           child: AnimatedScale(
-            scale: _pressed ? 0.992 : 1,
+            scale: scale,
             duration: motion.microInteractionDuration,
             curve: motion.fast,
             child: AnimatedContainer(
@@ -130,10 +148,13 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
                 borderRadius: radius,
                 border: Border.all(
                   color: active
-                      ? scheme.outlineVariant.withValues(alpha: 0.52)
+                      ? widget.selected
+                          ? scheme.primary.withValues(alpha: 0.34)
+                          : scheme.outlineVariant.withValues(alpha: 0.52)
                       : Colors.transparent,
                   width: 1,
                 ),
+                boxShadow: shadows,
               ),
               child: widget.child,
             ),
@@ -141,6 +162,39 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
         ),
       ),
     );
+  }
+
+  List<BoxShadow> _buildShadows(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final surfaces = context.surfaces;
+    final shadows = <BoxShadow>[];
+
+    if (widget.hoverShadow && _hovered && _interactive) {
+      final opacity = widget.hoverShadowOpacity ??
+          (scheme.brightness == Brightness.dark ? 0.22 : 0.14);
+      shadows.add(
+        BoxShadow(
+          color: surfaces.shadowColor.withValues(
+            alpha: opacity * surfaces.shadowDepthScale,
+          ),
+          blurRadius: surfaces.shadowBlurSm * 0.78,
+          offset: Offset(0, surfaces.shadowOffsetSm * 0.54),
+        ),
+      );
+    }
+
+    if (widget.selectedGlow && widget.selected) {
+      final opacity = widget.selectedGlowOpacity ?? 0.18;
+      shadows.add(
+        BoxShadow(
+          color: scheme.primary.withValues(alpha: opacity),
+          blurRadius: surfaces.shadowBlurSm * 0.86,
+          spreadRadius: 0.4,
+        ),
+      );
+    }
+
+    return shadows;
   }
 }
 
@@ -375,6 +429,12 @@ class CpListTile extends StatelessWidget {
       onSecondaryTapDown: onSecondaryTapDown,
       selected: selected,
       padding: padding,
+      hoverScale: 1.006,
+      pressScale: 0.992,
+      hoverShadow: true,
+      selectedGlow: true,
+      hoverShadowOpacity: 0.1,
+      selectedGlowOpacity: 0.12,
       child: Row(
         children: [
           if (leading != null) ...[

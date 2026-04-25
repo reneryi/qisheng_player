@@ -1,4 +1,5 @@
 import 'package:coriander_player/component/bottom_player_bar.dart';
+import 'package:coriander_player/component/audio_visualizer/liquid_audio_visualizer.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/play_service/desktop_lyric_service.dart';
 import 'package:coriander_player/play_service/lyric_service.dart';
@@ -17,13 +18,14 @@ void main() {
       album: 'Wide Album',
       path: r'E:\Music\wide.flac',
     );
+    final playback = FakePlaybackController(
+      audio: audio,
+      queue: [audio, ...buildLongQueue()],
+    );
 
     await tester.pumpWidget(
       buildMediaHarness(
-        playbackController: FakePlaybackController(
-          audio: audio,
-          queue: [audio, ...buildLongQueue()],
-        ),
+        playbackController: playback,
         lyricController: FakeLyricController(
           Lrc(buildLongLrcLines(), LrcSource.local),
         ),
@@ -40,6 +42,27 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Wide Song'), findsOneWidget);
+    expect(find.byType(LiquidAudioVisualizer), findsOneWidget);
+    final visualizerIgnorePointer = tester.widget<IgnorePointer>(
+      find
+          .ancestor(
+            of: find.byType(LiquidAudioVisualizer),
+            matching: find.byType(IgnorePointer),
+          )
+          .first,
+    );
+    expect(visualizerIgnorePointer.ignoring, isTrue);
+
+    playback.setAudioSpectrum(
+      List<double>.generate(
+        audioSpectrumBinCount,
+        (index) => index.isEven ? 0.72 : 0.28,
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Slider), findsWidgets);
     expect(find.byTooltip('打开播放队列'), findsOneWidget);
   });
 

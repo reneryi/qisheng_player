@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/component/audio_visualizer/liquid_audio_visualizer.dart';
 import 'package:coriander_player/component/cp/cp_components.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/page/now_playing_page/component/current_playlist_view.dart';
@@ -63,26 +64,39 @@ class BottomPlayerBar extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final layout = resolveBottomPlayerBarLayout(constraints.maxWidth);
+            final playback = context.read<PlaybackController>();
 
-            return Row(
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: _BottomBarTrackSection(dense: layout.dense),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  flex: 2,
-                  child: _BottomBarCenterSection(
-                    compact: layout.compact,
-                    dense: layout.dense,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: LiquidAudioVisualizer(
+                      spectrum: playback.audioSpectrum,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: _BottomBarActionsSection(
-                    compact: layout.compact,
-                    dense: layout.dense,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BottomBarTrackSection(dense: layout.dense),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      flex: 2,
+                      child: _BottomBarCenterSection(
+                        compact: layout.compact,
+                        dense: layout.dense,
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: _BottomBarActionsSection(
+                        compact: layout.compact,
+                        dense: layout.dense,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );

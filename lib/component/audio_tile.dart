@@ -203,6 +203,12 @@ class AudioTile extends StatelessWidget {
               child: CpMotionPressable(
                 borderRadius: BorderRadius.circular(12.0),
                 selected: effectiveFocus || selected,
+                hoverScale: 1.008,
+                pressScale: 0.992,
+                hoverShadow: true,
+                selectedGlow: true,
+                hoverShadowOpacity: 0.11,
+                selectedGlowOpacity: effectiveFocus ? 0.16 : 0.1,
                 onTap: () {
                   if (controller.isOpen) {
                     controller.close();
@@ -243,7 +249,13 @@ class AudioTile extends StatelessWidget {
                       future: () => audio.cover,
                       builder: (context, snapshot) {
                         if (snapshot.data == null) {
-                          return placeholder;
+                          return RepaintBoundary(
+                            child: SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Center(child: placeholder),
+                            ),
+                          );
                         }
 
                         return RepaintBoundary(

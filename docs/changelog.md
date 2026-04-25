@@ -6,6 +6,36 @@
 
 - 暂无。
 
+## [1.7.1] - 2026-04-25
+
+本版本为预发布版本，基于 1.7.0 预发布继续验证 Apple Music 风格的沉浸视觉、封面取色、歌词动效、底部音频可视化和专辑 Hero 转场。
+
+### 新增
+
+- Apple Music 风格 UI 第二轮迭代：新增 Rust 专辑封面主色调提取、专辑调色板缓存和快速切歌防串色保护。
+- 新增 `LiquidGradientBackground`，主窗口背景支持随专辑封面色彩变化的柔和流体渐变，并遵守 `UiEffectsLevel` 性能降级策略。
+- 新增底部播放器实时 FFT 音频可视化，使用 BASS `BASS_ChannelGetData` 采样、服务层 30fps 平滑频谱和低干扰流体波形绘制。
+- 新增专辑列表到专辑详情页的共享封面 Hero 转场，使用独立 `album-artwork:*` tag，避免与 Now Playing 的 `now-playing-artwork` 冲突。
+
+### 变更
+
+- 歌曲、专辑、艺术家列表项增强 hover、press、阴影和选中 glow 反馈，封面绘制使用 `RepaintBoundary` 隔离。
+- Now Playing 竖向/横向歌词增强当前行层级、透明度、字号和 glow，快速切歌时清理旧滚动与延迟任务。
+- 底部播放器可视化层放置在背景中，并通过 `IgnorePointer` 保持按钮、进度条、音量条交互不受影响。
+- WASAPI 独占模式下暂不启用 FFT 采样，避免读取 decoding channel 时影响播放进度。
+
+### 测试
+
+- 新增专辑调色板、流体背景、列表动效、歌词动效、底部播放器频谱平滑和专辑 Hero 转场相关测试。
+- 本轮已执行 `flutter analyze`、`flutter test`、`flutter test tools\test\sort_smoke_test.dart`、`cargo check`、`flutter build windows --debug`、`flutter build windows --release`。
+
+### 相较 1.7.0 预发布
+
+- 1.7.0 预发布主要完成桌面 UI 框架重塑、底部播放器、Now Playing 页面拆分、播放会话恢复、基础 shared-axis/Hero 转场和打包链路稳定性修复。
+- 1.7.1 预发布在 1.7.0 的框架基础上继续补齐沉浸体验：封面主色调由 Rust 提取并驱动主题，主背景升级为流体渐变，列表项和歌词具备更完整的动态层级。
+- 1.7.1 新增 BASS FFT 全局音频可视化，并通过服务层 `audioSpectrum` 隔离 UI 与底层播放 handle；1.7.0 不包含实时频谱能力。
+- 1.7.1 新增专辑列表到详情页的独立 `album-artwork:*` Hero 转场，并保留 1.7.0 已修复的 Now Playing Hero 稳定性约束。
+
 ## [1.7.0] - 2026-04-25
 
 ### 新增

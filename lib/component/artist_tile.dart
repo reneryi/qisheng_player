@@ -27,13 +27,22 @@ class ArtistTile extends StatelessWidget {
         onTap: () => context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist),
         borderRadius: BorderRadius.circular(14.0),
         padding: const EdgeInsets.all(8.0),
+        hoverScale: 1.018,
+        pressScale: 0.99,
+        hoverShadow: true,
         child: Row(
           children: [
             FutureBuilder(
               future: artist.works.first.cover,
               builder: (context, snapshot) {
                 if (snapshot.data == null) {
-                  return placeholder;
+                  return RepaintBoundary(
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(child: placeholder),
+                    ),
+                  );
                 }
                 return RepaintBoundary(
                   child: ClipOval(

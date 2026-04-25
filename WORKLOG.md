@@ -72,3 +72,54 @@
 
 - 新增 `canPaintSliderAtWidth` 单元测试。
 - 新增 `BottomPlayerBar survives volume slider width collapse` widget 回归测试，覆盖宽布局切换到 dense 布局时音量 Slider 收缩过程。
+
+## 2026-04-25 - Apple Music 风格 UI 计划阶段 1-6 完成
+
+### 背景
+
+- 根据 `docs/apple_music_ui_plan.md` 继续推进 Apple Music 风格 UI 更新计划，覆盖专辑色彩、流体背景、列表动效、歌词动效、全局音频可视化和专辑 Hero 转场。
+- 当前目标是在保持 Flutter + Rust + BASS 架构稳定的前提下，完成计划内剩余视觉与播放体验改造。
+
+### 实现
+
+- 阶段 1：新增 Rust 专辑封面主色调提取 API，Dart 侧接入 `AlbumPalette` 与 `ThemeProvider` 调色板缓存，并加入快速切歌 request id 防串色保护。
+- 阶段 2：新增 `LiquidGradientBackground`，主布局背景从静态渐变升级为可按 `UiEffectsLevel` 降级的流体渐变；用户自定义背景图存在时只作为 tint/scrim。
+- 阶段 3：扩展 `CpMotionPressable` 的 hover/press/shadow/glow 参数，并接入歌曲、专辑、艺术家列表项；封面绘制使用 `RepaintBoundary` 隔离。
+- 阶段 4：增强 Now Playing 竖向、横向和沉浸歌词动效，当前行增加字号、字重、透明度和 glow；快速切歌时清理旧滚动状态与延迟任务。
+- 阶段 5：扩展 BASS FFI `BASS_ChannelGetData` 与 FFT 常量，在 `BassPlayer` 暴露 `sampleFft()`；`PlaybackService` 以 30fps 平滑输出 `audioSpectrum`，底部播放器背景接入 `LiquidAudioVisualizer`。
+- 阶段 6：新增专辑封面共享元素转场，使用独立 `album-artwork:*` tag；通过 `AppNavigationState` 限制同一次转场只有被点击的源封面启用，避免重复 Hero tag。
+
+### 验证
+
+- `flutter analyze` 通过。
+- `flutter test` 通过。
+- `flutter test tools\test\sort_smoke_test.dart` 通过。
+- `cargo check` 通过。
+- `flutter build windows --debug` 通过。
+- `flutter build windows --release` 通过。
+- `git diff --check` 通过；仅有 Git LF/CRLF 提示。
+
+### 注意事项
+
+- WASAPI 独占模式下暂不启用 FFT 采样，避免读取 decoding channel 时影响播放进度。
+- 专辑 Hero 只在 `AlbumsPage` 的 `AlbumTile(enableHero: true)` 启用，其他复用场景默认不参与共享元素转场。
+- 后续若增加设置页可视化开关，应复用 `PlaybackController.audioSpectrum`，不要让 UI 直接访问 BASS stream handle。
+
+## 2026-04-25 - 1.7.1 预发布整合
+
+### 实现
+
+- 将应用版本从 `1.7.0` 更新到 `1.7.1`，同步 `pubspec.yaml` 和 `AppSettings.version`。
+- 将本轮 Apple Music 风格 UI 阶段 1-6 内容整理为 `docs/changelog.md` 的 `1.7.1` 预发布条目。
+- 新增 `docs/releases/v1.7.1.md` 和 `docs/releases/v1.7.1.json`，并在发布说明中加入与 `1.7.0` 预发布的差异对比。
+- 更新 `docs/releases/README.md`，把 `v1.7.1` 发布说明和 release payload 纳入当前发布文件列表。
+
+### 验证
+
+- `docs/releases/v1.7.1.json` 可被 `ConvertFrom-Json` 正常解析，`prerelease` 为 `true`。
+- `flutter analyze` 通过。
+- `flutter test` 通过。
+- `flutter test tools\test\sort_smoke_test.dart` 通过。
+- `cargo check` 通过。
+- `flutter build windows --debug` 通过。
+- `flutter build windows --release` 通过。

@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/src/bass/bass_wasapi.dart' as BASS;
 import 'package:coriander_player/utils.dart';
@@ -47,6 +48,10 @@ const BASS_REQUIRED_PLUGINS = [
 const BASS_OPTIONAL_PLUGINS = [
   "bass_aac.dll",
 ];
+
+const _bassFft256ValueCount = 128;
+const _bassFft256UsableBins = _bassFft256ValueCount - 1;
+const _bassChannelGetDataError = 0xFFFFFFFF;
 
 class BassPlayer {
   late final ffi.DynamicLibrary _bassLib;
@@ -123,6 +128,48 @@ class BassPlayer {
     final volDsp = ffi.malloc.allocate<ffi.Float>(ffi.sizeOf<ffi.Float>());
     _bass.BASS_ChannelGetAttribute(_fstream!, BASS.BASS_ATTRIB_VOLDSP, volDsp);
     return volDsp.value;
+  }
+
+  List<double> sampleFft({int bins = 64}) {
+    if (_fstream == null || wasapiExclusive) return const <double>[];
+    if (playerState != PlayerState.playing) return const <double>[];
+
+    final requestedBins = bins.clamp(1, _bassFft256UsableBins).toInt();
+    final fft = ffi.malloc.allocate<ffi.Float>(
+      _bassFft256ValueCount * ffi.sizeOf<ffi.Float>(),
+    );
+
+    try {
+      final read = _bass.BASS_ChannelGetData(
+        _fstream!,
+        fft.cast<ffi.Void>(),
+        BASS.BASS_DATA_FFT256,
+      );
+      final expectedBytes = _bassFft256ValueCount * ffi.sizeOf<ffi.Float>();
+      if (read <= 0 ||
+          read == _bassChannelGetDataError ||
+          read > expectedBytes) {
+        return const <double>[];
+      }
+
+      final values = List<double>.filled(requestedBins, 0);
+      for (var i = 0; i < requestedBins; i++) {
+        final ratio = requestedBins == 1 ? 0.0 : i / (requestedBins - 1);
+        final curvedRatio = math.pow(ratio, 1.35).toDouble();
+        final sourceIndex =
+            1 + (curvedRatio * (_bassFft256UsableBins - 1)).round();
+        final rawValue = fft[sourceIndex];
+        final raw = rawValue.isFinite ? math.max(0.0, rawValue) : 0.0;
+        final shaped = math.log(1 + raw * 140) / math.log(141);
+        values[i] = shaped.clamp(0.0, 1.0).toDouble();
+      }
+      return values;
+    } catch (err) {
+      LOGGER.w("[bass fft] sample failed: $err");
+      return const <double>[];
+    } finally {
+      ffi.malloc.free(fft);
+    }
   }
 
   /// update every 33ms

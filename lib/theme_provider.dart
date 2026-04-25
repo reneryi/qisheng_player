@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/src/rust/api/album_palette.dart'
+    as rust_palette;
+import 'package:coriander_player/theme/album_palette.dart';
 import 'package:coriander_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 Color resolveThemeDominantColor({
   required Color fallbackColor,
@@ -65,11 +67,15 @@ class ThemeProvider extends ChangeNotifier {
     brightness: Brightness.dark,
   );
 
-  final Map<String, Color> _dominantColorCache = {};
+  static const int _maxPaletteCacheEntries = 128;
+
+  final Map<String, AlbumPalette> _paletteCache = {};
+  int _dynamicThemeRequestId = 0;
 
   Color? _lightAccentColor;
   Color? _darkAccentColor;
   Color? _dynamicDominantColor;
+  AlbumPalette? _dynamicAlbumPalette;
 
   UiEffectsLevel uiEffectsLevel = AppSettings.instance.uiEffectsLevel;
   UiVisualStyleMode visualStyleMode = AppSettings.instance.uiVisualStyleMode;
@@ -98,6 +104,9 @@ class ThemeProvider extends ChangeNotifier {
         fallbackColor: currScheme.primary,
         dynamicDominantColor: _dynamicDominantColor,
       );
+
+  AlbumPalette get albumPalette =>
+      _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
 
   List<Color> get backgroundGradient => buildDynamicBackgroundGradient(
         dominantColor,
@@ -142,6 +151,7 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   void applyTheme({required Color seedColor}) {
+    _dynamicThemeRequestId++;
     _lightBaseScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: Brightness.light,
@@ -163,10 +173,12 @@ class ThemeProvider extends ChangeNotifier {
 
   void applyThemeFromAudio(Audio audio) {
     if (!AppSettings.instance.dynamicTheme) {
+      _dynamicThemeRequestId++;
       _resetDynamicTheme();
       return;
     }
-    unawaited(_applyDynamicTheme(audio));
+    final requestId = ++_dynamicThemeRequestId;
+    unawaited(_applyDynamicTheme(audio, requestId));
   }
 
   void changeFontFamily(String? fontFamily) {
@@ -189,36 +201,72 @@ class ThemeProvider extends ChangeNotifier {
     await _syncDesktopLyricTheme();
   }
 
-  Future<void> _applyDynamicTheme(Audio audio) async {
+  Future<void> _applyDynamicTheme(Audio audio, int requestId) async {
     try {
-      final cached = _dominantColorCache[audio.path];
-      final extracted = cached ?? await _extractDominantColor(audio);
-      final dominant = extracted ?? _fallbackDominantColor();
+      final cacheKey = _paletteCacheKey(audio);
+      final cached = _paletteCache[cacheKey];
+      final extracted = cached ?? await _extractAlbumPalette(audio);
+      if (requestId != _dynamicThemeRequestId) return;
 
-      _dominantColorCache[audio.path] = dominant;
-      _dynamicDominantColor = dominant;
-      _lightAccentColor = _resolveAccentColor(dominant, Brightness.light);
-      _darkAccentColor = _resolveAccentColor(dominant, Brightness.dark);
+      if (extracted != null && cached == null) {
+        _cachePalette(cacheKey, extracted);
+      }
+
+      _applyAlbumPalette(
+        extracted ?? AlbumPalette.fallback(_fallbackDominantColor()),
+      );
       notifyListeners();
       await _syncDesktopLyricTheme();
     } catch (_) {
-      _resetDynamicTheme();
+      if (requestId != _dynamicThemeRequestId) return;
+      _applyAlbumPalette(AlbumPalette.fallback(_fallbackDominantColor()));
+      notifyListeners();
+      await _syncDesktopLyricTheme();
     }
   }
 
-  Future<Color?> _extractDominantColor(Audio audio) async {
-    final cover = await audio.cover;
-    if (cover == null) return null;
-    final palette = await PaletteGenerator.fromImageProvider(
-      cover,
-      maximumColorCount: 16,
+  Future<AlbumPalette?> _extractAlbumPalette(Audio audio) async {
+    final coverBytes = await audio.coverBytes;
+    if (coverBytes == null || coverBytes.isEmpty) return null;
+
+    final rgbColors = await rust_palette.extractDominantColors(
+      imageBytes: coverBytes,
+      maxColors: 6,
     );
-    final resolved = palette.dominantColor?.color ??
-        palette.vibrantColor?.color ??
-        palette.lightVibrantColor?.color ??
-        palette.mutedColor?.color;
-    if (resolved == null) return null;
-    return _normalizeColor(resolved);
+    if (rgbColors.isEmpty) return null;
+
+    final colors = rgbColors
+        .map(_colorFromRgbInt)
+        .map(_normalizeColor)
+        .toList(growable: false);
+
+    return AlbumPalette.fromColors(
+      colors,
+      fallback: _fallbackDominantColor(),
+    );
+  }
+
+  void _applyAlbumPalette(AlbumPalette palette) {
+    _dynamicAlbumPalette = palette;
+    _dynamicDominantColor = palette.primary;
+    _lightAccentColor = _resolveAccentColor(palette.accent, Brightness.light);
+    _darkAccentColor = _resolveAccentColor(palette.accent, Brightness.dark);
+  }
+
+  void _cachePalette(String key, AlbumPalette palette) {
+    if (!_paletteCache.containsKey(key) &&
+        _paletteCache.length >= _maxPaletteCacheEntries) {
+      _paletteCache.remove(_paletteCache.keys.first);
+    }
+    _paletteCache[key] = palette;
+  }
+
+  String _paletteCacheKey(Audio audio) {
+    return '${audio.path}\u0001${audio.modified}\u0001${audio.mediaPath}';
+  }
+
+  Color _colorFromRgbInt(int rgb) {
+    return Color(0xFF000000 | (rgb & 0x00FFFFFF));
   }
 
   Color _resolveAccentColor(Color color, Brightness brightness) {
@@ -249,6 +297,7 @@ class ThemeProvider extends ChangeNotifier {
 
   void _resetDynamicTheme({bool notify = true}) {
     _dynamicDominantColor = null;
+    _dynamicAlbumPalette = null;
     _lightAccentColor = null;
     _darkAccentColor = null;
     if (!notify) return;

@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/component/album_artwork_hero.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/audio_tile.dart';
@@ -32,6 +33,7 @@ class AlbumDetailPage extends StatelessWidget {
       pref: AppPreference.instance.albumDetailPagePref,
       primaryContent: album,
       primaryPic: album.cover,
+      primaryPicHeroTag: albumArtworkHeroTag(album),
       backgroundPic: album.works.first.cover,
       picShape: PicShape.rrect,
       title: album.name,

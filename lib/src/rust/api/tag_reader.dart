@@ -6,9 +6,15 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `file_size_for_identity`, `is_cue_path`, `is_unknown_text`, `merge_missing_fields`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `sanitize_metadata_text`, `to_json_value`, `to_json_value`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioFolder`, `Audio`
+// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `file_size_for_identity`, `is_cue_path`, `is_unknown_text`, `merge_missing_fields`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `sanitize_metadata_text`, `sanitize_optional_text`, `to_json_value`, `to_json_value`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioFolder`, `AudioIdentityParts`, `Audio`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `fmt`
+
+/// for Flutter
+/// 如果无法通过 Lofty 获取则通过 Windows 获取
+Future<Uint8List?> getOriginalPictureFromPath({required String path}) =>
+    RustLib.instance.api
+        .crateApiTagReaderGetOriginalPictureFromPath(path: path);
 
 /// for Flutter
 /// 如果无法通过 Lofty 获取则通过 Windows 获取
