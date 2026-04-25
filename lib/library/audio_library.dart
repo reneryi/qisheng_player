@@ -42,7 +42,7 @@ class AudioLibrary {
   ///         },
   ///         ...
   ///     ],
-  ///     "version": 110
+  ///     "version": 113
   /// }
   /// ```
   static Future<void> initFromIndex() async {
@@ -51,6 +51,7 @@ class AudioLibrary {
       final indexPath = "$supportPath\\index.json";
 
       final indexStr = File(indexPath).readAsStringSync();
+      if (indexStr.trim().isEmpty) return;
       final Map indexJson = json.decode(indexStr);
       final List foldersJson = indexJson["folders"];
       final List<AudioFolder> folders = [];
@@ -193,6 +194,10 @@ class Audio {
 
   String album;
 
+  String? composer;
+
+  String? arranger;
+
   /// 0: 没有碟号
   int disc;
 
@@ -231,7 +236,9 @@ class Audio {
   /// 标签来源（Lofty、Windows、null）
   String? by;
 
-  ImageProvider? _cover;
+  Future<ImageProvider?>? _coverFuture;
+  Future<ImageProvider?>? _mediumCoverFuture;
+  Future<ImageProvider?>? _largeCoverFuture;
 
   /// 以“、”和“/”分割艺术家，会把名称中带有这些符号的艺术家分割。
   /// 暂时想不到别的方法。
@@ -239,6 +246,8 @@ class Audio {
     this.title,
     this.artist,
     this.album,
+    this.composer,
+    this.arranger,
     this.disc,
     this.track,
     this.duration,
@@ -262,6 +271,8 @@ class Audio {
         map["title"],
         map["artist"],
         map["album"],
+        map["composer"]?.toString(),
+        map["arranger"]?.toString(),
         map["disc"] ?? _inferDiscFromPath(map["path"]),
         map["track"] ?? 0,
         map["duration"] ?? 0,
@@ -281,6 +292,8 @@ class Audio {
         "title": title,
         "artist": artist,
         "album": album,
+        "composer": composer,
+        "arranger": arranger,
         "disc": disc,
         "track": track,
         "duration": duration,
@@ -326,6 +339,10 @@ class Audio {
     return parts.join(" · ");
   }
 
+  bool get hasCredits =>
+      (composer?.trim().isNotEmpty ?? false) ||
+      (arranger?.trim().isNotEmpty ?? false);
+
   /// 读取音乐文件的图片，自动适应缩放
   Future<ImageProvider?> _getResizedPic({
     required int width,
@@ -350,30 +367,41 @@ class Audio {
   /// 缓存ImageProvider不用重新解码。快速滚动时最多250mb
   /// 48*48
   Future<ImageProvider?> get cover {
-    if (_cover == null) {
-      return _getResizedPic(width: 48, height: 48).then((value) {
-        if (value == null) return null;
+    final existingFuture = _coverFuture;
+    if (existingFuture != null) return existingFuture;
 
-        _cover = value;
-        return _cover;
-      });
-    }
-    return Future.value(_cover);
+    final future = _getResizedPic(width: 48, height: 48);
+    _coverFuture = future;
+    return future;
   }
 
   void clearCoverCache() {
-    _cover = null;
+    _coverFuture = null;
+    _mediumCoverFuture = null;
+    _largeCoverFuture = null;
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片
   /// 200 * 200
-  Future<ImageProvider?> get mediumCover =>
-      _getResizedPic(width: 200, height: 200);
+  Future<ImageProvider?> get mediumCover {
+    final existingFuture = _mediumCoverFuture;
+    if (existingFuture != null) return existingFuture;
+
+    final future = _getResizedPic(width: 200, height: 200);
+    _mediumCoverFuture = future;
+    return future;
+  }
 
   /// now playing 不需要频繁调用，所以不缓存图片
   /// size: 400 * devicePixelRatio（屏幕缩放大小）
-  Future<ImageProvider?> get largeCover =>
-      _getResizedPic(width: 400, height: 400);
+  Future<ImageProvider?> get largeCover {
+    final existingFuture = _largeCoverFuture;
+    if (existingFuture != null) return existingFuture;
+
+    final future = _getResizedPic(width: 400, height: 400);
+    _largeCoverFuture = future;
+    return future;
+  }
 
   @override
   String toString() {

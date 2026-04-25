@@ -1,8 +1,10 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/component/ui/app_surface.dart';
 import 'package:coriander_player/page/uni_page_components.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -127,17 +129,8 @@ class MultiSelectController<T> extends ChangeNotifier {
   }
 }
 
-/// `AudiosPage`, `ArtistsPage`, `AlbumsPage`, `FoldersPage`, `FolderDetailPage` 页面的主要组件，
-/// 提供随机播放以及更改排序方式、排序顺序、内容视图的支持。
-///
-/// `enableShufflePlay` 只能在 `T` 是 `Audio` 时为 `ture`
-///
-/// `enableSortMethod` 为 `true` 时，`sortMethods` 不可为空且必须包含一个 `SortMethodDesc`
-///
-/// `defaultContentView` 表示默认的内容视图。如果设置为 `ContentView.list`，就以单行列表视图展示内容；
-/// 如果是 `ContentView.table`，就以最大 300 * 64 的子组件以 8 为间距组成的表格展示内容。
-///
-/// `multiSelectController` 可以使页面进入多选状态。如果它不为空，则 `multiSelectViewActions` 也不可为空
+/// `AudiosPage`, `ArtistsPage`, `AlbumsPage`, `FoldersPage`, `FolderDetailPage`
+/// 的通用页面容器，提供排序、视图切换、多选和定位等能力。
 class UniPage<T> extends StatefulWidget {
   const UniPage({
     super.key,
@@ -322,15 +315,18 @@ class _UniPageState<T> extends State<UniPage<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> actions = [];
-    if (widget.primaryAction != null) {
-      actions.add(widget.primaryAction!);
-    }
+    Widget? primaryAction = widget.primaryAction;
+    final secondaryActions = <Widget>[];
     if (widget.enableShufflePlay) {
-      actions.add(ShufflePlay<T>(contentList: widget.contentList));
+      final shufflePlay = ShufflePlay<T>(contentList: widget.contentList);
+      if (primaryAction == null) {
+        primaryAction = shufflePlay;
+      } else {
+        secondaryActions.add(shufflePlay);
+      }
     }
     if (widget.enableSortMethod) {
-      actions.add(SortMethodComboBox<T>(
+      secondaryActions.add(SortMethodComboBox<T>(
         sortMethods: widget.sortMethods!,
         contentList: widget.contentList,
         currSortMethod: currSortMethod!,
@@ -338,38 +334,47 @@ class _UniPageState<T> extends State<UniPage<T>> {
       ));
     }
     if (widget.enableSortOrder) {
-      actions.add(SortOrderSwitch<T>(
+      secondaryActions.add(SortOrderSwitch<T>(
         sortOrder: currSortOrder,
         setSortOrder: setSortOrder,
       ));
     }
     if (widget.enableContentViewSwitch) {
-      actions.add(ContentViewSwitch<T>(
+      secondaryActions.add(ContentViewSwitch<T>(
         contentView: currContentView,
         setContentView: setContentView,
       ));
     }
 
     return widget.multiSelectController == null
-        ? result(null, actions)
+        ? result(null, primaryAction, secondaryActions)
         : ListenableBuilder(
             listenable: widget.multiSelectController!,
             builder: (context, _) => result(
               widget.multiSelectController!,
-              actions,
+              primaryAction,
+              secondaryActions,
             ),
           );
   }
 
   Widget result(
-      MultiSelectController<T>? multiSelectController, List<Widget> actions) {
+    MultiSelectController<T>? multiSelectController,
+    Widget? primaryAction,
+    List<Widget> secondaryActions,
+  ) {
     final sideIndex = widget.sideIndexLabels;
     final hasSideIndex = sideIndex != null && sideIndex.isNotEmpty;
     final sideIndexLabels = sideIndex ?? const <String>[];
     final hasLocateButton =
         widget.locateTo != null || widget.locateIndexResolver != null;
     final rightReserved = (hasSideIndex || hasLocateButton) ? 64.0 : 0.0;
-    final listPadding = EdgeInsets.fromLTRB(0, 0, rightReserved, 132.0);
+    final listPadding = EdgeInsets.fromLTRB(
+      0,
+      0,
+      rightReserved,
+      context.chrome.dockHeight + 56,
+    );
 
     final listBody = Material(
       type: MaterialType.transparency,
@@ -434,30 +439,29 @@ class _UniPageState<T> extends State<UniPage<T>> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final availableHeight = constraints.maxHeight;
-                final itemHeight =
-                    ((availableHeight - 12.0) / sideIndexLabels.length)
-                        .clamp(12.0, 20.0)
-                        .toDouble();
-                final fontSize = (itemHeight - 5.0).clamp(10.0, 13.0);
+                final innerHeight = (availableHeight - 12.0)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+                final itemHeight = sideIndexLabels.isEmpty
+                    ? 0.0
+                    : innerHeight / sideIndexLabels.length;
+                final fontSize = (itemHeight - 2.0).clamp(6.0, 13.0);
 
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainer.withValues(alpha: 0.78),
-                    borderRadius: BorderRadius.circular(18.0),
-                  ),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        sideIndexLabels.length,
-                        (i) {
-                          final label = sideIndexLabels[i];
-                          final selected = label == _activeSideIndexLabel;
-                          return SizedBox(
+                return AppSurface(
+                  variant: AppSurfaceVariant.floating,
+                  radius: 22,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      sideIndexLabels.length,
+                      (i) {
+                        final label = sideIndexLabels[i];
+                        final selected = label == _activeSideIndexLabel;
+                        return Expanded(
+                          child: SizedBox(
                             width: 26,
-                            height: itemHeight,
                             child: InkWell(
                               onTap: () => _jumpBySideIndex(label),
                               borderRadius: BorderRadius.circular(9),
@@ -484,9 +488,9 @@ class _UniPageState<T> extends State<UniPage<T>> {
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 );
@@ -497,34 +501,50 @@ class _UniPageState<T> extends State<UniPage<T>> {
           Positioned(
             right: 4,
             bottom: 16,
-            child: FloatingActionButton.small(
-              heroTag: null,
-              tooltip: "定位当前音乐",
-              onPressed: _jumpToLocateTarget,
-              child: const Icon(Icons.my_location_rounded),
+            child: AppSurface(
+              variant: AppSurfaceVariant.floating,
+              radius: 24,
+              child: IconButton(
+                tooltip: '瀹氫綅褰撳墠闊充箰',
+                onPressed: _jumpToLocateTarget,
+                icon: const Icon(Icons.my_location_rounded),
+              ),
             ),
           ),
       ],
     );
 
+    Widget? effectivePrimaryAction = primaryAction;
+    List<Widget> effectiveSecondaryActions = [...secondaryActions];
+    if (multiSelectController != null) {
+      if (multiSelectController.enableMultiSelectView) {
+        final multiSelectActions =
+            widget.multiSelectViewActions ?? const <Widget>[];
+        effectivePrimaryAction =
+            multiSelectActions.isNotEmpty ? multiSelectActions.first : null;
+        effectiveSecondaryActions = multiSelectActions.length > 1
+            ? multiSelectActions.sublist(1)
+            : <Widget>[];
+      } else {
+        effectiveSecondaryActions = [
+          ...effectiveSecondaryActions,
+          IconButton.filledTonal(
+            tooltip: "多选",
+            onPressed: () {
+              multiSelectController.useMultiSelectView(true);
+              multiSelectController.clear();
+            },
+            icon: const Icon(Icons.checklist),
+          ),
+        ];
+      }
+    }
+
     return PageScaffold(
       title: widget.title,
       subtitle: widget.subtitle,
-      actions: multiSelectController == null
-          ? actions
-          : multiSelectController.enableMultiSelectView
-              ? widget.multiSelectViewActions!
-              : [
-                  ...actions,
-                  IconButton.filledTonal(
-                    tooltip: "多选",
-                    onPressed: () {
-                      multiSelectController.useMultiSelectView(true);
-                      multiSelectController.clear();
-                    },
-                    icon: const Icon(Icons.checklist),
-                  ),
-                ],
+      primaryAction: effectivePrimaryAction,
+      secondaryActions: effectiveSecondaryActions,
       body: body,
     );
   }

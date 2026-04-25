@@ -1,174 +1,250 @@
-import 'dart:io';
-
-import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
+import 'package:coriander_player/component/ui/app_surface.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
-/// title, actions, body
-///
-/// 提供基本的响应式布局：
-///
-/// 小屏幕时，折叠第一个组件以外的其他组件。后两个放在同一行；
-/// 若 action 总数大于 3，把第二个起倒数第三个为止的组件相继放在下面。
 class PageScaffold extends StatelessWidget {
   const PageScaffold({
     super.key,
     required this.title,
     this.subtitle,
-    required this.actions,
+    this.primaryAction,
+    this.secondaryActions = const [],
     required this.body,
   });
 
   final String title;
   final String? subtitle;
-  final List<Widget> actions;
+  final Widget? primaryAction;
+  final List<Widget> secondaryActions;
   final Widget body;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final backgroundVisible = _hasValidCustomBackground();
-    final surfaceColor = backgroundVisible
-        ? scheme.surface.withValues(alpha: 0.88)
-        : scheme.surface;
-
-    return ResponsiveBuilder(builder: (context, screenType) {
-      List<Widget> rowChildren;
-
-      if (actions.isEmpty) {
-        rowChildren =
-            subtitle == null ? [onlyTitle(scheme)] : [withSubtitle(scheme)];
-      } else {
-        switch (screenType) {
-          case ScreenType.small:
-            {
-              final List<Widget> foldedRow1 = [];
-              int count = 0;
-              for (int i = actions.length - 1;
-                  i > 0 && count < 2;
-                  --i, ++count) {
-                if (count == 1) foldedRow1.add(const SizedBox(width: 8.0));
-
-                foldedRow1.add(actions[i]);
-              }
-
-              final List<Widget> foldedColumn = [];
-              if (foldedRow1.isNotEmpty) {
-                foldedColumn.add(Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: foldedRow1,
-                ));
-              }
-
-              if (actions.length >= 4) {
-                for (var i = actions.length - 1 - count; i > 0; --i) {
-                  foldedColumn.add(actions[i]);
-                }
-              }
-
-              final menuStyle = MenuStyle(
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              );
-
-              rowChildren = [
-                subtitle == null ? onlyTitle(scheme) : withSubtitle(scheme),
-                const SizedBox(width: 16.0),
-                actions.first,
-                if (foldedColumn.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16.0),
-                    child: MenuAnchor(
-                      style: menuStyle,
-                      menuChildren: foldedColumn,
-                      builder: (_, controller, __) => IconButton.filledTonal(
-                        tooltip: "更多",
-                        onPressed: () {
-                          controller.isOpen
-                              ? controller.close()
-                              : controller.open();
-                        },
-                        icon: const Icon(Symbols.more_vert),
-                      ),
-                    ),
-                  ),
-              ];
-              break;
-            }
-          case ScreenType.medium:
-          case ScreenType.large:
-            {
-              rowChildren = [
-                subtitle == null ? onlyTitle(scheme) : withSubtitle(scheme),
-                const SizedBox(width: 16.0),
-                Wrap(spacing: 8.0, children: actions)
-              ];
-            }
-        }
-      }
-
-      return ColoredBox(
-        color: surfaceColor,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16.0,
-            vertical: 8.0,
-          ),
+    return ResponsiveBuilder(
+      builder: (context, screenType) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: rowChildren,
-                ),
+              AppSurface(
+                variant: AppSurfaceVariant.inset,
+                radius: context.surfaces.radiusXl,
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: switch (screenType) {
+                  ScreenType.small => _SmallHeader(
+                      title: title,
+                      subtitle: subtitle,
+                      primaryAction: primaryAction,
+                      secondaryActions: secondaryActions,
+                    ),
+                  ScreenType.medium || ScreenType.large => _WideHeader(
+                      title: title,
+                      subtitle: subtitle,
+                      primaryAction: primaryAction,
+                      secondaryActions: secondaryActions,
+                    ),
+                },
               ),
+              SizedBox(height: context.visuals.contentHeaderGap),
               Expanded(child: body),
             ],
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
+}
 
-  bool _hasValidCustomBackground() {
-    final path = AppSettings.instance.backgroundImagePath;
-    if (path == null || path.isEmpty) return false;
-    return File(path).existsSync();
+class _SmallHeader extends StatelessWidget {
+  const _SmallHeader({
+    required this.title,
+    required this.subtitle,
+    required this.primaryAction,
+    required this.secondaryActions,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? primaryAction;
+  final List<Widget> secondaryActions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TitleBlock(title: title, subtitle: subtitle),
+        if (primaryAction != null || secondaryActions.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          if (primaryAction != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: primaryAction!,
+              ),
+            ),
+          if (secondaryActions.isNotEmpty)
+            _HorizontalActions(
+              actions: secondaryActions,
+              alignment: MainAxisAlignment.start,
+            ),
+        ],
+      ],
+    );
   }
+}
 
-  Expanded onlyTitle(ColorScheme scheme) {
-    return Expanded(
-      child: Text(
-        title,
-        style: TextStyle(fontSize: 32.0, color: scheme.onSurface),
-        overflow: TextOverflow.ellipsis,
+class _WideHeader extends StatelessWidget {
+  const _WideHeader({
+    required this.title,
+    required this.subtitle,
+    required this.primaryAction,
+    required this.secondaryActions,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? primaryAction;
+  final List<Widget> secondaryActions;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasActions = primaryAction != null || secondaryActions.isNotEmpty;
+        final compact = constraints.maxWidth < 1120;
+
+        if (!hasActions) {
+          return _TitleBlock(title: title, subtitle: subtitle);
+        }
+
+        final actions = ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: compact ? constraints.maxWidth : 640,
+          ),
+          child: Column(
+            crossAxisAlignment:
+                compact ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+            children: [
+              if (primaryAction != null)
+                Align(
+                  alignment:
+                      compact ? Alignment.centerLeft : Alignment.centerRight,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: primaryAction!,
+                  ),
+                ),
+              if (secondaryActions.isNotEmpty) ...[
+                if (primaryAction != null) const SizedBox(height: 10),
+                _HorizontalActions(
+                  actions: secondaryActions,
+                  alignment:
+                      compact ? MainAxisAlignment.start : MainAxisAlignment.end,
+                ),
+              ],
+            ],
+          ),
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TitleBlock(title: title, subtitle: subtitle),
+              const SizedBox(height: 14),
+              actions,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _TitleBlock(title: title, subtitle: subtitle),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Flexible(child: actions),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HorizontalActions extends StatelessWidget {
+  const _HorizontalActions({
+    required this.actions,
+    required this.alignment,
+  });
+
+  final List<Widget> actions;
+  final MainAxisAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: alignment,
+        children: List.generate(actions.length * 2 - 1, (index) {
+          if (index.isOdd) {
+            return const SizedBox(width: 10);
+          }
+          return actions[index ~/ 2];
+        }),
       ),
     );
   }
+}
 
-  Expanded withSubtitle(ColorScheme scheme) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(fontSize: 28.0, color: scheme.onSurface),
-            overflow: TextOverflow.ellipsis,
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 32,
+            height: 1.05,
+            color: scheme.onSurface,
+            fontWeight: FontWeight.w800,
           ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 6),
           Text(
             subtitle!,
-            style: TextStyle(fontSize: 14.0, color: scheme.onSurface),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
-          )
+            style: TextStyle(
+              fontSize: 14,
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
@@ -20,26 +21,40 @@ class LyricViewTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lyricViewController = context.watch<LyricViewController>();
+    final motion = context.motion;
+    final isMainLine = opacity == 1.0;
     return Align(
       alignment: switch (lyricViewController.lyricTextAlign) {
         LyricTextAlign.left => Alignment.centerLeft,
         LyricTextAlign.center => Alignment.center,
         LyricTextAlign.right => Alignment.centerRight,
       },
-      child: Opacity(
+      child: AnimatedOpacity(
+        duration: motion.controlTransitionDuration,
+        curve: motion.fast,
         opacity: opacity,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12.0),
-          child: line is SyncLyricLine
-              ? _SyncLineContent(
-                  syncLine: line as SyncLyricLine,
-                  isMainLine: opacity == 1.0,
-                )
-              : _LrcLineContent(
-                  lrcLine: line as LrcLine,
-                  isMainLine: opacity == 1.0,
-                ),
+        child: AnimatedScale(
+          duration: motion.controlTransitionDuration,
+          curve: motion.normal,
+          scale: isMainLine ? 1 : 0.985,
+          alignment: switch (lyricViewController.lyricTextAlign) {
+            LyricTextAlign.left => Alignment.centerLeft,
+            LyricTextAlign.center => Alignment.center,
+            LyricTextAlign.right => Alignment.centerRight,
+          },
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12.0),
+            child: line is SyncLyricLine
+                ? _SyncLineContent(
+                    syncLine: line as SyncLyricLine,
+                    isMainLine: isMainLine,
+                  )
+                : _LrcLineContent(
+                    lrcLine: line as LrcLine,
+                    isMainLine: isMainLine,
+                  ),
+          ),
         ),
       ),
     );
@@ -307,10 +322,34 @@ class _LrcLineContent extends StatelessWidget {
 
 /// 歌词间奏表示
 /// lrcLine 和 syncLine 必须有且只有一个不为空
-class LyricTransitionTile extends StatelessWidget {
+class LyricTransitionTile extends StatefulWidget {
   final LrcLine? lrcLine;
   final SyncLyricLine? syncLine;
   const LyricTransitionTile({super.key, this.lrcLine, this.syncLine});
+
+  @override
+  State<LyricTransitionTile> createState() => _LyricTransitionTileState();
+}
+
+class _LyricTransitionTileState extends State<LyricTransitionTile> {
+  late LyricTransitionTileController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = LyricTransitionTileController(widget.lrcLine, widget.syncLine);
+  }
+
+  @override
+  void didUpdateWidget(covariant LyricTransitionTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lrcLine == widget.lrcLine &&
+        oldWidget.syncLine == widget.syncLine) {
+      return;
+    }
+    controller.dispose();
+    controller = LyricTransitionTileController(widget.lrcLine, widget.syncLine);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -324,11 +363,17 @@ class LyricTransitionTile extends StatelessWidget {
         child: CustomPaint(
           painter: LyricTransitionPainter(
             scheme,
-            LyricTransitionTileController(lrcLine, syncLine),
+            controller,
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
   }
 }
 
@@ -368,7 +413,9 @@ class LyricTransitionPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(LyricTransitionPainter oldDelegate) => false;
+  bool shouldRepaint(LyricTransitionPainter oldDelegate) {
+    return oldDelegate.scheme != scheme || oldDelegate.controller != controller;
+  }
 
   @override
   bool shouldRebuildSemantics(LyricTransitionPainter oldDelegate) => false;
@@ -386,6 +433,7 @@ class LyricTransitionTileController extends ChangeNotifier {
   double sizeFactor = 0;
   double k = 1;
   late final Ticker factorTicker;
+  bool _disposed = false;
 
   LyricTransitionTileController([this.lrcLine, this.syncLine]) {
     positionStreamSub = playbackService.positionStream.listen(_updateProgress);
@@ -424,6 +472,8 @@ class LyricTransitionTileController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     positionStreamSub.cancel();
     factorTicker.dispose();
     super.dispose();

@@ -187,7 +187,8 @@ class _MoveSelectionToPlaylistAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
-      menuChildren: PLAYLISTS.where((item) => item != currentPlaylist)
+      menuChildren: PLAYLISTS
+          .where((item) => item != currentPlaylist)
           .map(
             (targetPlaylist) => MenuItemButton(
               onPressed: () {

@@ -191,6 +191,7 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
     kugouSongHash: widget.searchResult.kugouSongHash,
     neteaseSongId: widget.searchResult.neteaseSongId,
   );
+
   @override
   Widget build(BuildContext context) {
     const loadingWidget = Padding(
@@ -276,22 +277,21 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
             },
           ), 0);
 
-          final LyricLine currLine = lyric.lines[currLineIndex];
+          final currLine = lyric.lines[currLineIndex];
           if (currLine is LrcLine) {
             return Text(
               "当前：${currLine.content}",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             );
-          } else {
-            final syncLine = currLine as SyncLyricLine;
-
-            return Text(
-              "当前：${syncLine.content}${syncLine.translation != null ? "┃${syncLine.translation}" : ""}",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            );
           }
+
+          final syncLine = currLine as SyncLyricLine;
+          return Text(
+            "当前：${syncLine.content}${syncLine.translation != null ? "┃${syncLine.translation}" : ""}",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
         },
       ),
     );

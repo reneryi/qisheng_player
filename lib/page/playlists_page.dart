@@ -48,7 +48,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       final line = raw.trim();
       if (line.isEmpty || line.startsWith('#')) continue;
 
-      final resolvedPath = path.isAbsolute(line) ? line : path.join(m3uDir, line);
+      final resolvedPath =
+          path.isAbsolute(line) ? line : path.join(m3uDir, line);
       final key = _normalizePathKey(path.normalize(resolvedPath));
       final audio = pathToAudio[key];
       if (audio == null) continue;

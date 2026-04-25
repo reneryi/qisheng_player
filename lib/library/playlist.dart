@@ -11,7 +11,8 @@ import 'package:coriander_player/utils.dart';
 List<Playlist> PLAYLISTS = [];
 Timer? _playlistSaveDebounce;
 
-void scheduleSavePlaylists({Duration delay = const Duration(milliseconds: 200)}) {
+void scheduleSavePlaylists(
+    {Duration delay = const Duration(milliseconds: 200)}) {
   _playlistSaveDebounce?.cancel();
   _playlistSaveDebounce = Timer(delay, () {
     unawaited(savePlaylists());
@@ -37,10 +38,12 @@ Future<void> readPlaylists() async {
     if (!File(playlistsPath).existsSync()) return;
 
     final libraryAudios = <String, Audio>{
-      for (final audio in AudioLibrary.instance.audioCollection) audio.path: audio,
+      for (final audio in AudioLibrary.instance.audioCollection)
+        audio.path: audio,
     };
 
     final playlistsStr = File(playlistsPath).readAsStringSync();
+    if (playlistsStr.trim().isEmpty) return;
     final List playlistsJson = json.decode(playlistsStr);
 
     for (Map item in playlistsJson) {

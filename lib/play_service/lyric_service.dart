@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:async';
 import 'dart:math';
 
@@ -10,8 +12,18 @@ import 'package:coriander_player/music_matcher.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/foundation.dart';
 
+/// 歌词相关状态与行为接口，便于 UI 与测试注入。
+abstract class LyricController extends ChangeNotifier {
+  Future<Lyric?> get currLyricFuture;
+  int get currentLyricLineIndex;
+  Stream<int> get lyricLineStream;
+
+  void findCurrLyricLine();
+  void refreshCurrentLyricLine();
+}
+
 /// 只通知 lyric 变更
-class LyricService extends ChangeNotifier {
+class LyricService extends LyricController {
   final PlayService playService;
 
   late StreamSubscription _positionStreamSubscription;
@@ -47,7 +59,7 @@ class LyricService extends ChangeNotifier {
 
   late final StreamController<int> _lyricLineStreamController =
       StreamController.broadcast(onListen: () {
-    _lyricLineStreamController.add(_nextLyricLine);
+    _lyricLineStreamController.add(currentLyricLineIndex);
   });
 
   Stream<int> get lyricLineStream => _lyricLineStreamController.stream;

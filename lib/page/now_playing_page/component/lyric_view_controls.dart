@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_source_view.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -25,7 +27,6 @@ class LyricViewController extends ChangeNotifier {
   late double lyricFontSize = nowPlayingPagePref.lyricFontSize;
   late double translationFontSize = nowPlayingPagePref.translationFontSize;
 
-  /// 在左对齐、居中、右对齐之间循环切换
   void switchLyricTextAlign() {
     lyricTextAlign = switch (lyricTextAlign) {
       LyricTextAlign.left => LyricTextAlign.center,
@@ -35,6 +36,7 @@ class LyricViewController extends ChangeNotifier {
 
     nowPlayingPagePref.lyricTextAlign = lyricTextAlign;
     notifyListeners();
+    unawaited(AppPreference.instance.save());
   }
 
   void increaseFontSize() {
@@ -44,6 +46,7 @@ class LyricViewController extends ChangeNotifier {
     nowPlayingPagePref.lyricFontSize = lyricFontSize;
     nowPlayingPagePref.translationFontSize = translationFontSize;
     notifyListeners();
+    unawaited(AppPreference.instance.save());
   }
 
   void decreaseFontSize() {
@@ -55,6 +58,7 @@ class LyricViewController extends ChangeNotifier {
     nowPlayingPagePref.lyricFontSize = lyricFontSize;
     nowPlayingPagePref.translationFontSize = translationFontSize;
     notifyListeners();
+    unawaited(AppPreference.instance.save());
   }
 
   void toggleShowTranslation() {
@@ -62,6 +66,7 @@ class LyricViewController extends ChangeNotifier {
     nowPlayingPagePref.showTranslation = showTranslation;
     notifyListeners();
     PlayService.instance.lyricService.refreshCurrentLyricLine();
+    unawaited(AppPreference.instance.save());
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_tile.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,6 +26,8 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final motion = context.motion;
+    final showControls = isHovering || ALWAYS_SHOW_LYRIC_VIEW_CONTROLS;
 
     const loadingWidget = Center(
       child: SizedBox(
@@ -59,7 +62,7 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                   final lyricNullable = snapshot.data;
                   final noLyricWidget = Center(
                     child: Text(
-                      "无歌词",
+                      "暂无歌词",
                       style: TextStyle(
                         fontSize: 22,
                         color: scheme.onSecondaryContainer,
@@ -77,11 +80,25 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                             ? noLyricWidget
                             : _VerticalLyricScrollView(lyric: lyricNullable),
                       },
-                      if (isHovering || ALWAYS_SHOW_LYRIC_VIEW_CONTROLS)
-                        const Align(
-                          alignment: Alignment.bottomRight,
-                          child: LyricViewControls(),
-                        )
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: IgnorePointer(
+                          ignoring: !showControls,
+                          child: AnimatedSlide(
+                            duration: motion.controlTransitionDuration,
+                            curve: motion.normal,
+                            offset: showControls
+                                ? Offset.zero
+                                : const Offset(0.04, 0.08),
+                            child: AnimatedOpacity(
+                              duration: motion.controlTransitionDuration,
+                              curve: motion.fast,
+                              opacity: showControls ? 1 : 0,
+                              child: const LyricViewControls(),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -116,8 +133,9 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     LyricViewTile(line: LrcLine.defaultLine, opacity: 1.0)
   ];
 
-  /// 用来定位到当前歌词
   final currentLyricTileKey = GlobalKey();
+  int? _lastSafeIndex;
+  DateTime _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -128,26 +146,24 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         lyricService.lyricLineStream.listen(_updateNextLyricLine);
   }
 
-  /// 加载当前歌词页面，获取并滚动到当前歌词行的位置
   void _initLyricView() {
     final next = widget.lyric.lines.indexWhere(
       (element) =>
           element.start.inMilliseconds / 1000 > playbackService.position,
     );
-    int nextLyricLine = next == -1 ? widget.lyric.lines.length : next;
+    final nextLyricLine = next == -1 ? widget.lyric.lines.length : next;
     lyricTiles = _generateLyricTiles(max(nextLyricLine - 1, 0));
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       final targetContext = currentLyricTileKey.currentContext;
       if (targetContext == null) return;
 
-      /// scroll to curr lyric line
       if (targetContext.mounted) {
         Scrollable.ensureVisible(
           targetContext,
           alignment: 0.25,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.fastOutSlowIn,
+          duration: context.motion.lyricScrollDuration,
+          curve: context.motion.normal,
         );
       }
     });
@@ -160,8 +176,6 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     });
   }
 
-  /// 当前歌词行100%不透明度，其他歌词行18%透明度
-  /// 把[currentLyricTileKey]绑在当前歌词行上
   List<LyricViewTile> _generateLyricTiles(int mainLine) {
     return List.generate(
       widget.lyric.lines.length,
@@ -182,20 +196,29 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   }
 
   void _updateNextLyricLine(int lyricLine) {
-    lyricTiles = _generateLyricTiles(lyricLine);
+    if (widget.lyric.lines.isEmpty) return;
+    final safeIndex = lyricLine.clamp(0, widget.lyric.lines.length - 1).toInt();
+    final now = DateTime.now();
+    if (_lastSafeIndex == safeIndex &&
+        now.difference(_lastLyricUpdateAt) <
+            const Duration(milliseconds: 120)) {
+      return;
+    }
+    _lastSafeIndex = safeIndex;
+    _lastLyricUpdateAt = now;
+    lyricTiles = _generateLyricTiles(safeIndex);
     setState(() {});
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       final targetContext = currentLyricTileKey.currentContext;
       if (targetContext == null) return;
 
-      /// scroll to curr lyric line
       if (targetContext.mounted) {
         Scrollable.ensureVisible(
           targetContext,
           alignment: 0.25,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.fastOutSlowIn,
+          duration: context.motion.lyricScrollDuration,
+          curve: context.motion.normal,
         );
       }
     });
@@ -209,9 +232,11 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       slivers: [
         const SliverFillRemaining(),
         SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: lyricTiles,
+          child: RepaintBoundary(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: lyricTiles,
+            ),
           ),
         ),
         const SliverFillRemaining(),

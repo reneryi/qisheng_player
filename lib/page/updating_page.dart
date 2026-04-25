@@ -3,12 +3,15 @@ import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/component/ui/app_surface.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/online_cover_store.dart';
 import 'package:coriander_player/library/play_count_store.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -19,24 +22,42 @@ class UpdatingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      body: Center(
-        child: FutureBuilder(
-          future: getAppDataDir(),
-          builder: (context, snapshot) {
-            if (snapshot.data == null) {
-              return const Center(
-                child: Text("Fail to get app data dir."),
-              );
-            }
-
-            return UpdatingStateView(indexPath: snapshot.data!);
-          },
+    final chrome = context.chrome;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [chrome.windowBgTop, chrome.windowBgBottom],
+            ),
+          ),
         ),
-      ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: AppSurface(
+              variant: AppSurfaceVariant.glass,
+              glassDensity: AppSurfaceGlassDensity.low,
+              padding: const EdgeInsets.all(22),
+              child: FutureBuilder(
+                future: getAppDataDir(),
+                builder: (context, snapshot) {
+                  if (snapshot.data == null) {
+                    return const Center(
+                      child: Text("Fail to get app data dir."),
+                    );
+                  }
+
+                  return UpdatingStateView(indexPath: snapshot.data!);
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -62,10 +83,16 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       PlayCountStore.instance.read(),
       OnlineCoverStore.instance.read(),
     ]);
+    await PlayService.instance.playbackService.restoreLastSession();
     _subscription?.cancel();
     final ctx = context;
     if (ctx.mounted) {
-      ctx.go(app_paths.START_PAGES[AppPreference.instance.startPage]);
+      final startPage = AppPreference.instance.startPage;
+      final startLocation =
+          startPage >= 0 && startPage < app_paths.START_PAGES.length
+              ? app_paths.START_PAGES[startPage]
+              : app_paths.AUDIOS_PAGE;
+      ctx.go(startLocation);
     }
   }
 
@@ -89,7 +116,7 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
     final scheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 400.0,
+      width: 420.0,
       child: StreamBuilder(
         stream: updateIndexStream,
         builder: (context, snapshot) {

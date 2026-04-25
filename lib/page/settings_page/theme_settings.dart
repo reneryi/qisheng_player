@@ -1,13 +1,17 @@
 import 'dart:io';
-import 'package:coriander_player/src/rust/api/installed_font.dart';
-import 'package:coriander_player/utils.dart';
-import 'package:flutter/services.dart';
+
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/page/settings_page/theme_picker_dialog.dart';
+import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/src/rust/api/installed_font.dart';
 import 'package:coriander_player/theme_provider.dart';
+import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/window_controls.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -17,7 +21,8 @@ class ThemeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SettingsTile(
-      description: "修改主题",
+      description: "主题颜色",
+      hint: "手动选择强调色；在背景层级变化时保持稳定。",
       action: FilledButton.icon(
         onPressed: () async {
           final seedColor = await showDialog<Color>(
@@ -30,7 +35,7 @@ class ThemeSelector extends StatelessWidget {
           AppSettings.instance.defaultTheme = seedColor.toARGB32();
           await AppSettings.instance.saveSettings();
         },
-        label: const Text("主题选择器"),
+        label: const Text("选择颜色"),
         icon: const Icon(Symbols.palette),
       ),
     );
@@ -50,7 +55,8 @@ class _ThemeModeControlState extends State<ThemeModeControl> {
   @override
   Widget build(BuildContext context) {
     return SettingsTile(
-      description: "主题模式",
+      description: "明暗模式",
+      hint: "在明亮和夜间界面之间切换。",
       action: SegmentedButton<ThemeMode>(
         showSelectedIcon: false,
         segments: const [
@@ -78,6 +84,50 @@ class _ThemeModeControlState extends State<ThemeModeControl> {
   }
 }
 
+class VisualStyleModeControl extends StatefulWidget {
+  const VisualStyleModeControl({super.key});
+
+  @override
+  State<VisualStyleModeControl> createState() => _VisualStyleModeControlState();
+}
+
+class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "UI 视觉风格",
+      hint: "在玻璃拟态与高对比极简风格之间切换，按钮和面板层级会同步调整。",
+      action: SegmentedButton<UiVisualStyleMode>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<UiVisualStyleMode>(
+            value: UiVisualStyleMode.glass,
+            icon: Icon(Symbols.blur_on),
+            label: Text("玻璃"),
+          ),
+          ButtonSegment<UiVisualStyleMode>(
+            value: UiVisualStyleMode.contrast,
+            icon: Icon(Symbols.tune),
+            label: Text("高对比"),
+          ),
+        ],
+        selected: {settings.uiVisualStyleMode},
+        onSelectionChanged: (selection) async {
+          final nextMode = selection.first;
+          if (nextMode == settings.uiVisualStyleMode) return;
+
+          setState(() {
+            settings.uiVisualStyleMode = nextMode;
+          });
+          await ThemeProvider.instance.applyVisualStyleMode(nextMode);
+        },
+      ),
+    );
+  }
+}
+
 class DynamicThemeSwitch extends StatefulWidget {
   const DynamicThemeSwitch({super.key});
 
@@ -92,13 +142,139 @@ class _DynamicThemeSwitchState extends State<DynamicThemeSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "动态主题",
+      hint: "使用当前封面颜色影响强调色和背景色。",
       action: Switch(
         value: settings.dynamicTheme,
         onChanged: (_) async {
           setState(() {
             settings.dynamicTheme = !settings.dynamicTheme;
           });
+          if (!settings.dynamicTheme) {
+            ThemeProvider.instance.applyTheme(
+              seedColor: Color(settings.defaultTheme),
+            );
+          } else {
+            final audio = PlayService.instance.playbackService.nowPlaying;
+            if (audio != null) {
+              ThemeProvider.instance.applyThemeFromAudio(audio);
+            }
+          }
           await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
+class UiEffectsLevelControl extends StatefulWidget {
+  const UiEffectsLevelControl({super.key});
+
+  @override
+  State<UiEffectsLevelControl> createState() => _UiEffectsLevelControlState();
+}
+
+class _UiEffectsLevelControlState extends State<UiEffectsLevelControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "UI 效果强度",
+      hint: "平衡、视觉和性能模式会影响模糊强度与阴影深度。",
+      action: SegmentedButton<UiEffectsLevel>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<UiEffectsLevel>(
+            value: UiEffectsLevel.balanced,
+            icon: Icon(Symbols.tune),
+            label: Text("平衡"),
+          ),
+          ButtonSegment<UiEffectsLevel>(
+            value: UiEffectsLevel.visual,
+            icon: Icon(Symbols.auto_awesome),
+            label: Text("视觉"),
+          ),
+          ButtonSegment<UiEffectsLevel>(
+            value: UiEffectsLevel.performance,
+            icon: Icon(Symbols.speed),
+            label: Text("性能"),
+          ),
+        ],
+        selected: {settings.uiEffectsLevel},
+        onSelectionChanged: (selection) async {
+          final nextLevel = selection.first;
+          if (nextLevel == settings.uiEffectsLevel) return;
+
+          setState(() {
+            settings.uiEffectsLevel = nextLevel;
+          });
+          ThemeProvider.instance.applyUiEffectsLevel(nextLevel);
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
+class WindowBackdropModeControl extends StatefulWidget {
+  const WindowBackdropModeControl({super.key});
+
+  @override
+  State<WindowBackdropModeControl> createState() =>
+      _WindowBackdropModeControlState();
+}
+
+class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
+  final settings = AppSettings.instance;
+  String _effectiveMode = AppSettings.instance.windowBackdropMode.name;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "Windows 背景材质",
+      hint: "Auto 会跟随系统策略；不支持的模式会回退。当前实际模式：$_effectiveMode",
+      action: SegmentedButton<WindowBackdropMode>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.auto,
+            icon: Icon(Symbols.auto_awesome),
+            label: Text("自动"),
+          ),
+          ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.mica,
+            icon: Icon(Symbols.layers),
+            label: Text("Mica"),
+          ),
+          ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.acrylic,
+            icon: Icon(Symbols.blur_on),
+            label: Text("Acrylic"),
+          ),
+          ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.none,
+            icon: Icon(Symbols.block),
+            label: Text("关闭"),
+          ),
+        ],
+        selected: {settings.windowBackdropMode},
+        onSelectionChanged: (selection) async {
+          final requested = selection.first;
+          if (requested == settings.windowBackdropMode) return;
+
+          final effective = await WindowControls.setWindowBackdropMode(
+            requested,
+          );
+          setState(() {
+            settings.windowBackdropMode = requested;
+            _effectiveMode = effective;
+          });
+          await settings.saveSettings();
+          if (effective != requested.name && context.mounted) {
+            showTextOnSnackBar(
+              "背景材质已回退：${requested.name} -> $effective",
+            );
+          }
         },
       ),
     );
@@ -118,7 +294,8 @@ class _UseSystemThemeSwitchState extends State<UseSystemThemeSwitch> {
   @override
   Widget build(BuildContext context) {
     return SettingsTile(
-      description: "启动时使用系统主题",
+      description: "启动时使用系统主题色",
+      hint: "读取系统强调色作为应用主题来源。",
       action: Switch(
         value: settings.useSystemTheme,
         onChanged: (_) async {
@@ -146,7 +323,8 @@ class _UseSystemThemeModeSwitchState extends State<UseSystemThemeModeSwitch> {
   @override
   Widget build(BuildContext context) {
     return SettingsTile(
-      description: "启动时使用系统主题模式",
+      description: "启动时使用系统明暗模式",
+      hint: "跟随系统明暗模式设置。",
       action: Switch(
         value: settings.useSystemThemeMode,
         onChanged: (_) async {
@@ -167,41 +345,41 @@ class SelectFontCombobox extends StatelessWidget {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "自定义字体",
+      hint: "应用到页面标题、正文和播放控件文本。",
       action: FilledButton.icon(
         onPressed: () async {
           final installedFont = await getInstalledFonts();
           if (installedFont == null || installedFont.isEmpty) {
-            showTextOnSnackBar("无法获取字体");
+            showTextOnSnackBar("无法读取系统字体");
             return;
           }
 
-          if (context.mounted) {
-            final selectedFont = await showDialog<InstalledFont>(
-              context: context,
-              builder: (context) => _FontSelector(installedFont: installedFont),
+          if (!context.mounted) return;
+          final selectedFont = await showDialog<InstalledFont>(
+            context: context,
+            builder: (context) => _FontSelector(installedFont: installedFont),
+          );
+          if (selectedFont == null) return;
+
+          try {
+            final fontLoader = FontLoader(selectedFont.fullName);
+            fontLoader.addFont(
+              File(selectedFont.path).readAsBytes().then((value) {
+                return ByteData.sublistView(value);
+              }),
             );
-            if (selectedFont == null) return;
+            await fontLoader.load();
+            ThemeProvider.instance.changeFontFamily(selectedFont.fullName);
 
-            try {
-              final fontLoader = FontLoader(selectedFont.fullName);
-              fontLoader.addFont(
-                File(selectedFont.path).readAsBytes().then((value) {
-                  return ByteData.sublistView(value);
-                }),
-              );
-              await fontLoader.load();
-              ThemeProvider.instance.changeFontFamily(selectedFont.fullName);
-
-              final settings = AppSettings.instance;
-              settings.fontFamily = selectedFont.fullName;
-              settings.fontPath = selectedFont.path;
-              await settings.saveSettings();
-            } catch (err) {
-              ThemeProvider.instance.changeFontFamily(null);
-              LOGGER.e("[select font] $err");
-              if (context.mounted) {
-                showTextOnSnackBar(err.toString());
-              }
+            final settings = AppSettings.instance;
+            settings.fontFamily = selectedFont.fullName;
+            settings.fontPath = selectedFont.path;
+            await settings.saveSettings();
+          } catch (err) {
+            ThemeProvider.instance.changeFontFamily(null);
+            LOGGER.e("[select font] $err");
+            if (context.mounted) {
+              showTextOnSnackBar(err.toString());
             }
           }
         },
@@ -212,8 +390,53 @@ class SelectFontCombobox extends StatelessWidget {
   }
 }
 
+class NowPlayingStyleModeControl extends StatefulWidget {
+  const NowPlayingStyleModeControl({super.key});
+
+  @override
+  State<NowPlayingStyleModeControl> createState() =>
+      _NowPlayingStyleModeControlState();
+}
+
+class _NowPlayingStyleModeControlState
+    extends State<NowPlayingStyleModeControl> {
+  final pref = AppPreference.instance.nowPlayingPagePref;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: '正在播放页面模式',
+      hint: '默认使用沉浸模式，也可以切换到专业双栏布局。',
+      action: SegmentedButton<NowPlayingStyleMode>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<NowPlayingStyleMode>(
+            value: NowPlayingStyleMode.immersive,
+            icon: Icon(Icons.blur_on),
+            label: Text('沉浸'),
+          ),
+          ButtonSegment<NowPlayingStyleMode>(
+            value: NowPlayingStyleMode.studio,
+            icon: Icon(Icons.tune),
+            label: Text('专业'),
+          ),
+        ],
+        selected: {pref.styleMode},
+        onSelectionChanged: (selection) async {
+          if (selection.first == pref.styleMode) return;
+          setState(() {
+            pref.styleMode = selection.first;
+          });
+          await AppPreference.instance.save();
+        },
+      ),
+    );
+  }
+}
+
 class _FontSelector extends StatelessWidget {
   const _FontSelector({required this.installedFont});
+
   final List<InstalledFont> installedFont;
 
   @override
@@ -301,6 +524,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
       children: [
         SettingsTile(
           description: "自定义背景",
+          hint: "选择图片作为背景，内容区域会自动加深遮罩以保证可读性。",
           action: Wrap(
             spacing: 8,
             children: [
@@ -341,6 +565,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
         ),
         SettingsTile(
           description: "背景透明度",
+          hint: "建议使用 10% - 30%，避免背景图影响文字阅读。",
           action: SizedBox(
             width: 260,
             child: Row(

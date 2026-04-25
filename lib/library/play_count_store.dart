@@ -23,6 +23,7 @@ class PlayCountStore {
       if (!file.existsSync()) return;
 
       final jsonStr = await file.readAsString();
+      if (jsonStr.trim().isEmpty) return;
       final map = json.decode(jsonStr) as Map<String, dynamic>;
       _counts.clear();
       for (final entry in map.entries) {

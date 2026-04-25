@@ -3,7 +3,7 @@
 [![Windows CI](https://github.com/reneryi/coriander_player/actions/workflows/windows_ci.yml/badge.svg)](https://github.com/reneryi/coriander_player/actions/workflows/windows_ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-![音乐页](软件截图/音乐页.png)
+![音乐页](docs/screenshots/音乐页.png)
 
 > 基于 [Ferry-200/coriander_player](https://github.com/Ferry-200/coriander_player) 的维护分支，专注于 **稳定性修复** 与 **功能增强**。
 
@@ -46,7 +46,15 @@
 - **多选入口优化**：多选功能从右上角直接进入，无需右键菜单
 - **文件夹管理**：设置中的文件夹管理移至专属页面，支持扫描音乐库
 
-完整改动日志请见 [CHANGELOG.md](CHANGELOG.md)。
+### 🎨 体验重塑（阶段三）
+- **设计系统重构**：新增统一主题 token、拟态表面容器和组件子主题，亮暗模式视觉更一致
+- **大屏壳层更新**：主界面改为浮层侧边栏 + 页面面板 + 浮动迷你播放器的现代桌面布局
+- **可折叠侧边栏**：设置下方新增展开/收起按钮，大屏导航栏宽度可丝滑过渡
+- **音乐页内联搜索**：搜索入口移动到页头，点击展开后实时过滤当前歌曲列表
+- **播放页双模式**：Now Playing 新增 `沉浸` / `专业` 两套布局，可在设置页和播放页内切换
+- **动态取色收敛**：歌曲封面动态主题只影响强调色，不再打乱整体表面层级与深蓝黑夜间基调
+
+完整改动日志请见 [docs/changelog.md](docs/changelog.md)。
 
 ## 📥 下载安装
 
@@ -54,7 +62,7 @@
 前往 [Releases](https://github.com/reneryi/coriander_player/releases) 下载最新版本。
 
 ### MSIX 安装
-如使用 MSIX 包安装，请参阅 [MSIX 安装指南](MSIX_install.md)。
+如使用 MSIX 包安装，请参阅 [MSIX 安装指南](docs/msix_install.md)。
 
 ## 🎵 支持的音频格式
 
@@ -112,17 +120,35 @@
 
 ```
 coriander_player/
-├── lib/                        # Flutter 主程序
-│   ├── main.dart               # 启动入口
-│   ├── play_service/           # 播放服务
-│   ├── library/                # 媒体库
-│   ├── lyric/                  # 歌词解析
-│   └── src/rust/               # Rust FFI 桥接
-├── rust/                       # Rust 实现（标签读取等）
-├── windows/runner/             # Windows 原生层（托盘、任务栏控件等）
-├── third_party/desktop_lyric/  # 桌面歌词组件（内置 path 依赖）
-├── BASS/                       # BASS 音频引擎动态库（运行时需要）
-└── tools/                      # 构建与测试工具
+├── lib/                        Flutter 主程序源码
+├── rust/                       Rust 源码
+├── windows/                    Windows 原生层
+├── third_party/
+│   └── desktop_lyric/          桌面歌词子项目
+├── test/                       项目测试
+├── tools/
+│   ├── release/                打包脚本
+│   └── test/                   工具类测试脚本
+├── docs/
+│   ├── changelog.md
+│   ├── msix_install.md
+│   ├── project_structure.md
+│   ├── release_workflow.md
+│   ├── releases/               版本发布说明与 payload
+│   └── screenshots/            README 截图
+├── dist/
+│   └── windows/
+│       ├── package/            整合后的完整发布目录
+│       ├── artifacts/
+│       │   └── packages/       最终 zip / setup.exe
+│       └── installer_work/     Inno Setup 工作目录
+├── BASS/                       本地运行依赖 DLL（不提交）
+├── build/                      Flutter/Rust 自动构建输出
+├── notes/                      本地协作笔记（不提交）
+├── README.md
+├── CONTRIBUTING.md
+└── pubspec.yaml
+
 ```
 
 ## 🏗️ 本地构建（Windows）
@@ -134,7 +160,7 @@ flutter pub get
 # 2. 代码质量检查
 flutter analyze
 cd rust && cargo check && cd ..
-flutter test tools/sort_smoke_test.dart
+flutter test tools/test/sort_smoke_test.dart
 
 # 3. 构建主程序
 flutter build windows --release
@@ -157,13 +183,13 @@ cd ../..
 
 ```bash
 # 在完成 release 构建后执行
-powershell -ExecutionPolicy Bypass -File tools/package_release_windows.ps1
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1
 ```
 
-产物输出目录：`build/release_artifacts`
+产物输出目录：`dist/windows/artifacts`
 
-- `coriander_player-<version>-windows-x64.zip`：便携压缩包
-- `coriander_player-<version>-windows-x64-installer.exe`：安装程序（安装到 `%LOCALAPPDATA%\Coriander Player`）
+- `Coriander-Player-v<version>-Windows-x64.zip`：便携压缩包
+- `Coriander-Player-v<version>-Setup-x64.exe`：安装程序（安装到 `%LOCALAPPDATA%\Coriander Player`）
 
 ## 🔄 CI / CD
 
@@ -182,20 +208,20 @@ GitHub Actions 工作流 ([`.github/workflows/windows_ci.yml`](.github/workflows
 <details>
 <summary>展开查看更多截图</summary>
 
-![音乐页](软件截图/音乐页.png)
-![艺术家页](软件截图/艺术家页.png)
-![艺术家详情页](软件截图/艺术家详情页.png)
-![专辑详情页](软件截图/专辑详情页.png)
-![主题选择器](软件截图/主题选择器.png)
-![夜间模式](软件截图/夜间模式.png)
-![正在播放：LRC歌词](软件截图/正在播放（LRC歌词）.png)
-![正在播放：逐字歌词](软件截图/正在播放（逐字歌词）.png)
-![正在播放：间奏动画](软件截图/正在播放（间奏动画）.png)
-![正在播放：居中对齐](软件截图/正在播放（居中对齐）.png)
-![桌面歌词](软件截图/桌面歌词.png)
-![桌面歌词：操作栏](软件截图/桌面歌词（操作栏）.png)
-![桌面歌词：个性化设置](软件截图/桌面歌词（个性化设置）.png)
-![桌面歌词：夜间模式](软件截图/桌面歌词（夜间模式）.png)
+![音乐页](docs/screenshots/音乐页.png)
+![艺术家页](docs/screenshots/艺术家页.png)
+![艺术家详情页](docs/screenshots/艺术家详情页.png)
+![专辑详情页](docs/screenshots/专辑详情页.png)
+![主题选择器](docs/screenshots/主题选择器.png)
+![夜间模式](docs/screenshots/夜间模式.png)
+![正在播放：LRC歌词](docs/screenshots/正在播放（LRC歌词）.png)
+![正在播放：逐字歌词](docs/screenshots/正在播放（逐字歌词）.png)
+![正在播放：间奏动画](docs/screenshots/正在播放（间奏动画）.png)
+![正在播放：居中对齐](docs/screenshots/正在播放（居中对齐）.png)
+![桌面歌词](docs/screenshots/桌面歌词.png)
+![桌面歌词：操作栏](docs/screenshots/桌面歌词（操作栏）.png)
+![桌面歌词：个性化设置](docs/screenshots/桌面歌词（个性化设置）.png)
+![桌面歌词：夜间模式](docs/screenshots/桌面歌词（夜间模式）.png)
 
 </details>
 

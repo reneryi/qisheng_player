@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 enum ScreenType {
-  /// width <= 640
+  /// width < 1040
   small,
 
-  /// 640 < width < 1100
+  /// 1040 <= width < 1360
   medium,
 
-  /// width >= 1100
+  /// width >= 1360
   large,
 }
 
@@ -20,9 +20,9 @@ class ResponsiveBuilder extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
 
-    if (screenSize.width <= 640) {
+    if (screenSize.width < 1040) {
       return builder(context, ScreenType.small);
-    } else if (screenSize.width > 640 && screenSize.width < 1100) {
+    } else if (screenSize.width < 1360) {
       return builder(context, ScreenType.medium);
     } else {
       return builder(context, ScreenType.large);
@@ -39,7 +39,7 @@ class ResponsiveBuilder2 extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
 
-    if (screenSize.width <= 928) {
+    if (screenSize.width < 1040) {
       return builder(context, ScreenType.small);
     } else {
       return builder(context, ScreenType.large);

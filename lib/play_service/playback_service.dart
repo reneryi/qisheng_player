@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -29,8 +31,35 @@ enum PlayMode {
   }
 }
 
+/// 播放相关状态与控制接口，便于桌面 UI 和测试共用。
+abstract class PlaybackController extends ChangeNotifier {
+  Audio? get nowPlaying;
+  int get playlistIndex;
+  ValueListenable<List<Audio>> get playlist;
+  Stream<double> get positionStream;
+  double get length;
+  double get position;
+  Stream<PlayerState> get playerStateStream;
+  PlayerState get playerState;
+  ValueNotifier<double> get volumeDspNotifier;
+  double get volumeDsp;
+  ValueNotifier<PlayMode> get playMode;
+
+  void setPlayMode(PlayMode playMode);
+  void setVolumeDsp(double volume);
+  void seek(double position);
+  void start();
+  void pause();
+  void playAgain();
+  void lastAudio();
+  void nextAudio();
+  void playIndexOfPlaylist(int audioIndex);
+  void reorderPlaylist(int oldIndex, int newIndex);
+  void removeAudioFromPlaylistByPath(String path);
+}
+
 /// 只通知 now playing 变更
-class PlaybackService extends ChangeNotifier {
+class PlaybackService extends PlaybackController {
   final PlayService playService;
 
   late StreamSubscription _playerStateStreamSub;
@@ -70,6 +99,7 @@ class PlaybackService extends ChangeNotifier {
   final _pref = AppPreference.instance.playbackPref;
   final _positionStreamController = StreamController<double>.broadcast();
   bool _cueAutoNextTriggered = false;
+  DateTime _lastSessionSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   late final _wasapiExclusive = ValueNotifier(_player.wasapiExclusive);
   ValueNotifier<bool> get wasapiExclusive => _wasapiExclusive;
@@ -80,6 +110,9 @@ class PlaybackService extends ChangeNotifier {
   late final _volumeLevelingPreampDb =
       ValueNotifier(_pref.volumeLevelingPreampDb);
   ValueNotifier<double> get volumeLevelingPreampDb => _volumeLevelingPreampDb;
+
+  late final _volumeDsp = ValueNotifier(_pref.volumeDsp);
+  ValueNotifier<double> get volumeDspNotifier => _volumeDsp;
 
   /// 独占模式
   void useExclusiveMode(bool exclusive) {
@@ -102,12 +135,40 @@ class PlaybackService extends ChangeNotifier {
   ValueNotifier<PlayMode> get playMode => _playMode;
 
   void setPlayMode(PlayMode playMode) {
+    if (this.playMode.value == playMode) return;
+    final shouldShuffle = playMode == PlayMode.loop;
+    if (shouldShuffle != shuffle.value) {
+      _applyShuffleState(shouldShuffle);
+    }
     this.playMode.value = playMode;
     _pref.playMode = playMode;
+    _rememberPlaybackSession(save: true);
   }
 
-  late final _shuffle = ValueNotifier(false);
+  late final _shuffle = ValueNotifier(_pref.playMode == PlayMode.loop);
   ValueNotifier<bool> get shuffle => _shuffle;
+
+  void _applyShuffleState(bool flag) {
+    if (flag == shuffle.value) return;
+
+    if (nowPlaying != null) {
+      if (flag) {
+        playlist.value = List<Audio>.from(playlist.value);
+        playlist.value.remove(nowPlaying!);
+        playlist.value.shuffle();
+        playlist.value.insert(0, nowPlaying!);
+        _playlistIndex = 0;
+      } else {
+        final restored = _playlistBackup.isEmpty
+            ? List<Audio>.from(playlist.value)
+            : List<Audio>.from(_playlistBackup);
+        playlist.value = restored;
+        _playlistIndex = playlist.value.indexOf(nowPlaying!);
+      }
+    }
+
+    shuffle.value = flag;
+  }
 
   double _resolveNowPlayingLength() {
     final audio = nowPlaying;
@@ -168,6 +229,7 @@ class PlaybackService extends ChangeNotifier {
     final displayPosition = _toDisplayPosition(rawPosition);
     _positionStreamController.add(displayPosition);
     _smtc.updateTimeProperties(progress: (displayPosition * 1000).floor());
+    _rememberPlaybackSessionThrottled();
   }
 
   double get length => _resolveNowPlayingLength();
@@ -197,6 +259,7 @@ class PlaybackService extends ChangeNotifier {
   /// 修改解码时的音量（不影响 Windows 系统音量）
   void setVolumeDsp(double volume) {
     _pref.volumeDsp = volume;
+    _volumeDsp.value = volume;
     _applyOutputVolume(nowPlaying);
   }
 
@@ -251,6 +314,7 @@ class PlaybackService extends ChangeNotifier {
         duration: (length * 1000).floor(),
         path: nowPlaying!.mediaPath,
       );
+      _rememberPlaybackSession(save: true);
 
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
@@ -280,9 +344,9 @@ class PlaybackService extends ChangeNotifier {
       _playlistBackup = List.from(playlist);
       _loadAndPlay(0, this.playlist.value);
     } else {
-      _loadAndPlay(audioIndex, playlist);
       this.playlist.value = List.from(playlist);
       _playlistBackup = List.from(playlist);
+      _loadAndPlay(audioIndex, this.playlist.value);
     }
   }
 
@@ -299,8 +363,11 @@ class PlaybackService extends ChangeNotifier {
   /// 下一首播放
   void addToNext(Audio audio) {
     if (_playlistIndex != null) {
-      playlist.value.insert(_playlistIndex! + 1, audio);
-      _playlistBackup = List.from(playlist.value);
+      final updated = List<Audio>.from(playlist.value)
+        ..insert(_playlistIndex! + 1, audio);
+      playlist.value = updated;
+      _playlistBackup = List.from(updated);
+      _rememberPlaybackSession(save: true);
     }
   }
 
@@ -308,17 +375,10 @@ class PlaybackService extends ChangeNotifier {
     if (nowPlaying == null) return;
     if (flag == shuffle.value) return;
 
-    if (flag) {
-      playlist.value.shuffle();
-      playlist.value.remove(nowPlaying!);
-      playlist.value.insert(0, nowPlaying!);
-      _playlistIndex = 0;
-      shuffle.value = true;
-    } else {
-      playlist.value = List.from(_playlistBackup);
-      _playlistIndex = playlist.value.indexOf(nowPlaying!);
-      shuffle.value = false;
-    }
+    _applyShuffleState(flag);
+    _playMode.value = flag ? PlayMode.loop : PlayMode.forward;
+    _pref.playMode = _playMode.value;
+    _rememberPlaybackSession(save: true);
   }
 
   void _nextAudio_forward() {
@@ -352,7 +412,7 @@ class PlaybackService extends ChangeNotifier {
         _nextAudio_forward();
         break;
       case PlayMode.loop:
-        _nextAudio_loop();
+        _nextAudio_shuffleRandom();
         break;
       case PlayMode.singleLoop:
         _nextAudio_singleLoop();
@@ -433,6 +493,7 @@ class PlaybackService extends ChangeNotifier {
           updated.indexWhere((audio) => audio.path == nowPlaying!.path);
     }
 
+    _rememberPlaybackSession(save: true);
     notifyListeners();
   }
 
@@ -457,6 +518,7 @@ class PlaybackService extends ChangeNotifier {
       nowPlaying = null;
       _playlistIndex = null;
       _cueAutoNextTriggered = false;
+      _rememberPlaybackSession(save: true);
       pause();
       notifyListeners();
       return;
@@ -465,6 +527,7 @@ class PlaybackService extends ChangeNotifier {
     if (!removedCurrent) {
       final index = updated.indexWhere((audio) => audio.path == oldCurrentPath);
       _playlistIndex = index < 0 ? 0 : index;
+      _rememberPlaybackSession(save: true);
       notifyListeners();
       return;
     }
@@ -486,6 +549,7 @@ class PlaybackService extends ChangeNotifier {
 
         playService.desktopLyricService.sendPlayerStateMessage(false);
       });
+      _rememberPlaybackSession(save: true);
     } catch (err) {
       LOGGER.e("[pause] $err");
       showTextOnSnackBar(err.toString());
@@ -495,6 +559,12 @@ class PlaybackService extends ChangeNotifier {
   /// 恢复播放
   void start() {
     try {
+      if (nowPlaying == null) {
+        final audios = AudioLibrary.instance.audioCollection;
+        if (audios.isEmpty) return;
+        play(0, audios);
+        return;
+      }
       _player.start();
       _smtc.updateState(state: SMTCState.playing);
       playService.desktopLyricService.canSendMessage.then((canSend) {
@@ -502,6 +572,7 @@ class PlaybackService extends ChangeNotifier {
 
         playService.desktopLyricService.sendPlayerStateMessage(true);
       });
+      _rememberPlaybackSession(save: true);
     } catch (err) {
       LOGGER.e("[start]: $err");
       showTextOnSnackBar(err.toString());
@@ -527,9 +598,96 @@ class PlaybackService extends ChangeNotifier {
       _player.seek(position);
     }
     playService.lyricService.findCurrLyricLine();
+    _rememberPlaybackSession(save: true);
+  }
+
+  void _rememberPlaybackSession({bool save = false}) {
+    final audio = nowPlaying;
+    _pref
+      ..lastAudioPath = audio?.path
+      ..lastPlaylistPaths =
+          playlist.value.map((audio) => audio.path).toList(growable: false)
+      ..lastPlaylistIndex = _playlistIndex ?? 0
+      ..lastPosition =
+          audio == null ? 0.0 : position.clamp(0.0, length).toDouble();
+
+    if (save) {
+      unawaited(AppPreference.instance.save());
+    }
+  }
+
+  void _rememberPlaybackSessionThrottled() {
+    if (nowPlaying == null) return;
+    _rememberPlaybackSession();
+    final now = DateTime.now();
+    if (now.difference(_lastSessionSaveAt).inSeconds < 5) return;
+    _lastSessionSaveAt = now;
+    unawaited(AppPreference.instance.save());
+  }
+
+  Future<void> restoreLastSession() async {
+    final lastAudioPath = _pref.lastAudioPath;
+    if (lastAudioPath == null || lastAudioPath.isEmpty) return;
+
+    final allAudios = AudioLibrary.instance.audioCollection;
+    if (allAudios.isEmpty) return;
+
+    final byPath = <String, Audio>{
+      for (final audio in allAudios) audio.path: audio,
+    };
+    final restoredPlaylist = _pref.lastPlaylistPaths
+        .map((path) => byPath[path])
+        .whereType<Audio>()
+        .toList();
+
+    if (restoredPlaylist.isEmpty) {
+      restoredPlaylist.addAll(allAudios);
+    }
+
+    var index =
+        restoredPlaylist.indexWhere((audio) => audio.path == lastAudioPath);
+    if (index < 0) {
+      final fallbackAudio = byPath[lastAudioPath];
+      if (fallbackAudio == null) return;
+      restoredPlaylist.insert(0, fallbackAudio);
+      index = 0;
+    }
+
+    try {
+      playlist.value = List<Audio>.from(restoredPlaylist);
+      _playlistBackup = List<Audio>.from(restoredPlaylist);
+      _playlistIndex = index;
+      nowPlaying = restoredPlaylist[index];
+      _cueAutoNextTriggered = false;
+
+      _player.setSource(nowPlaying!.mediaPath);
+      final restorePosition = _pref.lastPosition.clamp(0.0, length).toDouble();
+      if (nowPlaying!.isCueTrack) {
+        final cueStartSec = (nowPlaying!.cueStartMs ?? 0) / 1000.0;
+        _player.seek(cueStartSec + restorePosition);
+      } else {
+        _player.seek(restorePosition);
+      }
+      _applyOutputVolume(nowPlaying);
+      playService.lyricService.updateLyric();
+      notifyListeners();
+      ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+
+      _smtc.updateState(state: SMTCState.paused);
+      _smtc.updateDisplay(
+        title: nowPlaying!.title,
+        artist: nowPlaying!.artist,
+        album: nowPlaying!.album,
+        duration: (length * 1000).floor(),
+        path: nowPlaying!.mediaPath,
+      );
+    } catch (err, trace) {
+      LOGGER.e("[restore playback session] $err", stackTrace: trace);
+    }
   }
 
   void close() {
+    _rememberPlaybackSession(save: true);
     _playerStateStreamSub.cancel();
     _smtcEventStreamSub.cancel();
     _rawPositionStreamSub.cancel();

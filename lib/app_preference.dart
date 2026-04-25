@@ -29,8 +29,18 @@ class PagePreference {
       );
 }
 
+enum NowPlayingStyleMode {
+  immersive,
+  studio;
+
+  static NowPlayingStyleMode? fromString(String? value) {
+    return NowPlayingStyleMode.immersive;
+  }
+}
+
 class NowPlayingPagePreference {
   NowPlayingViewMode nowPlayingViewMode;
+  NowPlayingStyleMode styleMode;
   LyricTextAlign lyricTextAlign;
   bool showTranslation;
   double lyricFontSize;
@@ -38,6 +48,7 @@ class NowPlayingPagePreference {
 
   NowPlayingPagePreference(
     this.nowPlayingViewMode,
+    this.styleMode,
     this.lyricTextAlign,
     this.showTranslation,
     this.lyricFontSize,
@@ -46,6 +57,7 @@ class NowPlayingPagePreference {
 
   Map toMap() => {
         "nowPlayingViewMode": nowPlayingViewMode.name,
+        "styleMode": styleMode.name,
         "lyricTextAlign": lyricTextAlign.name,
         "showTranslation": showTranslation,
         "lyricFontSize": lyricFontSize,
@@ -56,6 +68,8 @@ class NowPlayingPagePreference {
     return NowPlayingPagePreference(
       NowPlayingViewMode.fromString(map["nowPlayingViewMode"]) ??
           NowPlayingViewMode.withLyric,
+      NowPlayingStyleMode.fromString(map["styleMode"]) ??
+          NowPlayingStyleMode.immersive,
       LyricTextAlign.fromString(map["lyricTextAlign"]) ?? LyricTextAlign.left,
       map["showTranslation"] ?? true,
       map["lyricFontSize"] ?? 22.0,
@@ -69,12 +83,20 @@ class PlaybackPreference {
   double volumeDsp;
   bool enableVolumeLeveling;
   double volumeLevelingPreampDb;
+  String? lastAudioPath;
+  List<String> lastPlaylistPaths;
+  int lastPlaylistIndex;
+  double lastPosition;
 
   PlaybackPreference(
     this.playMode,
     this.volumeDsp,
     this.enableVolumeLeveling,
     this.volumeLevelingPreampDb,
+    this.lastAudioPath,
+    this.lastPlaylistPaths,
+    this.lastPlaylistIndex,
+    this.lastPosition,
   );
 
   Map toMap() => {
@@ -82,6 +104,10 @@ class PlaybackPreference {
         "volumeDsp": volumeDsp,
         "enableVolumeLeveling": enableVolumeLeveling,
         "volumeLevelingPreampDb": volumeLevelingPreampDb,
+        "lastAudioPath": lastAudioPath,
+        "lastPlaylistPaths": lastPlaylistPaths,
+        "lastPlaylistIndex": lastPlaylistIndex,
+        "lastPosition": lastPosition,
       };
 
   factory PlaybackPreference.fromMap(Map map) => PlaybackPreference(
@@ -89,6 +115,13 @@ class PlaybackPreference {
         map["volumeDsp"] ?? 1.0,
         map["enableVolumeLeveling"] ?? false,
         (map["volumeLevelingPreampDb"] as num?)?.toDouble() ?? 0.0,
+        map["lastAudioPath"]?.toString(),
+        (map["lastPlaylistPaths"] as List?)
+                ?.map((item) => item.toString())
+                .toList() ??
+            const [],
+        (map["lastPlaylistIndex"] as num?)?.toInt() ?? 0,
+        (map["lastPosition"] as num?)?.toDouble() ?? 0.0,
       );
 }
 
@@ -246,15 +279,32 @@ class AppPreference {
   var playlistDetailPagePref =
       PagePreference(0, SortOrder.ascending, ContentView.list);
 
+  bool sidebarCollapsedLarge = false;
+
   int startPage = 0;
 
-  var playbackPref = PlaybackPreference(PlayMode.forward, 0.2, false, 0.0);
+  var playbackPref = PlaybackPreference(
+    PlayMode.forward,
+    0.2,
+    false,
+    0.0,
+    null,
+    const [],
+    0,
+    0.0,
+  );
 
   var desktopLyricPref =
       DesktopLyricPreference(false, false, null, null, null, null, null);
 
   var nowPlayingPagePref = NowPlayingPagePreference(
-      NowPlayingViewMode.withLyric, LyricTextAlign.left, true, 22.0, 18.0);
+    NowPlayingViewMode.withLyric,
+    NowPlayingStyleMode.immersive,
+    LyricTextAlign.left,
+    true,
+    22.0,
+    18.0,
+  );
 
   var hotkeyPref = HotkeyPreference.defaults();
 
@@ -273,6 +323,8 @@ class AppPreference {
         "folderDetailPagePref": folderDetailPagePref.toMap(),
         "playlistsPagePref": playlistsPagePref.toMap(),
         "playlistDetailPagePref": playlistDetailPagePref.toMap(),
+        "audiosDefaultSortMigrated": true,
+        "sidebarCollapsedLarge": sidebarCollapsedLarge,
         "startPage": startPage,
         "playbackPref": playbackPref.toMap(),
         "desktopLyricPref": desktopLyricPref.toMap(),
@@ -294,10 +346,18 @@ class AppPreference {
       final appPreferencePath = "$supportPath\\app_preference.json";
 
       final prefJson = await File(appPreferencePath).readAsString();
+      if (prefJson.trim().isEmpty) return;
       final Map prefMap = json.decode(prefJson);
 
       instance.audiosPagePref =
           PagePreference.fromMap(prefMap["audiosPagePref"]);
+      final needNormalizeAudiosSort =
+          prefMap["audiosDefaultSortMigrated"] != true;
+      if (needNormalizeAudiosSort) {
+        instance.audiosPagePref
+          ..sortMethod = 0
+          ..sortOrder = SortOrder.ascending;
+      }
       instance.artistsPagePref =
           PagePreference.fromMap(prefMap["artistsPagePref"]);
       instance.artistDetailPagePref = PagePreference.fromMap(
@@ -319,7 +379,11 @@ class AppPreference {
       instance.playlistDetailPagePref = PagePreference.fromMap(
         prefMap["playlistDetailPagePref"],
       );
-      instance.startPage = prefMap["startPage"];
+      instance.sidebarCollapsedLarge =
+          prefMap["sidebarCollapsedLarge"] ?? false;
+      final needNormalizeStartPage = prefMap["startPage"] != 0;
+      // 旧版会把最后点击的侧栏页面写成启动页；没有显式设置时统一回到音乐页。
+      instance.startPage = 0;
       final loadedPlaybackPref =
           PlaybackPreference.fromMap(prefMap["playbackPref"]);
       // Normalize historical startup-at-100% volume bug once.
@@ -331,7 +395,11 @@ class AppPreference {
         ..playMode = loadedPlaybackPref.playMode
         ..volumeDsp = normalizedVolume
         ..enableVolumeLeveling = loadedPlaybackPref.enableVolumeLeveling
-        ..volumeLevelingPreampDb = loadedPlaybackPref.volumeLevelingPreampDb;
+        ..volumeLevelingPreampDb = loadedPlaybackPref.volumeLevelingPreampDb
+        ..lastAudioPath = loadedPlaybackPref.lastAudioPath
+        ..lastPlaylistPaths = loadedPlaybackPref.lastPlaylistPaths
+        ..lastPlaylistIndex = loadedPlaybackPref.lastPlaylistIndex
+        ..lastPosition = loadedPlaybackPref.lastPosition;
 
       final loadedDesktopLyricPref = DesktopLyricPreference.fromMap(
         prefMap["desktopLyricPref"] ?? {},
@@ -349,6 +417,7 @@ class AppPreference {
           NowPlayingPagePreference.fromMap(prefMap["nowPlayingPagePref"]);
       instance.nowPlayingPagePref
         ..nowPlayingViewMode = loadedNowPlayingPref.nowPlayingViewMode
+        ..styleMode = loadedNowPlayingPref.styleMode
         ..lyricTextAlign = loadedNowPlayingPref.lyricTextAlign
         ..showTranslation = loadedNowPlayingPref.showTranslation
         ..lyricFontSize = loadedNowPlayingPref.lyricFontSize
@@ -366,7 +435,10 @@ class AppPreference {
         needNormalizeMuteHotkey = true;
       }
 
-      if (needNormalizeVolume || needNormalizeMuteHotkey) {
+      if (needNormalizeStartPage ||
+          needNormalizeAudiosSort ||
+          needNormalizeVolume ||
+          needNormalizeMuteHotkey) {
         await instance.save();
       }
     } catch (err, trace) {

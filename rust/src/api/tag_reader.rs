@@ -45,7 +45,7 @@ static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
     "ape" => true,
 };
 
-const CURRENT_INDEX_VERSION: u64 = 112;
+const CURRENT_INDEX_VERSION: u64 = 113;
 
 pub struct IndexActionState {
     /// completed / total
@@ -77,10 +77,10 @@ fn file_size_for_identity(path: &str) -> u64 {
     fs::metadata(path).map(|value| value.len()).unwrap_or(0)
 }
 
-fn build_audio_identity_key(
-    title: &str,
-    artist: &str,
-    album: &str,
+struct AudioIdentityParts<'a> {
+    title: &'a str,
+    artist: &'a str,
+    album: &'a str,
     disc: u32,
     track: u32,
     duration: u64,
@@ -89,22 +89,24 @@ fn build_audio_identity_key(
     cue_start_ms: u64,
     cue_end_ms: u64,
     file_size: u64,
-    file_name: &str,
-) -> String {
+    file_name: &'a str,
+}
+
+fn build_audio_identity_key(parts: AudioIdentityParts<'_>) -> String {
     format!(
         "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
-        normalize_text_for_key(title),
-        normalize_text_for_key(artist),
-        normalize_text_for_key(album),
-        disc,
-        track,
-        duration,
-        bitrate,
-        sample_rate,
-        cue_start_ms,
-        cue_end_ms,
-        file_size,
-        normalize_text_for_key(file_name),
+        normalize_text_for_key(parts.title),
+        normalize_text_for_key(parts.artist),
+        normalize_text_for_key(parts.album),
+        parts.disc,
+        parts.track,
+        parts.duration,
+        parts.bitrate,
+        parts.sample_rate,
+        parts.cue_start_ms,
+        parts.cue_end_ms,
+        parts.file_size,
+        normalize_text_for_key(parts.file_name),
     )
 }
 
@@ -116,20 +118,20 @@ fn audio_identity_key_from_audio(audio: &Audio) -> String {
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    build_audio_identity_key(
-        &audio.title,
-        &audio.artist,
-        &audio.album,
-        audio.disc.unwrap_or(0),
-        audio.track.unwrap_or(0),
-        audio.duration,
-        audio.bitrate.unwrap_or(0),
-        audio.sample_rate.unwrap_or(0),
-        audio.cue_start_ms.unwrap_or(0),
-        audio.cue_end_ms.unwrap_or(0),
+    build_audio_identity_key(AudioIdentityParts {
+        title: &audio.title,
+        artist: &audio.artist,
+        album: &audio.album,
+        disc: audio.disc.unwrap_or(0),
+        track: audio.track.unwrap_or(0),
+        duration: audio.duration,
+        bitrate: audio.bitrate.unwrap_or(0),
+        sample_rate: audio.sample_rate.unwrap_or(0),
+        cue_start_ms: audio.cue_start_ms.unwrap_or(0),
+        cue_end_ms: audio.cue_end_ms.unwrap_or(0),
         file_size,
-        &file_name,
-    )
+        file_name: &file_name,
+    })
 }
 
 fn audio_identity_key_from_json(audio: &serde_json::Value) -> String {
@@ -141,20 +143,20 @@ fn audio_identity_key_from_json(audio: &serde_json::Value) -> String {
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    build_audio_identity_key(
-        audio["title"].as_str().unwrap_or_default(),
-        audio["artist"].as_str().unwrap_or_default(),
-        audio["album"].as_str().unwrap_or_default(),
-        audio["disc"].as_u64().unwrap_or(0) as u32,
-        audio["track"].as_u64().unwrap_or(0) as u32,
-        audio["duration"].as_u64().unwrap_or(0),
-        audio["bitrate"].as_u64().unwrap_or(0) as u32,
-        audio["sample_rate"].as_u64().unwrap_or(0) as u32,
-        audio["cue_start_ms"].as_u64().unwrap_or(0),
-        audio["cue_end_ms"].as_u64().unwrap_or(0),
+    build_audio_identity_key(AudioIdentityParts {
+        title: audio["title"].as_str().unwrap_or_default(),
+        artist: audio["artist"].as_str().unwrap_or_default(),
+        album: audio["album"].as_str().unwrap_or_default(),
+        disc: audio["disc"].as_u64().unwrap_or(0) as u32,
+        track: audio["track"].as_u64().unwrap_or(0) as u32,
+        duration: audio["duration"].as_u64().unwrap_or(0),
+        bitrate: audio["bitrate"].as_u64().unwrap_or(0) as u32,
+        sample_rate: audio["sample_rate"].as_u64().unwrap_or(0) as u32,
+        cue_start_ms: audio["cue_start_ms"].as_u64().unwrap_or(0),
+        cue_end_ms: audio["cue_end_ms"].as_u64().unwrap_or(0),
         file_size,
-        &file_name,
-    )
+        file_name: &file_name,
+    })
 }
 
 fn is_unknown_text(value: &str) -> bool {
@@ -196,6 +198,8 @@ struct Audio {
     title: String,
     artist: String,
     album: String,
+    composer: Option<String>,
+    arranger: Option<String>,
     disc: Option<u32>,
     track: Option<u32>,
     /// in secs
@@ -224,6 +228,8 @@ impl Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: "UNKNOWN".to_string(),
             album: "UNKNOWN".to_string(),
+            composer: None,
+            arranger: None,
             disc: None,
             track: None,
             duration: 0,
@@ -245,6 +251,8 @@ impl Audio {
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
+            "composer": self.composer,
+            "arranger": self.arranger,
             "disc": self.disc,
             "track": self.track,
             "duration": self.duration,
@@ -270,6 +278,12 @@ impl Audio {
         }
         if is_unknown_text(&primary.album) && !is_unknown_text(&fallback.album) {
             primary.album = fallback.album;
+        }
+        if primary.composer.is_none() && fallback.composer.is_some() {
+            primary.composer = fallback.composer;
+        }
+        if primary.arranger.is_none() && fallback.arranger.is_some() {
+            primary.arranger = fallback.arranger;
         }
         if primary.disc.unwrap_or(0) == 0 && fallback.disc.unwrap_or(0) > 0 {
             primary.disc = fallback.disc;
@@ -342,6 +356,15 @@ impl Audio {
             }
         }
         Some(rest.to_string())
+    }
+
+    fn sanitize_optional_text(value: &str) -> Option<String> {
+        let cleaned = sanitize_metadata_text(value, "").trim().to_string();
+        if cleaned.is_empty() || cleaned == "UNKNOWN" {
+            None
+        } else {
+            Some(cleaned)
+        }
     }
 
     fn parse_cue_timestamp_to_frames(value: &str) -> Option<u64> {
@@ -550,6 +573,8 @@ impl Audio {
                 title,
                 artist,
                 album,
+                composer: source_audio.composer.clone(),
+                arranger: source_audio.arranger.clone(),
                 disc: source_audio.disc,
                 track: Some(track.track),
                 duration,
@@ -632,13 +657,13 @@ impl Audio {
                 return Some(win);
             }
 
-            return Self::new_with_path(path, None);
+            Self::new_with_path(path, None)
         } else {
             if let Some(win) = win_audio {
                 return Some(win);
             }
 
-            return Self::new_with_path(path, None);
+            Self::new_with_path(path, None)
         }
     }
 
@@ -674,6 +699,14 @@ impl Audio {
             let replay_gain_db = tag
                 .get_strings(&ItemKey::ReplayGainTrackGain)
                 .find_map(Self::parse_replay_gain_db);
+            let composer = tag
+                .get_strings(&ItemKey::Composer)
+                .collect::<Vec<_>>()
+                .join("/");
+            let arranger = tag
+                .get_strings(&ItemKey::Arranger)
+                .collect::<Vec<_>>()
+                .join("/");
 
             let title_raw = tag
                 .title()
@@ -688,6 +721,8 @@ impl Audio {
                 title: sanitize_metadata_text(&title_raw, &fallback_title),
                 artist,
                 album: sanitize_metadata_text(&album_raw, "UNKNOWN"),
+                composer: Self::sanitize_optional_text(&composer),
+                arranger: Self::sanitize_optional_text(&arranger),
                 disc: tag.disk(),
                 track: tag.track(),
                 duration: properties.duration().as_secs(),
@@ -704,10 +739,12 @@ impl Audio {
             });
         }
 
-        return Some(Audio {
+        Some(Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
             album: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
+            composer: None,
+            arranger: None,
             disc: None,
             track: None,
             duration: properties.duration().as_secs(),
@@ -721,7 +758,7 @@ impl Audio {
             modified,
             created,
             by: Some("Lofty".to_string()),
-        });
+        })
     }
 
     /// 使用 Windows Api 获取音乐标签。会因为各种原因返回 Err
@@ -771,6 +808,8 @@ impl Audio {
             title,
             artist,
             album,
+            composer: None,
+            arranger: None,
             disc: None,
             track: Some(music_properties.TrackNumber()?),
             duration: duration.as_secs(),
@@ -1097,7 +1136,7 @@ fn _get_picture_by_windows(path: &String) -> Result<Vec<u8>, windows::core::Erro
 }
 
 fn _get_picture_by_lofty(path: &String) -> Option<Vec<u8>> {
-    if let Ok(tagged_file) = lofty::read_from_path(&path) {
+    if let Ok(tagged_file) = lofty::read_from_path(path) {
         let tag = tagged_file
             .primary_tag()
             .or_else(|| tagged_file.first_tag())?;
@@ -1139,7 +1178,10 @@ pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Ve
             );
 
             let mut output = Cursor::new(Vec::new());
-            if let Ok(_) = resized_img.write_to(&mut output, image::ImageFormat::Png) {
+            if resized_img
+                .write_to(&mut output, image::ImageFormat::Png)
+                .is_ok()
+            {
                 return Some(output.into_inner());
             }
         }
@@ -1149,7 +1191,7 @@ pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Ve
 }
 
 fn _get_lyric_from_lofty(path: &String) -> Option<String> {
-    if let Ok(tagged_file) = lofty::read_from_path(&path) {
+    if let Ok(tagged_file) = lofty::read_from_path(path) {
         let tag = tagged_file
             .primary_tag()
             .or_else(|| tagged_file.first_tag())?;
@@ -1187,38 +1229,36 @@ fn _get_lyric_from_lrc_file(path: &String) -> anyhow::Result<String> {
         return Ok(String::from_utf16(&u16_bytes)?);
     }
 
-    return Ok(String::from_utf8(lrc_bytes)?);
+    Ok(String::from_utf8(lrc_bytes)?)
 }
 
 /// for Flutter   
 /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
 /// 以及相同目录相同文件名的 .lrc 外挂歌词（utf-8 or utf-16）
 pub fn get_lyric_from_path(path: String) -> Option<String> {
-    return _get_lyric_from_lofty(&path).or_else(|| match _get_lyric_from_lrc_file(&path) {
+    _get_lyric_from_lofty(&path).or_else(|| match _get_lyric_from_lrc_file(&path) {
         Ok(val) => Some(val),
         Err(err) => {
-            log_to_dart(format!("fail to get lrc: {}", err.to_string()));
+            log_to_dart(format!("fail to get lrc: {}", err));
             None
         }
-    });
+    })
 }
 
 /// for Flutter
 /// 将标题、艺术家、专辑写入音乐文件的元数据标签
 /// 支持 ID3v2 (MP3)、VorbisComments (FLAC/OGG)、MP4Ilst (M4A) 等格式
-pub fn write_tag_to_file(
-    path: String,
-    title: String,
-    artist: String,
-    album: String,
-) -> bool {
+pub fn write_tag_to_file(path: String, title: String, artist: String, album: String) -> bool {
     use lofty::prelude::*;
 
     let path_ref = Path::new(&path);
     let tagged_file = match lofty::read_from_path(path_ref) {
         Ok(val) => val,
         Err(err) => {
-            log_to_dart(format!("write_tag_to_file: 无法读取文件 {:?}: {}", path, err));
+            log_to_dart(format!(
+                "write_tag_to_file: 无法读取文件 {:?}: {}",
+                path, err
+            ));
             return false;
         }
     };
@@ -1226,9 +1266,7 @@ pub fn write_tag_to_file(
     let file_type = tagged_file.file_type();
 
     // 获取首选标签类型
-    let tag_type = match file_type.primary_tag_type() {
-        tt => tt,
-    };
+    let tag_type = file_type.primary_tag_type();
 
     // 重新以可写方式打开
     let mut tagged_file = match lofty::read_from_path(path_ref) {
@@ -1275,8 +1313,8 @@ pub fn write_tag_to_file(
 /// 将封面图片数据写入音乐文件的元数据标签
 /// cover_data 为图片的原始字节（JPEG/PNG）
 pub fn write_cover_to_file(path: String, cover_data: Vec<u8>) -> bool {
+    use lofty::picture::{MimeType, Picture, PictureType};
     use lofty::prelude::*;
-    use lofty::picture::{Picture, PictureType, MimeType};
 
     let path_ref = Path::new(&path);
     let file_type = match lofty::read_from_path(path_ref) {
@@ -1318,12 +1356,7 @@ pub fn write_cover_to_file(path: String, cover_data: Vec<u8>) -> bool {
         MimeType::Jpeg
     };
 
-    let picture = Picture::new_unchecked(
-        PictureType::CoverFront,
-        Some(mime),
-        None,
-        cover_data,
-    );
+    let picture = Picture::new_unchecked(PictureType::CoverFront, Some(mime), None, cover_data);
 
     // 移除旧封面，添加新封面
     tag.remove_picture_type(PictureType::CoverFront);

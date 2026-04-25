@@ -1,5 +1,6 @@
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/component/audio_tile.dart';
+import 'package:coriander_player/component/ui/expandable_search_action.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/play_count_store.dart';
 import 'package:coriander_player/page/uni_page.dart';
@@ -9,9 +10,18 @@ import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class AudiosPage extends StatelessWidget {
+class AudiosPage extends StatefulWidget {
   final Audio? locateTo;
   const AudiosPage({super.key, this.locateTo});
+
+  @override
+  State<AudiosPage> createState() => _AudiosPageState();
+}
+
+class _AudiosPageState extends State<AudiosPage> {
+  late final MultiSelectController<Audio> multiSelectController =
+      MultiSelectController<Audio>();
+  String query = '';
 
   static final List<String> _letters = [
     ...List.generate(26, (i) => String.fromCharCode(65 + i)),
@@ -44,34 +54,64 @@ class AudiosPage extends StatelessWidget {
     return null;
   }
 
+  List<Audio> _buildFilteredList(List<Audio> source) {
+    final keyword = query.trim().toLowerCase();
+    if (keyword.isEmpty) return List<Audio>.from(source);
+
+    return source.where((audio) {
+      return audio.title.toLowerCase().contains(keyword) ||
+          audio.artist.toLowerCase().contains(keyword) ||
+          audio.album.toLowerCase().contains(keyword);
+    }).toList();
+  }
+
+  String _buildSubtitle(int filteredCount, int totalCount) {
+    if (query.trim().isEmpty) {
+      return '$totalCount 首乐曲';
+    }
+    return '搜索结果 $filteredCount / 总数 $totalCount';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final contentList = List<Audio>.from(AudioLibrary.instance.audioCollection);
-    final multiSelectController = MultiSelectController<Audio>();
+    final sourceList = List<Audio>.from(AudioLibrary.instance.audioCollection);
+    final contentList = _buildFilteredList(sourceList);
+    final searching = query.trim().isNotEmpty;
 
     return UniPage<Audio>(
       pref: AppPreference.instance.audiosPagePref,
       title: "音乐",
-      subtitle: "${contentList.length} 首乐曲",
+      subtitle: _buildSubtitle(contentList.length, sourceList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,
         playlist: contentList,
         showPlayCount: AppPreference.instance.audiosPagePref.sortMethod == 5,
-        focus: item == locateTo,
+        focus: item == widget.locateTo,
         multiSelectController: multiSelectController,
+      ),
+      primaryAction: ExpandableSearchAction(
+        hintText: '搜索歌曲、艺术家、专辑',
+        onChanged: (value) {
+          setState(() {
+            query = value;
+          });
+        },
       ),
       enableShufflePlay: true,
       enableSortMethod: true,
       enableSortOrder: true,
       enableContentViewSwitch: true,
-      locateTo: locateTo,
-      locateIndexResolver: (list) {
-        final current = PlayService.instance.playbackService.nowPlaying;
-        if (current == null) return null;
-        final index = list.indexWhere((audio) => audio.path == current.path);
-        return index >= 0 ? index : null;
-      },
+      locateTo: searching ? null : widget.locateTo,
+      locateIndexResolver: searching
+          ? null
+          : (list) {
+              final current = PlayService.instance.playbackService.nowPlaying;
+              if (current == null) return null;
+              final index =
+                  list.indexWhere((audio) => audio.path == current.path);
+              return index >= 0 ? index : null;
+            },
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
@@ -85,8 +125,8 @@ class AudiosPage extends StatelessWidget {
         ),
         MultiSelectExit(multiSelectController: multiSelectController),
       ],
-      sideIndexLabels: _letters,
-      sideIndexResolver: _resolveByLetter,
+      sideIndexLabels: searching ? null : _letters,
+      sideIndexResolver: searching ? null : _resolveByLetter,
       sortMethods: [
         SortMethodDesc(
           icon: Symbols.title,

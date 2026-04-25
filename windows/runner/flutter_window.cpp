@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <cwchar>
 #include <commctrl.h>
+#include <dwmapi.h>
 #include <tlhelp32.h>
 #include <optional>
 
@@ -16,6 +18,18 @@
 #endif
 
 namespace {
+#ifndef DWMWA_SYSTEMBACKDROP_TYPE
+#define DWMWA_SYSTEMBACKDROP_TYPE 38
+#endif
+
+#ifndef DWMSBT_AUTO
+#define DWMSBT_AUTO 0
+#define DWMSBT_NONE 1
+#define DWMSBT_MAINWINDOW 2
+#define DWMSBT_TRANSIENTWINDOW 3
+#define DWMSBT_TABBEDWINDOW 4
+#endif
+
 struct WindowSearchData {
   DWORD process_id = 0;
   HWND preferred_hwnd = nullptr;
@@ -117,6 +131,36 @@ HWND FindDesktopLyricWindowByTitle() {
   TitleSearchData data = {};
   EnumWindows(EnumDesktopLyricWindowByTitleProc, reinterpret_cast<LPARAM>(&data));
   return data.hwnd;
+}
+
+std::string ToLowerAscii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char ch) {
+                   return static_cast<char>(std::tolower(ch));
+                 });
+  return value;
+}
+
+std::string NormalizeBackdropMode(const std::string& value) {
+  const std::string normalized = ToLowerAscii(value);
+  if (normalized == "auto" || normalized == "mica" ||
+      normalized == "acrylic" || normalized == "none") {
+    return normalized;
+  }
+  return "auto";
+}
+
+int BackdropTypeFromMode(const std::string& mode) {
+  if (mode == "mica") {
+    return DWMSBT_MAINWINDOW;
+  }
+  if (mode == "acrylic") {
+    return DWMSBT_TRANSIENTWINDOW;
+  }
+  if (mode == "none") {
+    return DWMSBT_NONE;
+  }
+  return DWMSBT_AUTO;
 }
 }  // namespace
 
@@ -238,6 +282,18 @@ bool FlutterWindow::OnCreate() {
           const BOOL moved = SetWindowPos(
               lyric_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE);
           result->Success(flutter::EncodableValue(moved != FALSE));
+          return;
+        }
+
+        if (method_call.method_name() == "set_window_backdrop_mode") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          const auto requested_mode =
+              GetStringArg(map, "mode", std::string("auto"));
+          const auto applied_mode = SetWindowBackdropMode(requested_mode);
+          result->Success(flutter::EncodableValue(applied_mode));
           return;
         }
 
@@ -448,6 +504,45 @@ int FlutterWindow::GetIntArg(const flutter::EncodableMap* map, const char* key,
     return static_cast<int>(*double_value);
   }
   return default_value;
+}
+
+std::string FlutterWindow::GetStringArg(const flutter::EncodableMap* map,
+                                        const char* key,
+                                        const std::string& default_value) {
+  if (map == nullptr || key == nullptr) {
+    return default_value;
+  }
+
+  const auto it = map->find(flutter::EncodableValue(key));
+  if (it == map->end()) {
+    return default_value;
+  }
+
+  if (const auto* string_value = std::get_if<std::string>(&it->second)) {
+    return *string_value;
+  }
+  return default_value;
+}
+
+std::string FlutterWindow::SetWindowBackdropMode(
+    const std::string& requested_mode) {
+  const auto normalized_mode = NormalizeBackdropMode(requested_mode);
+  const int backdrop_type = BackdropTypeFromMode(normalized_mode);
+  const HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return "none";
+  }
+
+  const HRESULT apply_result = DwmSetWindowAttribute(
+      hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop_type, sizeof(backdrop_type));
+  if (SUCCEEDED(apply_result)) {
+    return normalized_mode;
+  }
+
+  const int fallback_type = DWMSBT_NONE;
+  DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &fallback_type,
+                        sizeof(fallback_type));
+  return "none";
 }
 
 HWND FlutterWindow::FindDesktopLyricWindowByPid(DWORD pid) const {

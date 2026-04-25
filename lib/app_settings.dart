@@ -8,9 +8,48 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// 把旧的 app data 目录（如果存在）移到新的目录
-/// 只在新 app data 目录没有数据时进行
-/// 从 C:\Users\$username\AppData\Roaming\com.example\coriander_player 移到 C:\Users\$username\Documents\coriander_player
+enum WindowBackdropMode {
+  auto,
+  mica,
+  acrylic,
+  none;
+
+  static WindowBackdropMode? fromName(String? value) {
+    for (final item in values) {
+      if (item.name == value) return item;
+    }
+    return null;
+  }
+}
+
+enum UiEffectsLevel {
+  balanced,
+  visual,
+  performance;
+
+  static UiEffectsLevel? fromName(String? value) {
+    for (final item in values) {
+      if (item.name == value) return item;
+    }
+    return null;
+  }
+}
+
+enum UiVisualStyleMode {
+  glass,
+  contrast;
+
+  static UiVisualStyleMode? fromName(String? value) {
+    for (final item in values) {
+      if (item.name == value) return item;
+    }
+    return null;
+  }
+}
+
+/// 把旧 app data 目录（如果存在）移到新的目录。
+/// 只在 app data 目录没有数据时进行。
+/// 从 C:\\Users\\$username\\AppData\\Roaming\\com.example\\coriander_player 移到 C:\\Users\\$username\\Documents\\coriander_player。
 Future<void> migrateAppData() async {
   try {
     final newAppDataDir = await getAppDataDir();
@@ -40,14 +79,14 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  static const String version = "1.6.2";
+  static const String version = "1.7.0";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "coriander_player";
 
-  /// 主题模式：亮 / 暗
+  /// 主题模式：亮 / 暗 / 跟随系统
   ThemeMode themeMode = getWindowsThemeMode();
 
-  /// 启动时 / 封面主题色不适合当主题时的主题
+  /// 启动时或封面主题色不适合当主题时的主色
   int defaultTheme = getWindowsTheme();
 
   /// 跟随歌曲封面的动态主题
@@ -59,7 +98,7 @@ class AppSettings {
   /// 跟随系统主题模式
   bool useSystemThemeMode = true;
 
-  List artistSeparator = ["/", "、"];
+  List artistSeparator = ["/", "\u3001"];
 
   /// 歌词来源：true，本地优先；false，在线优先
   bool localLyricFirst = true;
@@ -70,6 +109,9 @@ class AppSettings {
   String? fontPath;
   String? backgroundImagePath;
   double backgroundImageOpacity = 0.18;
+  WindowBackdropMode windowBackdropMode = WindowBackdropMode.auto;
+  UiEffectsLevel uiEffectsLevel = UiEffectsLevel.balanced;
+  UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.glass;
   final ValueNotifier<int> backgroundVersion = ValueNotifier(0);
 
   late String artistSplitPattern = artistSeparator.join("|");
@@ -79,26 +121,41 @@ class AppSettings {
   static AppSettings get instance => _instance;
 
   static ThemeMode getWindowsThemeMode() {
-    final systemTheme = SystemTheme.getSystemTheme();
+    try {
+      final systemTheme = SystemTheme.getSystemTheme();
 
-    final isDarkMode = (((5 * systemTheme.fore.$3) +
-            (2 * systemTheme.fore.$2) +
-            systemTheme.fore.$4) >
-        (8 * 128));
-    return isDarkMode ? ThemeMode.dark : ThemeMode.light;
+      final isDarkMode = (((5 * systemTheme.fore.$3) +
+              (2 * systemTheme.fore.$2) +
+              systemTheme.fore.$4) >
+          (8 * 128));
+      return isDarkMode ? ThemeMode.dark : ThemeMode.light;
+    } catch (_) {
+      return ThemeMode.dark;
+    }
   }
 
   static int getWindowsTheme() {
-    final systemTheme = SystemTheme.getSystemTheme();
-    return Color.fromARGB(
-      systemTheme.accent.$1,
-      systemTheme.accent.$2,
-      systemTheme.accent.$3,
-      systemTheme.accent.$4,
-    ).toARGB32();
+    try {
+      final systemTheme = SystemTheme.getSystemTheme();
+      return Color.fromARGB(
+        systemTheme.accent.$1,
+        systemTheme.accent.$2,
+        systemTheme.accent.$3,
+        systemTheme.accent.$4,
+      ).toARGB32();
+    } catch (_) {
+      return const Color(0xFF4F8DFF).toARGB32();
+    }
   }
 
   AppSettings._();
+
+  static UiVisualStyleMode parseUiVisualStyleMode(Object? value) {
+    if (value is String) {
+      return UiVisualStyleMode.fromName(value) ?? UiVisualStyleMode.glass;
+    }
+    return UiVisualStyleMode.glass;
+  }
 
   void notifyBackgroundChanged() {
     backgroundVersion.value++;
@@ -151,6 +208,7 @@ class AppSettings {
       final settingsPath = "$supportPath\\settings.json";
 
       final settingsStr = File(settingsPath).readAsStringSync();
+      if (settingsStr.trim().isEmpty) return;
       Map settingsMap = json.decode(settingsStr);
 
       if (settingsMap["Version"] == null) {
@@ -219,6 +277,20 @@ class AppSettings {
       if (bgOpacity is num) {
         _instance.backgroundImageOpacity = bgOpacity.toDouble().clamp(0.0, 0.6);
       }
+      final windowBackdropMode = settingsMap["WindowBackdropMode"];
+      if (windowBackdropMode is String) {
+        _instance.windowBackdropMode =
+            WindowBackdropMode.fromName(windowBackdropMode) ??
+                WindowBackdropMode.auto;
+      }
+      final uiEffectsLevel = settingsMap["UiEffectsLevel"];
+      if (uiEffectsLevel is String) {
+        _instance.uiEffectsLevel =
+            UiEffectsLevel.fromName(uiEffectsLevel) ?? UiEffectsLevel.balanced;
+      }
+      _instance.uiVisualStyleMode = parseUiVisualStyleMode(
+        settingsMap["UiVisualStyleMode"],
+      );
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -242,10 +314,13 @@ class AppSettings {
         "FontPath": fontPath,
         "BackgroundImagePath": backgroundImagePath,
         "BackgroundImageOpacity": backgroundImageOpacity,
+        "WindowBackdropMode": windowBackdropMode.name,
+        "UiEffectsLevel": uiEffectsLevel.name,
+        "UiVisualStyleMode": uiVisualStyleMode.name,
       };
 
-      // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸
-      // 这样windowSize始终保存的是窗口化时的尺寸
+      // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸。
+      // 这样 windowSize 始终保存的是窗口化时的尺寸。
       Size sizeToSave = windowSize;
       if (!isMaximized && !isFullScreen) {
         sizeToSave = await windowManager.getSize();

@@ -1,3 +1,4 @@
+import 'package:coriander_player/component/ui/app_section.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
 import 'package:coriander_player/page/settings_page/artist_separator_editor.dart';
 import 'package:coriander_player/page/settings_page/check_update.dart';
@@ -13,37 +14,47 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return PageScaffold(
       title: "设置",
-      actions: const [],
+      secondaryActions: const [],
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 96.0),
+        padding: const EdgeInsets.only(bottom: 120),
         children: const [
-          DefaultLyricSourceControl(),
-          SizedBox(height: 16.0),
-          VolumeLevelingSwitch(),
-          SizedBox(height: 16.0),
-          VolumeLevelingPreampControl(),
-          SizedBox(height: 16.0),
-          HotkeySettingsTile(),
-          SizedBox(height: 16.0),
-          DynamicThemeSwitch(),
-          SizedBox(height: 16.0),
-          UseSystemThemeSwitch(),
-          SizedBox(height: 16.0),
-          ThemeSelector(),
-          SizedBox(height: 16.0),
-          UseSystemThemeModeSwitch(),
-          SizedBox(height: 16.0),
-          ThemeModeControl(),
-          SizedBox(height: 16.0),
-          BackgroundImageSettings(),
-          SizedBox(height: 16.0),
-          SelectFontCombobox(),
-          SizedBox(height: 16.0),
-          ArtistSeparatorEditor(),
-          SizedBox(height: 16.0),
-          CreateIssueTile(),
-          SizedBox(height: 16.0),
-          CheckForUpdate(),
+          AppSection(
+            title: '外观',
+            description: '深蓝黑拟态壳层、亮暗模式和播放器外观偏好。',
+            children: [
+              DynamicThemeSwitch(),
+              UseSystemThemeSwitch(),
+              ThemeSelector(),
+              UseSystemThemeModeSwitch(),
+              ThemeModeControl(),
+              VisualStyleModeControl(),
+              UiEffectsLevelControl(),
+              WindowBackdropModeControl(),
+              BackgroundImageSettings(),
+              SelectFontCombobox(),
+            ],
+          ),
+          SizedBox(height: 18),
+          AppSection(
+            title: '播放',
+            description: '播放行为、歌词来源和音量均衡等日常设置。',
+            children: [
+              DefaultLyricSourceControl(),
+              VolumeLevelingSwitch(),
+              VolumeLevelingPreampControl(),
+              ArtistSeparatorEditor(),
+            ],
+          ),
+          SizedBox(height: 18),
+          AppSection(
+            title: '系统与工具',
+            description: '热键、问题反馈和更新检查。',
+            children: [
+              HotkeySettingsTile(),
+              CreateIssueTile(),
+              CheckForUpdate(),
+            ],
+          ),
         ],
       ),
     );

@@ -7,10 +7,14 @@ class RectangleProgressIndicator extends StatefulWidget {
     super.key,
     required this.size,
     required this.child,
+    this.progressColor,
+    this.trackColor,
   });
 
   final Size size;
   final Widget child;
+  final Color? progressColor;
+  final Color? trackColor;
 
   @override
   State<RectangleProgressIndicator> createState() =>
@@ -39,7 +43,12 @@ class _RectangleProgressIndicatorState
     final scheme = Theme.of(context).colorScheme;
     return CustomPaint(
       size: widget.size,
-      painter: RectangleProgressPainter(progress: progress, scheme: scheme),
+      painter: RectangleProgressPainter(
+        progress: progress,
+        scheme: scheme,
+        progressColor: widget.progressColor,
+        trackColor: widget.trackColor,
+      ),
       child: widget.child,
     );
   }
@@ -56,17 +65,23 @@ class RectangleProgressPainter extends CustomPainter {
   final ValueNotifier<double> progress;
 
   final ColorScheme scheme;
+  final Color? progressColor;
+  final Color? trackColor;
 
-  RectangleProgressPainter({required this.progress, required this.scheme})
-      : super(repaint: progress);
+  RectangleProgressPainter({
+    required this.progress,
+    required this.scheme,
+    this.progressColor,
+    this.trackColor,
+  }) : super(repaint: progress);
 
   @override
   void paint(Canvas canvas, Size size) {
     final progressPainter = Paint();
-    progressPainter.color = scheme.secondaryContainer;
+    progressPainter.color = progressColor ?? scheme.secondaryContainer;
 
     final trackPainter = Paint();
-    trackPainter.color = scheme.surfaceContainer;
+    trackPainter.color = trackColor ?? scheme.surfaceContainer;
 
     /// 进度条背景
     canvas.drawRect(

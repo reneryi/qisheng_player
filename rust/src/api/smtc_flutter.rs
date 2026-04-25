@@ -163,7 +163,7 @@ impl SMTCFlutter {
 
         stream.Seek(0)?;
 
-        Ok(RandomAccessStreamReference::CreateFromStream(&stream)?)
+        RandomAccessStreamReference::CreateFromStream(&stream)
     }
 
     fn _update_display(
@@ -193,10 +193,7 @@ impl SMTCFlutter {
             if let Some(pic_data) = tag_reader::get_picture_from_path(path.to_string(), 256, 256) {
                 Self::_ras_ref_from_pic_data(&pic_data)?
             } else {
-                log_to_dart(format!(
-                    "no embedded picture found for file: {}",
-                    path.to_string()
-                ));
+                log_to_dart(format!("no embedded picture found for file: {}", path));
                 let file = StorageFile::GetFileFromPathAsync(&path)?.get()?;
                 let thumbnail = file
                     .GetThumbnailAsyncOverloadDefaultSizeDefaultOptions(ThumbnailMode::MusicView)?

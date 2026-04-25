@@ -7,7 +7,8 @@ import 'package:coriander_player/utils.dart';
 
 class AudioMetadataOverrideStore {
   AudioMetadataOverrideStore._();
-  static final AudioMetadataOverrideStore instance = AudioMetadataOverrideStore._();
+  static final AudioMetadataOverrideStore instance =
+      AudioMetadataOverrideStore._();
 
   final Map<String, Map<String, String>> _overrides = {};
   bool _loaded = false;
@@ -21,7 +22,9 @@ class AudioMetadataOverrideStore {
       final file = File("$supportPath\\audio_override.json");
       if (!file.existsSync()) return;
 
-      final map = json.decode(await file.readAsString()) as Map<String, dynamic>;
+      final raw = await file.readAsString();
+      if (raw.trim().isEmpty) return;
+      final map = json.decode(raw) as Map<String, dynamic>;
       _overrides.clear();
       for (final entry in map.entries) {
         final value = entry.value;

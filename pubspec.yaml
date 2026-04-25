@@ -1,7 +1,7 @@
 name: coriander_player
 description: Windows 本地音乐播放器（Fork 维护版），基于 Flutter + Rust 构建。
 publish_to: 'none'
-version: 1.6.2
+version: 1.7.0
 
 environment:
   sdk: '>=3.1.4 <4.0.0'
@@ -26,6 +26,9 @@ dependencies:
   flutter_markdown: ^0.7.1
   flex_color_picker: ^3.5.0
   filepicker_windows: ^2.1.4
+  flutter_animate: ^4.5.2
+  google_fonts: ^6.2.1
+  palette_generator: ^0.3.3+7
   desktop_lyric:
     path: third_party/desktop_lyric
   music_api:
@@ -38,6 +41,7 @@ dependencies:
   flutter_rust_bridge: 2.11.1
   rust_lib_coriander_player:
     path: rust_builder
+  shadcn_flutter: ^0.0.52
 
 dev_dependencies:
   flutter_test:

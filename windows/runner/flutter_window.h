@@ -61,6 +61,10 @@ class FlutterWindow : public Win32Window {
       const flutter::EncodableValue* arguments) const;
   static int GetIntArg(const flutter::EncodableMap* map, const char* key,
                        int default_value);
+  static std::string GetStringArg(const flutter::EncodableMap* map,
+                                  const char* key,
+                                  const std::string& default_value);
+  std::string SetWindowBackdropMode(const std::string& requested_mode);
   void SetupTaskbarButtons();
   HICON CreateTransportIcon(TransportIconType type) const;
   bool HandlePlaybackCommand(UINT command_id);

@@ -6,7 +6,9 @@ import 'package:coriander_player/component/build_index_state_view.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/component/ui/app_surface.dart';
 import 'package:coriander_player/page/uni_page.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +16,23 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:coriander_player/app_paths.dart' as app_paths;
+
+({String title, String subtitle}) parseFolderDisplay(String absolutePath) {
+  final segments = absolutePath
+      .split(RegExp(r'[\\/]+'))
+      .where((segment) => segment.isNotEmpty)
+      .toList();
+  if (segments.isEmpty) {
+    return (title: absolutePath, subtitle: '根目录');
+  }
+  if (segments.length == 1) {
+    return (title: segments.first, subtitle: '根目录');
+  }
+  return (
+    title: segments.last,
+    subtitle: segments[segments.length - 2],
+  );
+}
 
 class FoldersPage extends StatefulWidget {
   const FoldersPage({super.key});
@@ -29,7 +48,8 @@ class _FoldersPageState extends State<FoldersPage> {
       barrierDismissible: false,
       builder: (context) => _FolderLibraryManagerDialog(
         allowFolderEdit: allowFolderEdit,
-        initialFolders: AudioLibrary.instance.folders.map((e) => e.path).toList(),
+        initialFolders:
+            AudioLibrary.instance.folders.map((e) => e.path).toList(),
         onIndexBuilt: () async {
           await Future.wait([
             AudioLibrary.initFromIndex(),
@@ -53,7 +73,7 @@ class _FoldersPageState extends State<FoldersPage> {
       subtitle: "${contentList.length} 个文件夹",
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) =>
-          AudioFolderTile(audioFolder: item),
+          _CompactAudioFolderTile(audioFolder: item),
       primaryAction: Wrap(
         spacing: 8,
         children: [
@@ -137,7 +157,8 @@ class _FolderLibraryManagerDialog extends StatefulWidget {
       _FolderLibraryManagerDialogState();
 }
 
-class _FolderLibraryManagerDialogState extends State<_FolderLibraryManagerDialog> {
+class _FolderLibraryManagerDialogState
+    extends State<_FolderLibraryManagerDialog> {
   late final List<String> folders = List<String>.from(widget.initialFolders);
   final applicationSupportDirectory = getAppDataDir();
   bool editing = true;
@@ -274,25 +295,166 @@ class AudioFolderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final surfaces = context.surfaces;
+    final display = parseFolderDisplay(audioFolder.path);
+    final modified = DateTime.fromMillisecondsSinceEpoch(
+      audioFolder.modified * 1000,
+    );
+
     return Tooltip(
       message: audioFolder.path,
-      child: ListTile(
-        title: Text(
-          audioFolder.path,
-          softWrap: false,
-          maxLines: 1,
+      child: AppSurface(
+        variant: AppSurfaceVariant.glass,
+        glassDensity: AppSurfaceGlassDensity.low,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(14),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(surfaces.radiusLg),
+            onTap: () => context.push(
+              app_paths.FOLDER_DETAIL_PAGE,
+              extra: audioFolder,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.folder_open_rounded,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        display.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        display.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.64),
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '更新于 ${modified.toLocal()} · ${audioFolder.audios.length} 首歌曲',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.48),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        subtitle: Text(
-          "修改日期：${DateTime.fromMillisecondsSinceEpoch(audioFolder.modified * 1000).toString()}",
-          softWrap: false,
-          maxLines: 1,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        onTap: () => context.push(
-          app_paths.FOLDER_DETAIL_PAGE,
-          extra: audioFolder,
+      ),
+    );
+  }
+}
+
+class _CompactAudioFolderTile extends StatelessWidget {
+  const _CompactAudioFolderTile({
+    required this.audioFolder,
+  });
+
+  final AudioFolder audioFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final surfaces = context.surfaces;
+    final display = parseFolderDisplay(audioFolder.path);
+
+    return Tooltip(
+      message: audioFolder.path,
+      child: AppSurface(
+        variant: AppSurfaceVariant.glass,
+        glassDensity: AppSurfaceGlassDensity.low,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(surfaces.radiusLg),
+            onTap: () => context.push(
+              app_paths.FOLDER_DETAIL_PAGE,
+              extra: audioFolder,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.folder_open_rounded,
+                    color: scheme.onSurface,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        display.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        display.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.64),
+                          fontSize: 12,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

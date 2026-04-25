@@ -359,7 +359,8 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                                     _HotkeyCaptureDialog(action: action),
                               );
                               if (captured == null) return;
-                              await HotkeysHelper.updateBinding(action, captured);
+                              await HotkeysHelper.updateBinding(
+                                  action, captured);
                               if (mounted) setState(() {});
                             },
                             icon: const Icon(Symbols.keyboard),
@@ -502,9 +503,9 @@ class _HotkeyCaptureDialogState extends State<_HotkeyCaptureDialog> {
                 children: [
                   OutlinedButton(
                     onPressed: () {
-                        Navigator.pop(
-                          context,
-                          HotkeyBindingPreference(
+                      Navigator.pop(
+                        context,
+                        HotkeyBindingPreference(
                           PhysicalKeyboardKey.browserBack.usbHidUsage,
                           const [],
                         ),
@@ -514,9 +515,9 @@ class _HotkeyCaptureDialogState extends State<_HotkeyCaptureDialog> {
                   ),
                   OutlinedButton(
                     onPressed: () {
-                        Navigator.pop(
-                          context,
-                          HotkeyBindingPreference(
+                      Navigator.pop(
+                        context,
+                        HotkeyBindingPreference(
                           PhysicalKeyboardKey.browserForward.usbHidUsage,
                           const [],
                         ),

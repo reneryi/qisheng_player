@@ -1,131 +1,152 @@
-// ignore_for_file: camel_case_types
+import 'dart:async';
 
-import 'dart:io';
-
-import 'package:coriander_player/app_settings.dart';
-import 'package:coriander_player/component/mini_now_playing.dart';
+import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/component/bottom_player_bar.dart';
+import 'package:coriander_player/component/cp/cp_components.dart';
+import 'package:coriander_player/component/main_layout_frame.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/component/side_nav.dart';
 import 'package:coriander_player/component/title_bar.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.page});
 
   final Widget page;
 
   @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  bool largeSidebarCollapsed = AppPreference.instance.sidebarCollapsedLarge;
+
+  void _toggleLargeSidebar(bool collapsed) {
+    if (largeSidebarCollapsed == collapsed) return;
+    setState(() {
+      largeSidebarCollapsed = collapsed;
+    });
+    AppPreference.instance.sidebarCollapsedLarge = collapsed;
+    unawaited(AppPreference.instance.save());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // 外层 Listener 捕获鼠标侧键事件，分发给快捷键系统处理
+    final routeIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
     return Listener(
       onPointerDown: HotkeysHelper.handlePointerDown,
       child: ResponsiveBuilder(
         builder: (context, screenType) {
-          switch (screenType) {
-            case ScreenType.small:
-              return _AppShell_Small(page: page);
-            case ScreenType.medium:
-            case ScreenType.large:
-              return _AppShell_Large(page: page);
-          }
+          final useDrawer = screenType == ScreenType.small;
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            drawer: useDrawer ? const SideNav() : null,
+            drawerScrimColor: Theme.of(context).colorScheme.scrim,
+            body: MainLayoutFrame(
+              titleBar: routeIsCurrent
+                  ? TitleBar(
+                      largeSidebarCollapsed: screenType == ScreenType.large &&
+                          largeSidebarCollapsed,
+                    )
+                  : const SizedBox.shrink(),
+              overlay: routeIsCurrent ? const BottomPlayerBar() : null,
+              child: switch (screenType) {
+                ScreenType.small => _ShellPagePanel(page: widget.page),
+                ScreenType.medium => _ShellWideContent(
+                    page: widget.page,
+                    sideNav: const SideNav(),
+                  ),
+                ScreenType.large => _ShellWideContent(
+                    page: widget.page,
+                    sideNav: SideNav(
+                      collapsed: largeSidebarCollapsed,
+                      onToggleCollapsed: _toggleLargeSidebar,
+                    ),
+                  ),
+              },
+            ),
+          );
         },
       ),
     );
   }
 }
 
-class _AppShell_Small extends StatelessWidget {
-  const _AppShell_Small({required this.page});
+class _ShellPagePanel extends StatelessWidget {
+  const _ShellPagePanel({required this.page});
 
   final Widget page;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: scheme.surfaceContainer,
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(48.0),
-        child: TitleBar(),
-      ),
-      drawer: const SideNav(),
-      body: Stack(
-        children: [
-          const _CustomBackground(),
-          page,
-          const MiniNowPlaying(),
-        ],
-      ),
-    );
-  }
-}
-
-class _AppShell_Large extends StatelessWidget {
-  const _AppShell_Large({required this.page});
-
-  final Widget page;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: scheme.surfaceContainer,
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(48.0),
-        child: TitleBar(),
-      ),
-      body: Row(
-        children: [
-          const SideNav(),
-          Expanded(
-            child: Stack(children: [
-              const _CustomBackground(),
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(8.0),
-                ),
-                child: page,
-              ),
-              const MiniNowPlaying()
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CustomBackground extends StatelessWidget {
-  const _CustomBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: AppSettings.instance.backgroundVersion,
-      builder: (context, _, __) {
-        final bgPath = AppSettings.instance.backgroundImagePath;
-        if (bgPath == null || bgPath.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final file = File(bgPath);
-        if (!file.existsSync()) {
-          return const SizedBox.shrink();
-        }
-
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: AppSettings.instance.backgroundImageOpacity,
-              child: Image.file(
-                file,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
+    final motion = context.motion;
+    return CpSurface(
+      tone: CpSurfaceTone.panel,
+      radius: 24,
+      padding: const EdgeInsets.all(16),
+      child: page,
+    )
+        .animate()
+        .fadeIn(duration: motion.panelTransitionDuration, curve: motion.normal)
+        .scale(
+          begin: const Offset(0.996, 0.996),
+          end: const Offset(1, 1),
+          duration: motion.panelTransitionDuration,
+          curve: motion.normal,
         );
-      },
+  }
+}
+
+class _ShellWideContent extends StatelessWidget {
+  const _ShellWideContent({
+    required this.page,
+    required this.sideNav,
+  });
+
+  final Widget page;
+  final Widget sideNav;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = context.chrome;
+    final motion = context.motion;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        sideNav
+            .animate()
+            .fadeIn(
+                duration: motion.panelTransitionDuration, curve: motion.normal)
+            .scale(
+              begin: const Offset(0.996, 0.996),
+              end: const Offset(1, 1),
+              duration: motion.panelTransitionDuration,
+              curve: motion.normal,
+            ),
+        SizedBox(width: chrome.shellGap),
+        Expanded(
+          child: CpSurface(
+            tone: CpSurfaceTone.panel,
+            radius: 24,
+            padding: const EdgeInsets.all(18),
+            child: page,
+          )
+              .animate(delay: const Duration(milliseconds: 48))
+              .fadeIn(
+                  duration: motion.panelTransitionDuration,
+                  curve: motion.normal)
+              .scale(
+                begin: const Offset(0.996, 0.996),
+                end: const Offset(1, 1),
+                duration: motion.panelTransitionDuration,
+                curve: motion.normal,
+              ),
+        ),
+      ],
     );
   }
 }

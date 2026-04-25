@@ -32,7 +32,7 @@ cargo check
 cd ..
 
 # 排序逻辑单元测试
-flutter test tools/sort_smoke_test.dart
+flutter test tools/test/sort_smoke_test.dart
 
 # Windows Release 构建
 flutter build windows --release

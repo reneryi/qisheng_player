@@ -1,8 +1,11 @@
 import 'dart:async';
+
+import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
+import 'package:coriander_player/component/ui/app_surface.dart';
 import 'package:coriander_player/library/audio_library.dart';
-import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/theme/app_theme_extensions.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,37 +18,61 @@ class WelcomingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = context.chrome;
 
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(48.0),
-        child: _TitleBar(),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 48.0),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "你的音乐放在哪些文件夹呢？",
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                ),
-              ),
-              Text(
-                "软件会扫描这些文件夹（包括所有子文件夹）下的音乐并建立索引。",
-                style: TextStyle(color: scheme.onSurface),
-              ),
-              const SizedBox(height: 16),
-              const FolderSelectorView(),
-            ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [chrome.windowBgTop, chrome.windowBgBottom],
+            ),
           ),
         ),
-      ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: const PreferredSize(
+            preferredSize: Size.fromHeight(64.0),
+            child: _TitleBar(),
+          ),
+          body: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: AppSurface(
+                  variant: AppSurfaceVariant.glass,
+                  glassDensity: AppSurfaceGlassDensity.low,
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "你的音乐放在哪些文件夹里？",
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "软件会扫描这些目录（包含子目录）并建立索引。",
+                        style: TextStyle(color: scheme.onSurface),
+                      ),
+                      const SizedBox(height: 16),
+                      const FolderSelectorView(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -67,8 +94,8 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
     final scheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 400,
-      height: 400,
+      width: 460,
+      height: 420,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
         child: selecting
@@ -109,8 +136,6 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
           children: [
             FilledButton(
               onPressed: () async {
-                // final path = await pickSingleFolder();
-                // if (path == null) return;
                 final dirPicker = DirectoryPicker();
                 dirPicker.title = "选择文件夹";
 
@@ -124,12 +149,14 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
               child: const Text("添加文件夹"),
             ),
             FilledButton(
-              onPressed: () {
-                setState(() {
-                  selecting = false;
-                });
-              },
-              child: const Text("扫描"),
+              onPressed: folders.isEmpty
+                  ? null
+                  : () {
+                      setState(() {
+                        selecting = false;
+                      });
+                    },
+              child: const Text("开始扫描"),
             ),
           ],
         ),
@@ -163,30 +190,35 @@ class _TitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return DragToMoveArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Image.asset("app_icon.ico", width: 24, height: 24),
-                  ),
-                  Text(
-                    "Coriander Player",
-                    style: TextStyle(color: scheme.onSurface, fontSize: 16),
-                  ),
-                ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: AppSurface(
+        variant: AppSurfaceVariant.glass,
+        radius: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: DragToMoveArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Image.asset("app_icon.ico", width: 24, height: 24),
+                    ),
+                    Text(
+                      "Coriander Player",
+                      style: TextStyle(color: scheme.onSurface, fontSize: 16),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8.0),
-            const _WindowControlls(),
-          ],
+              const SizedBox(width: 8.0),
+              const _WindowControlls(),
+            ],
+          ),
         ),
       ),
     );

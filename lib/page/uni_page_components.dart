@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:coriander_player/component/ui/app_surface.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/online_cover_store.dart';
 import 'package:coriander_player/library/playlist.dart';
@@ -22,7 +23,7 @@ class ShufflePlay<T> extends StatelessWidget {
       icon: const Icon(Symbols.shuffle),
       label: const Text("随机播放"),
       style: const ButtonStyle(
-        fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+        fixedSize: WidgetStatePropertyAll(Size.fromHeight(48)),
       ),
     );
   }
@@ -63,45 +64,45 @@ class SortMethodComboBox<T> extends StatelessWidget {
         ),
       ),
       builder: (context, menuController, _) {
-        final borderRadius = BorderRadius.circular(20.0);
-
         return SizedBox(
-          height: 40.0,
-          child: Material(
-            borderRadius: borderRadius,
-            color: scheme.secondaryContainer,
-            child: InkWell(
-              hoverColor: scheme.onSecondaryContainer.withValues(alpha: 0.08),
-              borderRadius: borderRadius,
-              onTap: () {
-                if (menuController.isOpen) {
-                  menuController.close();
-                } else {
-                  menuController.open();
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16.0, right: 12.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Symbols.sort,
-                      size: 24,
-                      color: scheme.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: 4.0),
-                    Text(
-                      currSortMethod.name,
-                      style: TextStyle(color: scheme.onSecondaryContainer),
-                    ),
-                    const SizedBox(width: 4.0),
-                    Icon(
-                      Symbols.arrow_drop_down,
-                      size: 24,
-                      color: scheme.onSecondaryContainer,
-                    ),
-                  ],
+          height: 48.0,
+          child: AppSurface(
+            variant: AppSurfaceVariant.inset,
+            radius: 24,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () {
+                  if (menuController.isOpen) {
+                    menuController.close();
+                  } else {
+                    menuController.open();
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16.0, right: 12.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Symbols.sort,
+                        size: 24,
+                        color: scheme.onSecondaryContainer,
+                      ),
+                      const SizedBox(width: 6.0),
+                      Text(
+                        currSortMethod.name,
+                        style: TextStyle(color: scheme.onSecondaryContainer),
+                      ),
+                      const SizedBox(width: 4.0),
+                      Icon(
+                        Symbols.arrow_drop_down,
+                        size: 24,
+                        color: scheme.onSecondaryContainer,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -123,6 +124,9 @@ class SortOrderSwitch<T> extends StatelessWidget {
     var isAscending = sortOrder == SortOrder.ascending;
     return IconButton.filledTonal(
       tooltip: "切换排序顺序；现在：${isAscending ? "升序" : "降序"}",
+      style: const ButtonStyle(
+        fixedSize: WidgetStatePropertyAll(Size(48, 48)),
+      ),
       onPressed: () => setSortOrder(
         isAscending ? SortOrder.decending : SortOrder.ascending,
       ),
@@ -142,6 +146,9 @@ class ContentViewSwitch<T> extends StatelessWidget {
     var isListView = contentView == ContentView.list;
     return IconButton.filledTonal(
       tooltip: "切换页面视图；现在：${isListView ? "列表" : "表格"}",
+      style: const ButtonStyle(
+        fixedSize: WidgetStatePropertyAll(Size(48, 48)),
+      ),
       onPressed: () => setContentView(
         isListView ? ContentView.table : ContentView.list,
       ),

@@ -27,6 +27,7 @@ class OnlineCoverStore {
       if (!cacheFile.existsSync()) return;
 
       final raw = await cacheFile.readAsString();
+      if (raw.trim().isEmpty) return;
       final map = json.decode(raw) as Map<String, dynamic>;
       _cachedPathMap.clear();
       for (final entry in map.entries) {

@@ -5,11 +5,13 @@ import 'package:flutter/scheduler.dart';
 
 class ScrollAwareFutureBuilder<T> extends StatefulWidget {
   final Future<T> Function() future;
-  final AsyncWidgetBuilder builder;
+  final Object? futureKey;
+  final AsyncWidgetBuilder<T> builder;
 
   const ScrollAwareFutureBuilder({
     super.key,
     required this.future,
+    this.futureKey,
     required this.builder,
   });
 
@@ -21,36 +23,62 @@ class ScrollAwareFutureBuilder<T> extends StatefulWidget {
 class _ScrollAwareFutureBuilderState<T>
     extends State<ScrollAwareFutureBuilder<T>> {
   Future<T>? _future;
+  int _generation = 0;
+  bool _retryScheduled = false;
 
-  void _createDeferredFuture() {
-    if (!context.mounted) {
-      // Polling: Wait until scrolling is done or context no longer recommends deferring loading
-      SchedulerBinding.instance.scheduleFrameCallback((_) {
-        scheduleMicrotask(_createDeferredFuture);
-      });
-      return;
+  Object get _effectiveFutureKey => widget.futureKey ?? widget.future;
+
+  @override
+  void initState() {
+    super.initState();
+    _restartDeferredFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant ScrollAwareFutureBuilder<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldFutureKey = oldWidget.futureKey ?? oldWidget.future;
+    if (oldFutureKey != _effectiveFutureKey) {
+      _restartDeferredFuture();
     }
-    // Check if loading should be deferred
+  }
+
+  void _restartDeferredFuture() {
+    _generation++;
+    _retryScheduled = false;
+    _future = null;
+    _scheduleCreateFuture(_generation);
+  }
+
+  void _scheduleCreateFuture(int generation) {
+    if (_retryScheduled) return;
+    _retryScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      scheduleMicrotask(() {
+        if (!mounted || generation != _generation) return;
+        _retryScheduled = false;
+        _createDeferredFuture(generation);
+      });
+    });
+  }
+
+  void _createDeferredFuture(int generation) {
+    if (!mounted || generation != _generation) return;
+
     if (Scrollable.recommendDeferredLoadingForContext(context)) {
-      setState(() {
-        _future = null;
-      });
-
-      // Polling: Wait until scrolling is done or context no longer recommends deferring loading
-      SchedulerBinding.instance.scheduleFrameCallback((_) {
-        scheduleMicrotask(_createDeferredFuture);
-      });
+      _scheduleCreateFuture(generation);
       return;
     }
 
+    final future = widget.future();
+    if (!mounted || generation != _generation) return;
     setState(() {
-      _future = widget.future();
+      _future = future;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    _createDeferredFuture();
     if (_future == null) {
       return const Center(child: CircularProgressIndicator());
     }

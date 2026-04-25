@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/component/cp/cp_components.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/audio_metadata_override_store.dart';
@@ -194,23 +195,14 @@ class AudioTile extends StatelessWidget {
               color: scheme.onSurface,
             );
 
-            return Ink(
+            final selected =
+                multiSelectController?.selected.contains(audio) == true;
+
+            return SizedBox(
               height: 64.0,
-              decoration: BoxDecoration(
-                color: multiSelectController == null
-                    ? (isNowPlaying
-                        ? scheme.primaryContainer.withValues(alpha: 0.35)
-                        : Colors.transparent)
-                    : multiSelectController!.selected.contains(audio)
-                        ? scheme.secondaryContainer
-                        : isNowPlaying
-                            ? scheme.primaryContainer.withValues(alpha: 0.35)
-                            : Colors.transparent,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: InkWell(
-                focusColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(8.0),
+              child: CpMotionPressable(
+                borderRadius: BorderRadius.circular(12.0),
+                selected: effectiveFocus || selected,
                 onTap: () {
                   if (controller.isOpen) {
                     controller.close();
@@ -238,90 +230,91 @@ class AudioTile extends StatelessWidget {
                     position: details.localPosition.translate(0, -240),
                   );
                 },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Row(
-                    children: [
-                      if (leading != null)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 16.0),
-                          child: leading!,
-                        ),
-                      ScrollAwareFutureBuilder(
-                        future: () => audio.cover,
-                        builder: (context, snapshot) {
-                          if (snapshot.data == null) {
-                            return placeholder;
-                          }
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Row(
+                  children: [
+                    if (leading != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 16.0),
+                        child: leading!,
+                      ),
+                    ScrollAwareFutureBuilder(
+                      futureKey: audio.path,
+                      future: () => audio.cover,
+                      builder: (context, snapshot) {
+                        if (snapshot.data == null) {
+                          return placeholder;
+                        }
 
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(8.0),
+                        return RepaintBoundary(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10.0),
                             child: Image(
                               image: snapshot.data!,
                               width: 48.0,
                               height: 48.0,
+                              fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => placeholder,
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 16.0),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              audio.title,
-                              style: TextStyle(color: textColor, fontSize: 16),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(width: 4.0),
-                            Text(
-                              showPlayCount
-                                  ? "${audio.artist} - ${audio.album} | ${audio.qualitySummary} | 播放 ${PlayCountStore.instance.get(audio)} 次"
-                                  : "${audio.artist} - ${audio.album} | ${audio.qualitySummary}",
-                              style: TextStyle(color: textColor),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8.0),
-                      Text(
-                        Duration(seconds: audio.duration).toStringHMMSS(),
-                        style: TextStyle(
-                          color: effectiveFocus
-                              ? scheme.primary
-                              : scheme.onSurface,
-                        ),
-                      ),
-                      if (multiSelectController?.enableMultiSelectView == true)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8.0),
-                          child: Checkbox(
-                            value:
-                                multiSelectController!.selected.contains(audio),
-                            onChanged: (_) {
-                              multiSelectController!.toggleSelectionWithIndex(
-                                index: audioIndex,
-                                item: audio,
-                                items: playlist,
-                                shiftPressed:
-                                    MultiSelectController.isShiftPressed(),
-                              );
-                            },
                           ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16.0),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            audio.title,
+                            style: TextStyle(color: textColor, fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: 4.0),
+                          Text(
+                            showPlayCount
+                                ? "${audio.artist} - ${audio.album} | ${audio.qualitySummary} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                : "${audio.artist} - ${audio.album} | ${audio.qualitySummary}",
+                            style: TextStyle(color: textColor),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Text(
+                      Duration(seconds: audio.duration).toStringHMMSS(),
+                      style: TextStyle(
+                        color:
+                            effectiveFocus ? scheme.primary : scheme.onSurface,
+                      ),
+                    ),
+                    if (multiSelectController?.enableMultiSelectView == true)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Checkbox(
+                          value:
+                              multiSelectController!.selected.contains(audio),
+                          onChanged: (_) {
+                            multiSelectController!.toggleSelectionWithIndex(
+                              index: audioIndex,
+                              item: audio,
+                              items: playlist,
+                              shiftPressed:
+                                  MultiSelectController.isShiftPressed(),
+                            );
+                          },
                         ),
-                      if (action != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8.0),
-                          child: action!,
-                        ),
-                    ],
-                  ),
+                      ),
+                    if (action != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: action!,
+                      ),
+                  ],
                 ),
               ),
             );

@@ -35,7 +35,7 @@ jobs:
         run: cargo check
 
       - name: Sort smoke test
-        run: flutter test tools/sort_smoke_test.dart
+        run: flutter test tools/test/sort_smoke_test.dart
 
       - name: Build Windows release
         run: flutter build windows --release

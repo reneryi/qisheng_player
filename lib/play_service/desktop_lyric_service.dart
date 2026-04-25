@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -19,7 +21,23 @@ import 'package:path/path.dart' as path;
 
 import 'package:desktop_lyric/message.dart' as msg;
 
-class DesktopLyricService extends ChangeNotifier {
+abstract class DesktopLyricController extends ChangeNotifier {
+  Future<Process?> get desktopLyric;
+  bool get isStarting;
+  bool get isLocked;
+  Future<bool> get canSendMessage;
+
+  Future<void> startDesktopLyric();
+  void killDesktopLyric({bool disablePreference = true});
+  void sendUnlockMessage();
+  void sendThemeModeMessage(bool darkMode);
+  void sendThemeMessage(ColorScheme scheme);
+  void sendPlayerStateMessage(bool isPlaying);
+  void sendNowPlayingMessage(Audio nowPlaying);
+  void sendLyricLineMessage(LyricLine line);
+}
+
+class DesktopLyricService extends DesktopLyricController {
   final PlayService playService;
   DesktopLyricService(this.playService);
 
@@ -363,6 +381,8 @@ class DesktopLyricService extends ChangeNotifier {
       if (line.isNotEmpty) {
         try {
           _handleDesktopLyricMessageMap(json.decode(line) as Map);
+        } on FormatException {
+          // Ignore incomplete/non-JSON stdout fragments from desktop lyric.
         } catch (err) {
           LOGGER.e("[desktop lyric] $err");
         }
