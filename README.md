@@ -1,49 +1,81 @@
-# 栖声 Qisheng Player
+# 🎵 栖声 Qisheng Player
+
+<div align="center">
+  <img src="app_icon.ico" alt="Logo" width="128" height="128" />
+</div>
+
+<div align="center">
+  <strong>一款专为 Windows 10/11 打造的现代化、高颜值本地音乐播放器</strong>
+</div>
+<br>
+
+<div align="center">
 
 [![Windows CI](https://github.com/reneryi/coriander_player/actions/workflows/windows_ci.yml/badge.svg)](https://github.com/reneryi/coriander_player/actions/workflows/windows_ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
+[![Rust](https://img.shields.io/badge/Rust-Native-000000?logo=rust)](https://www.rust-lang.org/)
 
-栖声是面向 Windows 10/11 的本地音乐播放器，基于 Flutter、Rust 与 BASS 构建。项目源自 [Ferry-200/coriander_player](https://github.com/Ferry-200/coriander_player)，当前分支已整合为 `qisheng_player v1.0.0`，重点优化本地曲库、歌词、播放队列、桌面歌词和沉浸式播放器界面。
+</div>
 
-## 主要功能
+栖声 (Qisheng Player) 是一款基于 **Flutter**、**Rust** 与 **BASS** 音频库构建的本地音乐播放器。项目源自 [Ferry-200/coriander_player](https://github.com/Ferry-200/coriander_player)，当前分支已全面升级为 `qisheng_player v1.0.0`，重点优化了本地曲库管理、歌词显示、播放队列、桌面歌词以及提供了沉浸式的播放器界面。
 
-- 本地曲库：支持多文件夹扫描、索引缓存、A-Z/拼音索引、搜索、排序、视图切换和当前播放定位。
-- 播放体验：支持播放队列、随机/顺序/单曲循环、拖拽重排、播放次数统计、ReplayGain 音量均衡和 CUE 分轨。
-- 歌词系统：支持本地歌词、在线歌词匹配、逐字歌词、翻译显示开关、桌面歌词和音乐页右侧歌词预览。
-- 资料管理：支持艺术家、专辑、文件夹、歌单与详细信息页面，右键菜单可编辑标签、封面和歌词。
-- 视觉与交互：统一玻璃拟态界面、动态专辑取色、可折叠侧栏、页面淡入淡出切换、沉浸式/专业式 Now Playing 页面。
-- 系统集成：支持自定义快捷键、鼠标侧键、系统托盘、任务栏缩略图控制、窗口拖拽/缩放和 Windows 背景材质回退。
+---
 
-## 支持格式
+## ✨ 主要特性 (Features)
 
-| 格式 | 播放 | 内嵌歌词 |
-| --- | :---: | :---: |
-| MP3 / MP2 / MP1 | 支持 | 支持 |
-| FLAC | 支持 | 支持 |
-| WAV / WAVE | 支持 | 支持 |
-| OGG | 支持 | 支持 |
-| AAC / ADTS / M4A | 支持 | 支持 |
-| AIFF / AIF / AIFC | 支持 | 支持 |
-| OPUS | 支持 | 支持 |
-| APE / WV / WVC | 支持 | 视标签而定 |
-| DSD / AC3 / WMA / MPC / MIDI / AMR / 3GA / DTS | 支持 | 视标签而定 |
+### 🎶 极致的本地曲库管理
+- **多文件夹支持**：支持多路径扫描与智能索引缓存，海量音乐秒级加载。
+- **快速定位**：内置 A-Z / 拼音索引，支持全局搜索、多维度排序（按专辑、艺术家、添加时间等）。
+- **灵活视图**：无缝切换列表与网格视图，提供沉浸式的浏览体验。
 
-同目录 LRC 文件、UTF-8/UTF-16 歌词文件与在线歌词匹配可作为补充歌词源。
+### 🎧 专业级播放体验
+- **全格式支持**：MP3, FLAC, WAV, APE, OGG, AAC, OPUS, DSD 等主流与无损格式全兼容。
+- **高级音频控制**：支持 ReplayGain 音量均衡、CUE 分轨读取。
+- **播放队列机制**：支持随机、顺序、单曲循环模式，支持拖拽重排与精细的播放次数统计。
 
-## 默认快捷键
+### 📝 完善的歌词与资料系统
+- **动态歌词**：支持本地歌词（LRC/UTF-8/UTF-16）、在线匹配、逐字歌词特效与外语翻译切换。
+- **多端显示**：内置桌面歌词与音乐页右侧歌词预览。
+- **元数据管理**：提供详细的艺术家、专辑、文件夹和歌单页面，支持右键菜单快速编辑 ID3 标签、封面和内嵌歌词。
 
-| 功能 | 快捷键 |
-| --- | --- |
-| 播放 / 暂停 | `Space` |
-| 上一首 / 下一首 | `Left` / `Right` |
-| 音量加 / 音量减 | `Up` / `Down` |
-| 静音 | `Alt + M` |
-| 显示 / 隐藏桌面歌词 | `Ctrl + M` |
-| 显示 / 隐藏主界面 | `Ctrl + H` |
-| 返回上一页 | `Esc` |
-| 退出程序 | `Ctrl + Q` |
+### 🎨 现代化的视觉与交互
+- **玻璃拟态 UI**：全应用统一的毛玻璃视觉风格，支持 Windows 11 背景材质回退。
+- **智能取色**：界面主色调根据当前播放专辑封面动态变化。
+- **优雅动效**：可折叠的侧边栏、页面之间的平滑淡入淡出。
+- **沉浸模式**：提供专属的沉浸式 / 专业 Now Playing 页面。
 
-所有快捷键都可以在设置中自定义，部分动作支持后台全局触发。
+### ⚙️ 深度系统集成
+- **全局快捷键**：支持自定义应用内与全局后台快捷键。
+- **硬件适配**：支持鼠标侧键控制、系统托盘（System Tray）、任务栏缩略图控制（Thumbnail Toolbar）、窗口自由拖拽与缩放。
+
+## 📂 支持格式详细列表
+
+| 格式分类 | 支持格式 | 播放支持 | 内嵌歌词读取 |
+| --- | --- | :---: | :---: |
+| **常见格式** | MP3 / MP2 / MP1 | ✅ 支持 | ✅ 支持 |
+| **无损音频** | FLAC / WAV / WAVE | ✅ 支持 | ✅ 支持 |
+| **其他主流** | OGG / AAC / ADTS / M4A / OPUS | ✅ 支持 | ✅ 支持 |
+| **苹果格式** | AIFF / AIF / AIFC | ✅ 支持 | ✅ 支持 |
+| **高阶/特殊** | APE / WV / WVC | ✅ 支持 | ⚠️ 视标签而定 |
+| **更多格式** | DSD / AC3 / WMA / MPC / MIDI / AMR / 3GA / DTS | ✅ 支持 | ⚠️ 视标签而定 |
+
+*注：同目录的 `.lrc` 文件、TXT 歌词文件以及在线歌词匹配功能可作为内嵌歌词的有效补充。*
+
+## ⌨️ 默认快捷键 (Shortcuts)
+
+| 动作分类 | 功能 | 快捷键 |
+| --- | --- | --- |
+| **播放控制** | 播放 / 暂停 | `Space` (空格键) |
+| | 上一首 / 下一首 | `Left` / `Right` (左右方向键) |
+| **音量控制** | 音量加 / 音量减 | `Up` / `Down` (上下方向键) |
+| | 静音开关 | `Alt + M` |
+| **界面交互** | 显示 / 隐藏桌面歌词 | `Ctrl + M` |
+| | 显示 / 隐藏主界面 | `Ctrl + H` |
+| | 返回上一页 | `Esc` |
+| | 退出程序 | `Ctrl + Q` |
+
+> 💡 **提示**: 所有快捷键均可在「设置」中自由修改，部分操作支持后台全局响应。
 
 ## 项目结构
 
