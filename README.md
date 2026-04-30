@@ -18,36 +18,62 @@
 
 </div>
 
-栖声 (Qisheng Player) 是一款基于 **Flutter**、**Rust** 与 **BASS** 音频库构建的本地音乐播放器。项目源自 [Ferry-200/coriander_player](https://github.com/Ferry-200/coriander_player)，当前分支已全面升级为 `qisheng_player v1.0.0`，重点优化了本地曲库管理、歌词显示、播放队列、桌面歌词以及提供了沉浸式的播放器界面。
+栖声 (Qisheng Player) 是一款基于 **Flutter**、**Rust** 与 **BASS** 音频库构建的高颜值本地音乐播放器。本项目是对上游优秀开源项目 [Ferry-200/coriander_player](https://github.com/Ferry-200/coriander_player) 进行的二次开发与全面升级。经过深度的重构与优化，当前版本 (`v1.0.0`) 带来了极其现代化的 **玻璃拟态 (Glassmorphism)** 界面、丝滑的动画过渡效果、以及更强大的本地曲库管理功能。
 
 ---
 
-## ✨ 主要特性 (Features)
+## ✨ 核心亮点与特性 (Features)
+
+我们对 UI 进行了全面翻新，引入了 Apple Music 风格的设计理念，并深入底层重构了多项核心功能。
+
+### 🎨 现代化的视觉与交互设计
+- **全局玻璃拟态 UI**：全应用统一的毛玻璃视觉风格，背景具备随专辑封面主色调动态变化的流体弥散光效果。
+- **极致的沉浸体验**：提供专属的“沉浸式 / 专业 Now Playing”页面，配合逐字歌词动效，带来绝佳的视听享受。
+- **平滑动效与过渡**：页面间的 shared-axis 转场、专辑封面的 Hero 共享元素动画，让每一次点击都丝滑流畅。
+
+<p align="center">
+  <img src="docs/screenshots/播放器主页.png" width="48%" />
+  <img src="docs/screenshots/专辑页.png" width="48%" />
+</p>
 
 ### 🎶 极致的本地曲库管理
-- **多文件夹支持**：支持多路径扫描与智能索引缓存，海量音乐秒级加载。
-- **快速定位**：内置 A-Z / 拼音索引，支持全局搜索、多维度排序（按专辑、艺术家、添加时间等）。
-- **灵活视图**：无缝切换列表与网格视图，提供沉浸式的浏览体验。
+- **海量音乐秒级加载**：依托 Rust 编写的高效底层，支持多文件夹扫描与智能索引缓存，告别卡顿。
+- **多维度浏览与定位**：内置 A-Z / 拼音索引，支持全局搜索、多选操作，以及按添加时间、艺术家、专辑等多维度排序。
+- **丰富的元数据编辑**：支持右键快速编辑 ID3 标签、封面（支持从文件选取或内置图库挑选）和内嵌歌词。
 
-### 🎧 专业级播放体验
-- **全格式支持**：MP3, FLAC, WAV, APE, OGG, AAC, OPUS, DSD 等主流与无损格式全兼容。
-- **高级音频控制**：支持 ReplayGain 音量均衡、CUE 分轨读取。
-- **播放队列机制**：支持随机、顺序、单曲循环模式，支持拖拽重排与精细的播放次数统计。
+<p align="center">
+  <img src="docs/screenshots/歌曲页.png" width="48%" />
+  <img src="docs/screenshots/专辑详情页.png" width="48%" />
+</p>
 
-### 📝 完善的歌词与资料系统
-- **动态歌词**：支持本地歌词（LRC/UTF-8/UTF-16）、在线匹配、逐字歌词特效与外语翻译切换。
-- **多端显示**：内置桌面歌词与音乐页右侧歌词预览。
-- **元数据管理**：提供详细的艺术家、专辑、文件夹和歌单页面，支持右键菜单快速编辑 ID3 标签、封面和内嵌歌词。
+### 🎧 专业级音频与播放队列
+- **全格式兼容**：完美支持 MP3, FLAC, WAV, APE, OGG, AAC, OPUS, DSD 等主流与无损格式。
+- **高级音频控制**：支持 ReplayGain 音量均衡、CUE 分轨读取，并提供强大的 **专业均衡器 (EQ)** 供发烧友细调听感。
+- **灵活的队列管理**：支持单曲循环、列表循环、随机播放，可自由拖拽重排，并提供精细的播放次数与习惯统计。
 
-### 🎨 现代化的视觉与交互
-- **玻璃拟态 UI**：全应用统一的毛玻璃视觉风格，支持 Windows 11 背景材质回退。
-- **智能取色**：界面主色调根据当前播放专辑封面动态变化。
-- **优雅动效**：可折叠的侧边栏、页面之间的平滑淡入淡出。
-- **沉浸模式**：提供专属的沉浸式 / 专业 Now Playing 页面。
+<p align="center">
+  <img src="docs/screenshots/歌单播放页.png" width="48%" />
+  <img src="docs/screenshots/均衡器.png" width="48%" />
+</p>
+
+### 📝 完善的歌单与歌词系统
+- **动态逐字歌词**：支持本地歌词（LRC/UTF-8/UTF-16）、在线匹配获取，并提供带有发光特效的逐字动效与外语翻译切换。
+- **多端同步显示**：内置桌面悬浮歌词以及右侧侧边栏的歌词预览功能。
+- **灵活的歌单管理**：支持创建自定义歌单，并提供直观的歌单编辑与封面选择功能。
+
+<p align="center">
+  <img src="docs/screenshots/歌词主页.png" width="48%" />
+  <img src="docs/screenshots/封面选择.png" width="48%" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/歌单编辑页.png" width="80%" />
+</p>
 
 ### ⚙️ 深度系统集成
-- **全局快捷键**：支持自定义应用内与全局后台快捷键。
+- **全局快捷键**：支持自定义应用内与全局后台快捷键（支持媒体键响应）。
 - **硬件适配**：支持鼠标侧键控制、系统托盘（System Tray）、任务栏缩略图控制（Thumbnail Toolbar）、窗口自由拖拽与缩放。
+
+---
 
 ## 📂 支持格式详细列表
 
@@ -77,7 +103,7 @@
 
 > 💡 **提示**: 所有快捷键均可在「设置」中自由修改，部分操作支持后台全局响应。
 
-## 项目结构
+## 🛠️ 项目结构
 
 ```text
 qisheng_player/
@@ -93,7 +119,6 @@ qisheng_player/
 ├─ third_party/desktop_lyric/    桌面歌词子程序
 ├─ test/                         Widget、服务和回归测试
 ├─ tools/release/                Windows 发布打包脚本
-├─ tools/test/                   工具类测试
 ├─ docs/                         更新日志、结构说明和发布流程
 ├─ assets/                       栖声品牌图标资源
 └─ BASS/                         本地运行依赖 DLL，不提交到 Git
@@ -101,7 +126,7 @@ qisheng_player/
 
 更详细的目录说明见 [docs/project_structure.md](docs/project_structure.md)。
 
-## 本地开发
+## 🚀 本地开发指南
 
 ```powershell
 flutter pub get
@@ -115,7 +140,7 @@ Set-Location ..
 flutter build windows --debug
 ```
 
-## Windows 发布
+## 📦 Windows 发布打包
 
 先构建主程序和桌面歌词：
 
@@ -134,26 +159,19 @@ Set-Location ..\..
 powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0
 ```
 
-如果桌面歌词构建在当前机器上不稳定，但 `dist/windows/package/desktop_lyric/` 已经有可用产物，可以直接复用现有整合目录继续出包：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0 -ReuseExistingPackage
-```
-
 发布产物输出到 `dist/windows/artifacts/packages/`：
-
 - `Qisheng-Player-v1.0.0-Windows-x64.zip`
-- `Qisheng-Player-v1.0.0-Setup-x64.exe`
+- `Qisheng-Player-v1.0.0-Setup-x64.exe` (生成安装器需要本机安装 Inno Setup 6)
 
-生成安装器需要本机安装 Inno Setup 6。完整流程见 [docs/release_workflow.md](docs/release_workflow.md)。
+完整流程见 [docs/release_workflow.md](docs/release_workflow.md)。
 
-## 文档
+## 📖 文档与变更记录
 
-- [更新日志](docs/changelog.md)
+- [**更新日志与历史变更 (Changelog)**](docs/changelog.md) —— 查看当前版本与历史版本的详细更新内容。
 - [项目结构](docs/project_structure.md)
 - [Windows 发布流程](docs/release_workflow.md)
 - [贡献指南](CONTRIBUTING.md)
 
-## License
+## 📄 License
 
 本项目基于 GPL-3.0 许可证发布。请同时遵守 BASS 与相关第三方依赖的授权要求。
