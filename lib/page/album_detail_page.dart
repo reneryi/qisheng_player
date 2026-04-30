@@ -35,10 +35,12 @@ class AlbumDetailPage extends StatelessWidget {
       primaryContent: album,
       primaryPic: album.cover,
       primaryPicHeroTag: albumArtworkHeroTag(album),
-      backgroundPic: album.works.first.cover,
+      backgroundPic: album.works.isEmpty
+          ? Future<ImageProvider?>.value()
+          : album.works.first.cover,
       picShape: PicShape.rrect,
       title: album.name,
-      subtitle: "${album.works.length} 首作哀",
+      subtitle: formatWorkCount(album.works.length),
       secondaryContent: secondaryContent,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
           AudioTile(

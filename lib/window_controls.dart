@@ -147,6 +147,24 @@ class WindowControls {
     }
   }
 
+  static Future<void> setDesktopLyricProcess({
+    int? pid,
+    String? executablePath,
+  }) async {
+    try {
+      final payload = <String, Object>{};
+      if (pid != null) {
+        payload['pid'] = pid;
+      }
+      if (executablePath != null && executablePath.isNotEmpty) {
+        payload['executablePath'] = executablePath;
+      }
+      await _channel.invokeMethod<void>('set_desktop_lyric_process', payload);
+    } on PlatformException {
+      // Ignore cleanup/register failures during startup or shutdown.
+    }
+  }
+
   static Future<bool> startDragging() async {
     try {
       return await _channel.invokeMethod<bool>("start_dragging") ?? false;

@@ -55,6 +55,10 @@ class FlutterWindow : public Win32Window {
   void RestoreFromTray();
   void ExitApplication();
   void ShowTrayMenu();
+  void SetRegisteredDesktopLyricProcess(
+      DWORD pid, const std::wstring& executable_path);
+  DWORD ResolveDesktopLyricPid(
+      const flutter::EncodableValue* arguments) const;
   void TerminateDesktopLyricProcesses() const;
   HWND FindDesktopLyricWindowByPid(DWORD pid) const;
   HWND FindDesktopLyricWindowFromArgs(
@@ -89,6 +93,8 @@ class FlutterWindow : public Win32Window {
   bool is_playing_ = false;
   bool thumb_buttons_added_ = false;
   bool was_maximized_before_tray_ = false;
+  DWORD desktop_lyric_pid_ = 0;
+  std::wstring desktop_lyric_executable_path_;
   NOTIFYICONDATA tray_icon_data_ = {};
   ITaskbarList3* taskbar_list_ = nullptr;
   HICON icon_prev_ = nullptr;

@@ -56,7 +56,7 @@ class _AudiosPageState extends State<AudiosPage> {
   }
 
   String _buildSubtitle(int totalCount) {
-    return '$totalCount 首乐曀';
+    return formatMusicCount(totalCount);
   }
 
   bool get _showLyricPreview =>

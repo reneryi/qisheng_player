@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -103,28 +102,9 @@ class DesktopLyricService extends DesktopLyricController {
 
   List<String> _resolveDesktopLyricCandidates() {
     final exeDir = path.dirname(Platform.resolvedExecutable);
-    final programFiles = Platform.environment["PROGRAMFILES"];
     final candidates = <String>[
       path.join(exeDir, "desktop_lyric", "desktop_lyric.exe"),
       path.join(exeDir, "desktop_lyric.exe"),
-      path.join(Directory.current.path, "desktop_lyric", "desktop_lyric.exe"),
-      path.join(Directory.current.path, "desktop_lyric.exe"),
-      if (programFiles != null)
-        path.join(
-          programFiles,
-          AppBrand.englishName,
-          "desktop_lyric",
-          "desktop_lyric.exe",
-        ),
-      if (programFiles != null)
-        path.join(
-          programFiles,
-          "Coriander Player",
-          "desktop_lyric",
-          "desktop_lyric.exe",
-        ),
-      r"E:\Qisheng Player\desktop_lyric\desktop_lyric.exe",
-      r"E:\Coriander Player\desktop_lyric\desktop_lyric.exe",
     ];
 
     final checked = <String>{};
@@ -328,6 +308,7 @@ class DesktopLyricService extends DesktopLyricController {
   void _setDesktopLyricClosed() {
     _stopPositionSyncTimer();
     _desktopLyricPid = null;
+    unawaited(WindowControls.setDesktopLyricProcess());
     _desktopLyricStdoutPending = "";
     desktopLyric = Future.value(null);
     _desktopLyricSubscription?.cancel();
@@ -453,6 +434,12 @@ class DesktopLyricService extends DesktopLyricController {
 
         final process = await desktopLyric;
         _desktopLyricPid = process?.pid;
+        if (process != null) {
+          await WindowControls.setDesktopLyricProcess(
+            pid: process.pid,
+            executablePath: desktopLyricPath,
+          );
+        }
         process?.exitCode.then((_) {
           _setDesktopLyricClosed();
         });

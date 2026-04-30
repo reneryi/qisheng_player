@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -25,10 +25,12 @@ class ArtistDetailPage extends StatelessWidget {
       pref: AppPreference.instance.artistDetailPagePref,
       primaryContent: artist,
       primaryPic: artist.picture,
-      backgroundPic: artist.works.first.cover,
+      backgroundPic: artist.works.isEmpty
+          ? Future<ImageProvider?>.value()
+          : artist.works.first.cover,
       picShape: PicShape.oval,
       title: artist.name,
-      subtitle: "${artist.works.length} 首作哀",
+      subtitle: formatWorkCount(artist.works.length),
       secondaryContent: secondaryContent,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
           AudioTile(

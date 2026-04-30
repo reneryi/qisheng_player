@@ -18,7 +18,7 @@ class FolderDetailPage extends StatelessWidget {
     return UniPage<Audio>(
       pref: AppPreference.instance.folderDetailPagePref,
       title: folder.path,
-      subtitle: "${contentList.length} 首乐曀",
+      subtitle: formatMusicCount(contentList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,

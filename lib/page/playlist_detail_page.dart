@@ -43,7 +43,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     return UniPage<Audio>(
       pref: AppPreference.instance.playlistDetailPagePref,
       title: widget.playlist.name,
-      subtitle: "${contentList.length} 首乐曀",
+      subtitle: formatMusicCount(contentList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,

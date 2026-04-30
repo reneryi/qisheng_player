@@ -70,7 +70,7 @@ class _FoldersPageState extends State<FoldersPage> {
     return UniPage<AudioFolder>(
       pref: AppPreference.instance.foldersPagePref,
       title: "文件夹",
-      subtitle: "${contentList.length} 个文件夹",
+      subtitle: formatFolderCount(contentList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) =>
           _CompactAudioFolderTile(audioFolder: item),
@@ -359,7 +359,7 @@ class AudioFolderTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '更新亀${modified.toLocal()} · ${audioFolder.audios.length} 首歌曀',
+                        '更新于 ${modified.toLocal()} · ${formatSongCount(audioFolder.audios.length)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

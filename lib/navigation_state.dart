@@ -45,6 +45,14 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   void rememberLocation(String location, {Object? extra}) {
+    if (location != app_paths.ALBUM_DETAIL_PAGE &&
+        _albumArtworkNavigationInFlight) {
+      // Album detail may be dismissed via go()/shell navigation instead of pop().
+      // Release the hero guard so the source tile can be tapped again.
+      albumArtworkHeroTransition.value = null;
+      _albumArtworkNavigationInFlight = false;
+    }
+
     if (!_shouldTrackLocation(location)) {
       return;
     }
@@ -138,13 +146,13 @@ class AppNavigationState extends ChangeNotifier {
     if (currentEntry.location == app_paths.NOW_PLAYING_PAGE) {
       return closeNowPlaying(context, fallback: fallback);
     }
-    final target = moveHistoryBackEntry();
-    if (target != null) {
-      context.go(target.location, extra: target.extra);
-      return true;
-    }
+    final target = canGoBack ? moveHistoryBackEntry() : null;
     if (context.canPop()) {
       context.pop();
+      return true;
+    }
+    if (target != null) {
+      context.go(target.location, extra: target.extra);
       return true;
     }
     final fallbackLocation = fallback ?? app_paths.AUDIOS_PAGE;

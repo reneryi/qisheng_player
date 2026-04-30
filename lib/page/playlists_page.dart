@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
@@ -114,7 +114,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     return UniPage<Playlist>(
       pref: AppPreference.instance.playlistsPagePref,
       title: "歌单",
-      subtitle: "${PLAYLISTS.length} 个歌单",
+      subtitle: formatPlaylistCount(PLAYLISTS.length),
       contentList: PLAYLISTS,
       contentBuilder: (context, item, i, multiSelectController) => ListTile(
         title: Text(
@@ -123,7 +123,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
           maxLines: 1,
         ),
         subtitle: Text(
-          "${PLAYLISTS[i].audios.length}首乐曀",
+          formatMusicCount(PLAYLISTS[i].audios.length),
           softWrap: false,
           maxLines: 1,
         ),
@@ -327,7 +327,7 @@ class _EditPlaylistDialog extends StatelessWidget {
                     Navigator.pop(context, value);
                   },
                   decoration: const InputDecoration(
-                    labelText: "新歌单名秀",
+                    labelText: "新歌单名称",
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -345,7 +345,7 @@ class _EditPlaylistDialog extends StatelessWidget {
                     onPressed: () {
                       Navigator.pop(context, editingController.text);
                     },
-                    child: const Text("创建"),
+                    child: const Text("保存"),
                   ),
                 ],
               )

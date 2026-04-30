@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cwchar>
+#include <cwctype>
 #include <sstream>
 #include <commctrl.h>
 #include <dwmapi.h>
@@ -76,6 +77,50 @@ bool HasDesktopLyricTitle(HWND hwnd) {
     return false;
   }
   return wcscmp(title, L"desktop_lyric") == 0;
+}
+
+std::wstring Utf8ToWide(const std::string& value) {
+  if (value.empty()) {
+    return std::wstring();
+  }
+
+  const int size =
+      MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (size <= 1) {
+    return std::wstring();
+  }
+
+  std::wstring wide(static_cast<size_t>(size), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, wide.data(), size);
+  wide.resize(static_cast<size_t>(size - 1));
+  return wide;
+}
+
+std::wstring NormalizeWindowsPath(std::wstring value) {
+  std::replace(value.begin(), value.end(), L'/', L'\\');
+  std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch) {
+    return static_cast<wchar_t>(std::towlower(ch));
+  });
+  return value;
+}
+
+std::optional<std::wstring> GetProcessImagePath(HANDLE process) {
+  if (process == nullptr) {
+    return std::nullopt;
+  }
+
+  std::wstring buffer(MAX_PATH, L'\0');
+  DWORD size = static_cast<DWORD>(buffer.size());
+  while (!QueryFullProcessImageNameW(process, 0, buffer.data(), &size)) {
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+      return std::nullopt;
+    }
+    buffer.resize(buffer.size() * 2, L'\0');
+    size = static_cast<DWORD>(buffer.size());
+  }
+
+  buffer.resize(size);
+  return buffer;
 }
 
 bool WasWindowMaximized(HWND hwnd) {
@@ -601,6 +646,20 @@ bool FlutterWindow::OnCreate() {
           return;
         }
 
+        if (method_call.method_name() == "set_desktop_lyric_process") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          const int pid = GetIntArg(map, "pid", 0);
+          const auto executable_path =
+              Utf8ToWide(GetStringArg(map, "executablePath", std::string()));
+          SetRegisteredDesktopLyricProcess(static_cast<DWORD>(pid),
+                                           executable_path);
+          result->Success();
+          return;
+        }
+
         if (method_call.method_name() == "start_resizing") {
           const auto* map = method_call.arguments() == nullptr
                                 ? nullptr
@@ -1046,7 +1105,20 @@ HWND FlutterWindow::FindDesktopLyricWindowByPid(DWORD pid) const {
   return data.fallback_hwnd;
 }
 
-HWND FlutterWindow::FindDesktopLyricWindowFromArgs(
+void FlutterWindow::SetRegisteredDesktopLyricProcess(
+    DWORD pid,
+    const std::wstring& executable_path) {
+  if (pid == 0 || executable_path.empty()) {
+    desktop_lyric_pid_ = 0;
+    desktop_lyric_executable_path_.clear();
+    return;
+  }
+
+  desktop_lyric_pid_ = pid;
+  desktop_lyric_executable_path_ = NormalizeWindowsPath(executable_path);
+}
+
+DWORD FlutterWindow::ResolveDesktopLyricPid(
     const flutter::EncodableValue* arguments) const {
   const auto* map = arguments == nullptr
                         ? nullptr
@@ -1054,42 +1126,42 @@ HWND FlutterWindow::FindDesktopLyricWindowFromArgs(
   if (map != nullptr) {
     const int pid = GetIntArg(map, "pid", 0);
     if (pid > 0) {
-      if (HWND by_pid =
-              FindDesktopLyricWindowByPid(static_cast<DWORD>(pid))) {
-        return by_pid;
-      }
+      return static_cast<DWORD>(pid);
     }
   }
-  return FindDesktopLyricWindowByTitle();
+
+  return desktop_lyric_pid_;
+}
+
+HWND FlutterWindow::FindDesktopLyricWindowFromArgs(
+    const flutter::EncodableValue* arguments) const {
+  const DWORD pid = ResolveDesktopLyricPid(arguments);
+  if (pid == 0) {
+    return nullptr;
+  }
+  return FindDesktopLyricWindowByPid(pid);
 }
 
 void FlutterWindow::TerminateDesktopLyricProcesses() const {
-  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  if (snapshot == INVALID_HANDLE_VALUE) {
+  if (desktop_lyric_pid_ == 0 || desktop_lyric_executable_path_.empty()) {
     return;
   }
 
-  PROCESSENTRY32W entry = {};
-  entry.dwSize = sizeof(PROCESSENTRY32W);
-  if (!Process32FirstW(snapshot, &entry)) {
-    CloseHandle(snapshot);
+  HANDLE process = OpenProcess(
+      PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+      FALSE,
+      desktop_lyric_pid_);
+  if (process == nullptr) {
     return;
   }
 
-  do {
-    if (_wcsicmp(entry.szExeFile, L"desktop_lyric.exe") != 0) {
-      continue;
-    }
-
-    HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
-    if (process == nullptr) {
-      continue;
-    }
+  const auto image_path = GetProcessImagePath(process);
+  if (image_path.has_value() &&
+      NormalizeWindowsPath(*image_path) == desktop_lyric_executable_path_) {
     TerminateProcess(process, 0);
-    CloseHandle(process);
-  } while (Process32NextW(snapshot, &entry));
+  }
 
-  CloseHandle(snapshot);
+  CloseHandle(process);
 }
 
 void FlutterWindow::ShowTrayMenu() {

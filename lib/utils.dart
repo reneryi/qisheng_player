@@ -13,7 +13,7 @@ extension StringHMMSS on Duration {
   }
 }
 
-/// 把 dec 表示成两位 hex
+/// 把 [dec] 表示成两位 hex
 String _toHexString(int dec) {
   assert(dec >= 0 && dec <= 0xff);
 
@@ -88,16 +88,16 @@ extension PinyinCompare on String {
     '，',
     '。',
     '、',
-    '《',
-    '》',
-    '？',
-    '！',
-    '：',
     '；',
+    '：',
     '（',
     '）',
     '【',
     '】',
+    '《',
+    '》',
+    '「',
+    '」',
     '“',
     '”',
     '‘',
@@ -208,6 +208,20 @@ final SCAFFOLD_MESSAGER = GlobalKey<ScaffoldMessengerState>();
 void showTextOnSnackBar(String text) {
   SCAFFOLD_MESSAGER.currentState?.showSnackBar(SnackBar(content: Text(text)));
 }
+
+String formatMusicCount(int count) => '$count 首音乐';
+
+String formatSongCount(int count) => '$count 首歌曲';
+
+String formatWorkCount(int count) => '$count 首作品';
+
+String formatAlbumCount(int count) => '$count 张专辑';
+
+String formatArtistCount(int count) => '$count 位艺术家';
+
+String formatFolderCount(int count) => '$count 个文件夹';
+
+String formatPlaylistCount(int count) => '$count 个歌单';
 
 final LOGGER_MEMORY = MemoryOutput(
   secondOutput: kDebugMode ? ConsoleOutput() : null,

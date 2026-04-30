@@ -205,7 +205,7 @@ class AddAllToPlaylist extends StatelessWidget {
       final trimmed = createdName?.trim();
       if (trimmed == null || trimmed.isEmpty) return null;
       if (PLAYLISTS.any((item) => item.name == trimmed)) {
-        showTextOnSnackBar("歌单 trimmed”已存在");
+        showTextOnSnackBar('歌单“$trimmed”已存在');
         return null;
       }
       final playlist = Playlist(trimmed, {});
@@ -245,7 +245,7 @@ class AddAllToPlaylist extends StatelessWidget {
               final trimmed = createdName?.trim();
               if (trimmed == null || trimmed.isEmpty) return;
               if (PLAYLISTS.any((item) => item.name == trimmed)) {
-                showTextOnSnackBar("歌单 trimmed”已存在");
+                showTextOnSnackBar('歌单“$trimmed”已存在');
                 return;
               }
               final playlist = Playlist(trimmed, {});
@@ -332,7 +332,7 @@ class DeleteSelectedAudios extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text("删除选中歌曲"),
         content: Text(
-          "已选择$count首歌曲。\n"
+          "已选择 $count 首歌曲。\n"
           "删除源文件：会删除磁盘上的音乐文件。\n"
           "仅从播放器移除：不会删除磁盘文件。",
         ),
@@ -399,7 +399,7 @@ class DeleteSelectedAudios extends StatelessWidget {
 
     if (pathsToRemove.isEmpty) {
       if (failedMediaPaths.isNotEmpty) {
-        showTextOnSnackBar("鍒犻櫎澶辫触锛?{failedMediaPaths.length}个源文件无法删除");
+        showTextOnSnackBar("删除失败，${failedMediaPaths.length} 个源文件无法删除");
       }
       return;
     }
