@@ -32,8 +32,8 @@
 - **平滑动效与过渡**：页面间的 shared-axis 转场、专辑封面的 Hero 共享元素动画，让每一次点击都丝滑流畅。
 
 <p align="center">
-  <img src="docs/screenshots/播放器主页.png" width="48%" />
-  <img src="docs/screenshots/专辑页.png" width="48%" />
+  <img src="docs/screenshots/music.png" width="48%" />
+  <img src="docs/screenshots/album.png" width="48%" />
 </p>
 
 ### 🎶 极致的本地曲库管理
@@ -42,8 +42,8 @@
 - **丰富的元数据编辑**：支持右键快速编辑 ID3 标签、封面（支持从文件选取或内置图库挑选）和内嵌歌词。
 
 <p align="center">
-  <img src="docs/screenshots/歌曲页.png" width="48%" />
-  <img src="docs/screenshots/专辑详情页.png" width="48%" />
+  <img src="docs/screenshots/music_player.png" width="48%" />
+  <img src="docs/screenshots/album_detail.png" width="48%" />
 </p>
 
 ### 🎧 专业级音频与播放队列
@@ -52,8 +52,8 @@
 - **灵活的队列管理**：支持单曲循环、列表循环、随机播放，可自由拖拽重排，并提供精细的播放次数与习惯统计。
 
 <p align="center">
-  <img src="docs/screenshots/歌单播放页.png" width="48%" />
-  <img src="docs/screenshots/均衡器.png" width="48%" />
+  <img src="docs/screenshots/artist.png" width="48%" />
+  <img src="docs/screenshots/artist_detail.png" width="48%" />
 </p>
 
 ### 📝 完善的歌单与歌词系统
@@ -62,11 +62,11 @@
 - **灵活的歌单管理**：支持创建自定义歌单，并提供直观的歌单编辑与封面选择功能。
 
 <p align="center">
-  <img src="docs/screenshots/歌词主页.png" width="48%" />
-  <img src="docs/screenshots/封面选择.png" width="48%" />
+  <img src="docs/screenshots/lyric_selection.png" width="48%" />
+  <img src="docs/screenshots/desktop_lyric.png" width="48%" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/歌单编辑页.png" width="80%" />
+  <img src="docs/screenshots/music_edit.png" width="80%" />
 </p>
 
 ### ⚙️ 深度系统集成
