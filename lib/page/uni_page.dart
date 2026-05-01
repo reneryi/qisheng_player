@@ -510,7 +510,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
                     ? 0.0
                     : innerHeight / sideIndexLabels.length;
                 final fontSize = (itemHeight - 2.0).clamp(6.0, 13.0);
-                final tapHeight = (itemHeight - 1.0).clamp(12.0, 22.0);
+                final tapHeight = (itemHeight - 1.0).clamp(12.0, 24.0);
 
                 return SizedBox(
                   key: const ValueKey('uni-page-side-index'),
@@ -522,23 +522,28 @@ class _UniPageState<T> extends State<UniPage<T>> {
                       (i) {
                         final label = sideIndexLabels[i];
                         final selected = label == _activeSideIndexLabel;
+                        final selectedHeight = tapHeight.clamp(18.0, 24.0);
                         return Expanded(
                           child: Center(
                             child: InkWell(
                               enableFeedback: false,
                               onTap: () => _jumpBySideIndex(label),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(
+                                  context.surfaces.radiusSm),
                               child: AnimatedContainer(
                                 duration:
                                     context.motion.microInteractionDuration,
                                 curve: context.motion.fast,
                                 width: 24,
-                                height: tapHeight,
+                                height: selected ? selectedHeight : tapHeight,
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: selected
                                       ? scheme.primary.withValues(alpha: 0.9)
                                       : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(
+                                    context.surfaces.radiusSm,
+                                  ),
                                   boxShadow: selected
                                       ? [
                                           BoxShadow(
@@ -550,18 +555,26 @@ class _UniPageState<T> extends State<UniPage<T>> {
                                         ]
                                       : null,
                                 ),
-                                child: Center(
-                                  child: Text(
-                                    label,
-                                    style: TextStyle(
-                                      fontSize: fontSize,
-                                      fontWeight: selected
-                                          ? FontWeight.w800
-                                          : FontWeight.w500,
-                                      color: selected
-                                          ? scheme.onPrimary
-                                          : scheme.onSurface,
-                                    ),
+                                child: Text(
+                                  label,
+                                  strutStyle: StrutStyle(
+                                    fontSize: fontSize,
+                                    height: 1,
+                                    forceStrutHeight: true,
+                                  ),
+                                  textHeightBehavior: const TextHeightBehavior(
+                                    applyHeightToFirstAscent: false,
+                                    applyHeightToLastDescent: false,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    height: 1,
+                                    fontWeight: selected
+                                        ? FontWeight.w800
+                                        : FontWeight.w500,
+                                    color: selected
+                                        ? scheme.onPrimary
+                                        : scheme.onSurface,
                                   ),
                                 ),
                               ),

@@ -47,7 +47,7 @@ class SettingsPage extends StatelessWidget {
           ),
           SizedBox(height: 18),
           AppSection(
-            title: '系统与工兀',
+            title: '系统与工具',
             description: '热键、问题反馈和更新检查。',
             children: [
               HotkeySettingsTile(),

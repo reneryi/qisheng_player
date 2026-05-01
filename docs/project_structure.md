@@ -35,6 +35,7 @@
 - `docs/msix_install.md`：历史 MSIX 安装说明。
 - `docs/releases/`：版本发布说明和 GitHub Release payload。
 - `docs/screenshots/`：README 或发布说明可引用的截图。
+- `WORKLOG.md`：重要实现、验证结果与后续注意事项记录。
 
 ## 本地目录
 

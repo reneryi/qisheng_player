@@ -1,5 +1,7 @@
 ﻿import 'dart:io';
+import 'dart:ui';
 
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/component/app_shell.dart';
@@ -18,6 +20,7 @@ import 'package:qisheng_player/page/playlists_page.dart';
 import 'package:qisheng_player/page/search_page/search_page.dart';
 import 'package:qisheng_player/page/search_page/search_result_page.dart';
 import 'package:qisheng_player/page/settings_page/create_issue.dart';
+import 'package:qisheng_player/page/settings_page/check_update.dart';
 import 'package:qisheng_player/page/settings_page/page.dart';
 import 'package:qisheng_player/page/updating_page.dart';
 import 'package:qisheng_player/page/welcoming_page.dart';
@@ -64,8 +67,8 @@ Widget _buildAppRouteTransition(
   );
   final secondaryCurvedAnim = CurvedAnimation(
     parent: secondaryAnimation,
-    curve: motion.fast,
-    reverseCurve: motion.emphasized,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
   );
   final transitionedChild = provideNowPlayingScope
       ? NowPlayingRouteTransitionScope(animation: curvedAnim, child: child)
@@ -82,10 +85,22 @@ Widget _buildAppRouteTransition(
         scale: Tween<double>(begin: 0.988, end: 1).animate(contentReveal),
         child: FadeTransition(
           opacity: Tween<double>(begin: 0.8, end: 1).animate(contentReveal),
-          child: FadeTransition(
-            opacity:
-                Tween<double>(begin: 1, end: 0.94).animate(secondaryCurvedAnim),
+          child: AnimatedBuilder(
+            animation: secondaryCurvedAnim,
             child: transitionedChild,
+            builder: (context, child) {
+              final progress = secondaryCurvedAnim.value;
+              return ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: 8 * progress,
+                  sigmaY: 8 * progress,
+                ),
+                child: Opacity(
+                  opacity: 1 - 0.3 * progress,
+                  child: child,
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -214,9 +229,11 @@ class Entry extends StatelessWidget {
                     );
               return shadcn.Theme(
                 data: shadcnTheme,
-                child: Listener(
-                  onPointerDown: HotkeysHelper.handlePointerDown,
-                  child: routedChild,
+                child: StartupUpdatePrompt(
+                  child: Listener(
+                    onPointerDown: HotkeysHelper.handlePointerDown,
+                    child: routedChild,
+                  ),
                 ),
               );
             },
@@ -228,8 +245,7 @@ class Entry extends StatelessWidget {
 
   late final GoRouter config = GoRouter(
     navigatorKey: ROUTER_KEY,
-    initialLocation:
-        welcome ? app_paths.WELCOMING_PAGE : app_paths.UPDATING_DIALOG,
+    initialLocation: welcome ? app_paths.WELCOMING_PAGE : _startLocation(),
     routes: [
       ShellRoute(
         builder: (context, state, page) {
@@ -426,4 +442,11 @@ class Entry extends StatelessWidget {
         languageCode: 'zh', scriptCode: 'Hant', countryCode: 'HK'),
     Locale("en", "US"),
   ];
+
+  String _startLocation() {
+    final startPage = AppPreference.instance.startPage;
+    return startPage >= 0 && startPage < app_paths.START_PAGES.length
+        ? app_paths.START_PAGES[startPage]
+        : app_paths.AUDIOS_PAGE;
+  }
 }

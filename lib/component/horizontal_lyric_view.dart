@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
@@ -23,12 +23,13 @@ class HorizontalLyricView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaces = context.surfaces;
     final lyricController = _resolveLyricController(context);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(16.0),
+        borderRadius: BorderRadius.circular(surfaces.radiusLg),
       ),
       child: ListenableBuilder(
         listenable: lyricController,
@@ -168,7 +169,6 @@ class _LyricHorizontalScrollAreaState
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final motion = context.motion;
 
     return RepaintBoundary(
       child: Padding(
@@ -179,23 +179,28 @@ class _LyricHorizontalScrollAreaState
           child: Align(
             alignment: Alignment.centerLeft,
             child: AnimatedSwitcher(
-              duration: motion.controlTransitionDuration,
-              switchInCurve: motion.normal,
-              switchOutCurve: motion.fast,
+              duration: const Duration(milliseconds: 360),
+              reverseDuration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
                 final curved = CurvedAnimation(
                   parent: animation,
-                  curve: motion.normal,
-                  reverseCurve: motion.fast,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
                 );
                 return FadeTransition(
                   opacity: curved,
                   child: SlideTransition(
                     position: Tween<Offset>(
-                      begin: const Offset(0.02, 0),
+                      begin: const Offset(0.035, -0.08),
                       end: Offset.zero,
                     ).animate(curved),
-                    child: child,
+                    child: ScaleTransition(
+                      scale:
+                          Tween<double>(begin: 0.992, end: 1).animate(curved),
+                      child: child,
+                    ),
                   ),
                 );
               },

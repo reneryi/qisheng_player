@@ -1,10 +1,90 @@
-﻿import 'package:qisheng_player/app_settings.dart';
+﻿import 'dart:async';
+
+import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/src/rust/api/utils.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:github/github.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+Future<Release> fetchLatestRelease() {
+  return AppSettings.github.repositories
+      .listReleases(
+        RepositorySlug(
+          AppSettings.releaseRepoOwner,
+          AppSettings.releaseRepoName,
+        ),
+      )
+      .first;
+}
+
+int _versionValue(String version) {
+  final normalized = version.trim().replaceFirst(RegExp(r'^[vV]'), '');
+  final parts = normalized.split('.');
+  final major = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
+  final minor = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+  final patch = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
+  return major * 1000000 + minor * 1000 + patch;
+}
+
+bool isNewerRelease(Release release) {
+  final tag = release.tagName;
+  if (tag == null || tag.trim().isEmpty) return false;
+  return _versionValue(tag) > _versionValue(AppSettings.version);
+}
+
+Future<Release?> checkForNewRelease() async {
+  final release = await fetchLatestRelease();
+  return isNewerRelease(release) ? release : null;
+}
+
+class StartupUpdatePrompt extends StatefulWidget {
+  const StartupUpdatePrompt({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<StartupUpdatePrompt> createState() => _StartupUpdatePromptState();
+}
+
+class _StartupUpdatePromptState extends State<StartupUpdatePrompt> {
+  bool _checked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_checked) return;
+    _checked = true;
+    unawaited(_check());
+  }
+
+  Future<void> _check() async {
+    try {
+      final release = await checkForNewRelease();
+      if (release == null) return;
+      if (release.tagName == AppPreference.instance.ignoredUpdateTag) return;
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (context) => NewestUpdateView(
+          release: release,
+          showIgnoreAction: true,
+          onIgnore: () async {
+            AppPreference.instance.ignoredUpdateTag = release.tagName;
+            await AppPreference.instance.save();
+          },
+        ),
+      );
+    } catch (err, trace) {
+      LOGGER.e("[update check] $err", stackTrace: trace);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 class CheckForUpdate extends StatefulWidget {
   const CheckForUpdate({super.key});
@@ -29,23 +109,8 @@ class _CheckForUpdateState extends State<CheckForUpdate> {
                 });
 
                 try {
-                  final newest = await AppSettings.github.repositories
-                      .listReleases(
-                        RepositorySlug(
-                          AppSettings.releaseRepoOwner,
-                          AppSettings.releaseRepoName,
-                        ),
-                      )
-                      .first;
-                  final newestVer = int.tryParse(
-                        newest.tagName?.substring(1).replaceAll(".", "") ?? "",
-                      ) ??
-                      0;
-                  final currVer = int.tryParse(
-                        AppSettings.version.replaceAll(".", ""),
-                      ) ??
-                      0;
-                  if (newestVer > currVer) {
+                  final newest = await checkForNewRelease();
+                  if (newest != null) {
                     if (context.mounted) {
                       showDialog(
                         context: context,
@@ -93,9 +158,13 @@ class NewestUpdateView extends StatelessWidget {
   const NewestUpdateView({
     super.key,
     required this.release,
+    this.showIgnoreAction = false,
+    this.onIgnore,
   });
 
   final Release release;
+  final bool showIgnoreAction;
+  final Future<void> Function()? onIgnore;
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +221,18 @@ class NewestUpdateView extends StatelessWidget {
                     },
                     child: const Text("取消"),
                   ),
+                  if (showIgnoreAction) ...[
+                    const SizedBox(width: 16.0),
+                    TextButton(
+                      onPressed: () async {
+                        await onIgnore?.call();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text("不再提示此版本"),
+                    ),
+                  ],
                   const SizedBox(width: 16.0),
                   TextButton.icon(
                     onPressed: () {

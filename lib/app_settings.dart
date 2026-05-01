@@ -90,9 +90,9 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  static const String version = "1.0.0";
+  static const String version = "1.1.0";
   static const String releaseRepoOwner = "reneryi";
-  static const String releaseRepoName = "coriander_player";
+  static const String releaseRepoName = "qisheng_player";
 
   /// 主题模式：亮 / 鏆?/ 璺熼殢绯荤粺
   ThemeMode themeMode = getWindowsThemeMode();

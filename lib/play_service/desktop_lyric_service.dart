@@ -102,10 +102,49 @@ class DesktopLyricService extends DesktopLyricController {
 
   List<String> _resolveDesktopLyricCandidates() {
     final exeDir = path.dirname(Platform.resolvedExecutable);
+    final repoRoot = _findAncestorContaining(exeDir, "pubspec.yaml");
+    final workspaceRoot = repoRoot == null ? null : path.dirname(repoRoot);
     final candidates = <String>[
       path.join(exeDir, "desktop_lyric", "desktop_lyric.exe"),
       path.join(exeDir, "desktop_lyric.exe"),
     ];
+    final buildConfig = path.basename(exeDir);
+    if (buildConfig == "Debug" || buildConfig == "Release") {
+      final runnerDir = path.dirname(exeDir);
+      candidates.addAll([
+        path.join(runnerDir, "Release", "desktop_lyric", "desktop_lyric.exe"),
+        path.join(runnerDir, "Debug", "desktop_lyric", "desktop_lyric.exe"),
+      ]);
+    }
+    if (repoRoot != null) {
+      candidates.add(
+        path.join(
+          repoRoot,
+          "third_party",
+          "desktop_lyric",
+          "build",
+          "windows",
+          "x64",
+          "runner",
+          "Release",
+          "desktop_lyric.exe",
+        ),
+      );
+    }
+    if (workspaceRoot != null) {
+      candidates.add(
+        path.join(
+          workspaceRoot,
+          "desktop_lyric_verify",
+          "build",
+          "windows",
+          "x64",
+          "runner",
+          "Release",
+          "desktop_lyric.exe",
+        ),
+      );
+    }
 
     final checked = <String>{};
     final valid = <String>[];
@@ -115,7 +154,24 @@ class DesktopLyricService extends DesktopLyricController {
         valid.add(candidate);
       }
     }
+    if (valid.isEmpty) {
+      LOGGER.i(
+        "[desktop lyric] no bundled executable found. checked: ${checked.join(' ; ')}",
+      );
+    }
     return valid;
+  }
+
+  String? _findAncestorContaining(String startDir, String childName) {
+    var current = Directory(startDir);
+    while (true) {
+      if (File(path.join(current.path, childName)).existsSync()) {
+        return current.path;
+      }
+      final parent = current.parent;
+      if (parent.path == current.path) return null;
+      current = parent;
+    }
   }
 
   bool _isDesktopLyricBundle(String exePath) {

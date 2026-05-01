@@ -1,6 +1,6 @@
 # Windows 发布流程
 
-本文档说明 `qisheng_player` 的 Windows 发布约定。当前正式版本为 `1.0.0`，发布名使用 `Qisheng Player v1.0`。
+本文档说明 `qisheng_player` 的 Windows 发布约定。当前正式版本为 `1.1.0`，发布名使用 `Qisheng Player v1.1.0`。
 
 ## 目录分工
 
@@ -64,26 +64,26 @@ Set-Location ..\..
 ## 生成发布包
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.1.0
 ```
 
 如果桌面歌词的 `flutter build windows --release` 在当前机器上不稳定，但你已经有一份可用的
 `dist/windows/package/desktop_lyric/`，可以复用现有整合目录来继续生成 zip 和安装器：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0 -ReuseExistingPackage
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.1.0 -ReuseExistingPackage
 ```
 
 输出文件：
 
-- `dist/windows/artifacts/packages/Qisheng-Player-v1.0.0-Windows-x64.zip`
-- `dist/windows/artifacts/packages/Qisheng-Player-v1.0.0-Setup-x64.exe`
+- `dist/windows/artifacts/packages/Qisheng-Player-v1.1.0-Windows-x64.zip`
+- `dist/windows/artifacts/packages/Qisheng-Player-v1.1.0-Setup-x64.exe`
 
 安装器需要本机安装 Inno Setup 6。如果环境未安装 Inno Setup，zip 包仍可作为便携版交付，安装器需要在具备 `ISCC.exe` 的机器上重新生成。
 
 ## GitHub 发布建议
 
-- Tag：`v1.0.0`
-- Release 标题：`Qisheng Player v1.0`
-- Release 说明来源：`docs/releases/v1.0.0.md`
+- Tag：`v1.1.0`
+- Release 标题：`Qisheng Player v1.1.0`
+- Release 说明来源：`docs/releases/v1.1.0.md`
 - 附件：zip 便携包和 setup 安装器。

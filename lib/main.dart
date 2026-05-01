@@ -1,9 +1,17 @@
-﻿import 'dart:io';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/entry.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
+import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/online_cover_store.dart';
+import 'package:qisheng_player/library/play_count_store.dart';
+import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/lyric/lyric_source.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/src/rust/api/tag_reader.dart';
 import 'package:qisheng_player/src/rust/api/logger.dart';
 import 'package:qisheng_player/src/rust/frb_generated.dart';
 import 'package:qisheng_player/theme_provider.dart';
@@ -48,6 +56,27 @@ Future<void> loadPrefFont() async {
   }
 }
 
+Future<void> _loadLibraryState() async {
+  await Future.wait([
+    AudioLibrary.initFromIndex(),
+    readPlaylists(),
+    readLyricSources(),
+    PlayCountStore.instance.read(),
+    OnlineCoverStore.instance.read(),
+  ]);
+}
+
+Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
+  try {
+    await for (final action in updateIndex(indexPath: supportPath)) {
+      LOGGER.i("[update index silent] ${action.progress}: ${action.message}");
+    }
+    await _loadLibraryState();
+  } catch (err, trace) {
+    LOGGER.e("[update index silent] $err", stackTrace: trace);
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -68,6 +97,10 @@ Future<void> main() async {
     await AppPreference.read();
   }
   final welcome = !File("$supportPath\\index.json").existsSync();
+  if (!welcome) {
+    await _loadLibraryState();
+    await PlayService.instance.playbackService.restoreLastSession();
+  }
 
   // Must initialize after loading preferences to avoid default-volume capture.
   WindowControls.init();
@@ -75,4 +108,7 @@ Future<void> main() async {
   await HotkeysHelper.init();
 
   runApp(Entry(welcome: welcome));
+  if (!welcome) {
+    unawaited(_runStartupIndexUpdateSilently(supportPath));
+  }
 }

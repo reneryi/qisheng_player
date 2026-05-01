@@ -2,6 +2,25 @@
 
 本文件记录重要实现、验证结果与后续注意事项。
 
+## 2026-05-01 - qisheng_player v1.1.0 发布整合
+
+### 背景
+
+- 需要整理本轮 UI、桌面歌词、启动扫描和发布链路修复，并将正式版本提升到 `1.1.0`。
+- 仓库已迁移到 `https://github.com/reneryi/qisheng_player`，更新检查与发布配置需要同步。
+
+### 实现
+
+- 精简顶栏、列表和索引栏视觉层级，统一圆角并优化歌词与页面切换动画。
+- 修复桌面歌词在 Debug、Release 和安装目录中的查找路径，发布包与 CI 主产物均包含 `desktop_lyric` bundle。
+- 启动索引更新改为后台静默执行，文件夹页手动扫描仍保留进度动画。
+- 新增启动检查 GitHub Release 的更新提示；暂不做播放器内自动替换安装包，提示界面提供 GitHub 下载入口。
+- 更新 `docs/changelog.md`、`docs/releases/v1.1.0.md`、`docs/releases/v1.1.0.json` 和发布流程文档。
+
+### 验证
+
+- 发布前执行格式化、静态分析、测试、Windows Release 构建、打包脚本与 GitHub Release 上传。
+
 ## 2026-04-29 - qisheng_player v1.0 整合
 
 ### 背景

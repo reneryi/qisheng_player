@@ -66,6 +66,28 @@ jobs:
 
           Copy-Item -Path build\tmp\x64\*.dll -Destination build\windows\x64\runner\Release\BASS -Force
 
+      - name: Get desktop_lyric dependencies
+        working-directory: third_party/desktop_lyric
+        run: flutter pub get
+
+      - name: Build bundled desktop_lyric release
+        working-directory: third_party/desktop_lyric
+        run: flutter build windows --release
+
+      - name: Bundle desktop_lyric with main app
+        shell: pwsh
+        run: |
+          $source = "third_party\desktop_lyric\build\windows\x64\runner\Release"
+          $target = "build\windows\x64\runner\Release\desktop_lyric"
+          if (!(Test-Path (Join-Path $source "desktop_lyric.exe")) -or !(Test-Path (Join-Path $source "flutter_windows.dll")) -or !(Test-Path (Join-Path $source "data"))) {
+            throw "desktop_lyric release bundle is incomplete: $source"
+          }
+          if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $target -Recurse -Force
+
       - name: Upload main artifacts
         uses: actions/upload-artifact@v4
         with:

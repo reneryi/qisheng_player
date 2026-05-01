@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:ui';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_metadata_override_store.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/src/rust/api/tag_reader.dart';
 import 'package:qisheng_player/utils.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 /// from index.json
@@ -29,6 +28,11 @@ class AudioLibrary {
   }
 
   static AudioLibrary? _instance;
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static void notifyChanged() {
+    revision.value++;
+  }
 
   /// 目前 index 结构：
   /// ```json
@@ -72,6 +76,7 @@ class AudioLibrary {
       await AudioMetadataOverrideStore.instance.read();
       AudioMetadataOverrideStore.instance.applyToLibrary(instance);
       instance._rebuildCollections();
+      notifyChanged();
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -94,9 +99,13 @@ class AudioLibrary {
       folder.audios.removeWhere((audio) => paths.contains(audio.path));
     }
     _rebuildCollections();
+    notifyChanged();
   }
 
-  void rebuildCollectionsFromCurrentFolders() => _rebuildCollections();
+  void rebuildCollectionsFromCurrentFolders() {
+    _rebuildCollections();
+    notifyChanged();
+  }
 
   void _buildCollections() {
     for (var f in folders) {

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:qisheng_player/app_paths.dart' as app_paths;
@@ -346,6 +346,13 @@ class AudioTile extends StatelessWidget {
                                   padding: EdgeInsets.zero,
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
+                                ).copyWith(
+                                  backgroundColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  overlayColor: WidgetStatePropertyAll(
+                                    textColor.withValues(alpha: 0.08),
+                                  ),
                                 ),
                               ),
                             ],

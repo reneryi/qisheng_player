@@ -44,6 +44,46 @@ function Get-IsccPath {
   throw "Inno Setup compiler (ISCC.exe) not found. Install Inno Setup 6 first."
 }
 
+function Test-DesktopLyricBundle {
+  param(
+    [string]$BundleDir
+  )
+
+  if ([string]::IsNullOrWhiteSpace($BundleDir) -or !(Test-Path $BundleDir)) {
+    return $false
+  }
+
+  $exePath = Join-Path $BundleDir "desktop_lyric.exe"
+  $runtimePath = Join-Path $BundleDir "flutter_windows.dll"
+  $dataPath = Join-Path $BundleDir "data"
+  return (Test-Path $exePath) -and (Test-Path $runtimePath) -and (Test-Path $dataPath)
+}
+
+function Build-DesktopLyricRelease {
+  param(
+    [string]$ProjectDir
+  )
+
+  if (!(Test-Path $ProjectDir)) {
+    throw "desktop_lyric project not found: $ProjectDir"
+  }
+
+  Push-Location $ProjectDir
+  try {
+    flutter pub get
+    if ($LASTEXITCODE -ne 0) {
+      throw "flutter pub get failed for desktop_lyric with exit code $LASTEXITCODE"
+    }
+
+    flutter build windows --release
+    if ($LASTEXITCODE -ne 0) {
+      throw "flutter build windows --release failed for desktop_lyric with exit code $LASTEXITCODE"
+    }
+  } finally {
+    Pop-Location
+  }
+}
+
 function Resolve-DesktopLyricSourceDir {
   param(
     [string]$BuildOutputDir,
@@ -69,10 +109,7 @@ function Resolve-DesktopLyricSourceDir {
       continue
     }
 
-    $exePath = Join-Path $candidate "desktop_lyric.exe"
-    $runtimePath = Join-Path $candidate "flutter_windows.dll"
-    $dataPath = Join-Path $candidate "data"
-    if ((Test-Path $exePath) -and (Test-Path $runtimePath) -and (Test-Path $dataPath)) {
+    if (Test-DesktopLyricBundle -BundleDir $candidate) {
       return $candidate
     }
   }
@@ -88,6 +125,7 @@ $Version = Resolve-PackageVersion -RequestedVersion $Version -PubspecPath $pubsp
 $buildDir = Join-Path $repoRoot "build"
 $distRoot = Join-Path $repoRoot "dist\windows"
 $mainReleaseDir = Join-Path $repoRoot "build\windows\x64\runner\Release"
+$desktopLyricProjectDir = Join-Path $repoRoot "third_party\desktop_lyric"
 $desktopLyricReleaseDir = Join-Path $repoRoot "third_party\desktop_lyric\build\windows\x64\runner\Release"
 $releasePackageDir = Join-Path $distRoot "package"
 $existingDesktopLyricPackageDir = Join-Path $releasePackageDir "desktop_lyric"
@@ -100,6 +138,12 @@ if (!(Test-Path $mainReleaseDir)) {
 }
 if (!(Test-Path (Join-Path $mainReleaseDir "qisheng_player.exe"))) {
   throw "Main release executable missing: $(Join-Path $mainReleaseDir 'qisheng_player.exe')"
+}
+
+if (!(Test-DesktopLyricBundle -BundleDir $desktopLyricReleaseDir) -and
+    !(Test-DesktopLyricBundle -BundleDir $existingDesktopLyricPackageDir)) {
+  Write-Host "desktop_lyric release output not found. Building bundled desktop lyric..."
+  Build-DesktopLyricRelease -ProjectDir $desktopLyricProjectDir
 }
 
 $desktopLyricSourceDir = Resolve-DesktopLyricSourceDir `
@@ -125,6 +169,9 @@ if (Test-Path $desktopLyricTargetDir) {
 }
 New-Item -ItemType Directory -Path $desktopLyricTargetDir -Force | Out-Null
 Copy-Item -Path (Join-Path $desktopLyricSourceDir "*") -Destination $desktopLyricTargetDir -Recurse -Force
+if (!(Test-DesktopLyricBundle -BundleDir $desktopLyricTargetDir)) {
+  throw "Bundled desktop_lyric package is incomplete: $desktopLyricTargetDir"
+}
 
 New-Item -ItemType Directory -Path $artifactsRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $artifactPackagesDir -Force | Out-Null
@@ -169,7 +216,7 @@ $issContent = @"
 #define MyAppName "Qisheng Player"
 #define MyAppVersion "$Version"
 #define MyAppPublisher "reneryi"
-#define MyAppURL "https://github.com/reneryi/coriander_player"
+#define MyAppURL "https://github.com/reneryi/qisheng_player"
 #define MyAppExeName "qisheng_player.exe"
 #define ReleaseDir "$escapedReleaseDir"
 

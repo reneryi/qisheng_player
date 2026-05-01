@@ -204,85 +204,79 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
-    return AppSurface(
-      variant: AppSurfaceVariant.inset,
-      glassDensity: AppSurfaceGlassDensity.low,
-      radius: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          Shortcuts(
-            shortcuts: const {
-              SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-            },
-            child: Actions(
-              actions: {
-                DismissIntent: CallbackAction<DismissIntent>(
-                  onInvoke: (_) {
-                    _controller.clear();
-                    _toggleExpanded(false);
-                    return null;
-                  },
-                ),
-              },
-              child: AnimatedContainer(
-                duration: motion.searchExpandDuration,
-                curve: motion.emphasized,
-                width: _expanded ? 360 : 42,
-                child: _expanded
-                    ? TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Symbols.search, size: 20),
-                          suffixIcon: IconButton(
-                            enableFeedback: false,
-                            tooltip: '关闭搜索',
-                            onPressed: () {
-                              _controller.clear();
-                              _toggleExpanded(false);
-                            },
-                            icon: const Icon(Symbols.close, size: 18),
-                          ),
-                          hintText: '搜索歌曲、艺术家、专辑',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: _submitSearch,
-                        onTapOutside: (_) {
-                          if (_controller.text.trim().isEmpty) {
-                            _toggleExpanded(false);
-                          }
-                        },
-                      )
-                    : IconButton(
-                        enableFeedback: false,
-                        tooltip: '搜索',
-                        onPressed: () => _toggleExpanded(true),
-                        icon: Icon(
-                          Symbols.search,
-                          size: 20,
-                          color: scheme.onSurface.withValues(alpha: 0.68),
-                        ),
-                      ),
+    return Row(
+      children: [
+        Shortcuts(
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+          },
+          child: Actions(
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (_) {
+                  _controller.clear();
+                  _toggleExpanded(false);
+                  return null;
+                },
               ),
+            },
+            child: AnimatedContainer(
+              duration: motion.searchExpandDuration,
+              curve: motion.emphasized,
+              width: _expanded ? 360 : 42,
+              child: _expanded
+                  ? TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Symbols.search, size: 20),
+                        suffixIcon: IconButton(
+                          enableFeedback: false,
+                          tooltip: '关闭搜索',
+                          onPressed: () {
+                            _controller.clear();
+                            _toggleExpanded(false);
+                          },
+                          icon: const Icon(Symbols.close, size: 18),
+                        ),
+                        hintText: '搜索歌曲、艺术家、专辑',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: _submitSearch,
+                      onTapOutside: (_) {
+                        if (_controller.text.trim().isEmpty) {
+                          _toggleExpanded(false);
+                        }
+                      },
+                    )
+                  : IconButton(
+                      enableFeedback: false,
+                      tooltip: '搜索',
+                      onPressed: () => _toggleExpanded(true),
+                      icon: Icon(
+                        Symbols.search,
+                        size: 20,
+                        color: scheme.onSurface.withValues(alpha: 0.68),
+                      ),
+                    ),
             ),
           ),
-          AnimatedContainer(
-            duration: motion.searchExpandDuration,
-            curve: motion.emphasized,
-            width: _expanded ? 14 : 8,
+        ),
+        AnimatedContainer(
+          duration: motion.searchExpandDuration,
+          curve: motion.emphasized,
+          width: _expanded ? 14 : 8,
+        ),
+        const Expanded(
+          child: WindowDragRegion(
+            child: HorizontalLyricView(),
           ),
-          const Expanded(
-            child: WindowDragRegion(
-              child: HorizontalLyricView(),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -455,38 +449,31 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AppSurface(
-      variant: AppSurfaceVariant.glass,
-      glassDensity: AppSurfaceGlassDensity.low,
-      radius: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _WindowButton(
-            tooltip: _isFullScreen ? '退出全屏' : '全屏',
-            onPressed: _isProcessing ? null : _toggleFullScreen,
-            icon:
-                _isFullScreen ? Symbols.close_fullscreen : Symbols.open_in_full,
-          ),
-          _WindowButton(
-            tooltip: '最小化',
-            onPressed: windowManager.minimize,
-            icon: Symbols.remove,
-          ),
-          _WindowButton(
-            tooltip: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
-            onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
-            icon: _isMaximized ? Symbols.fullscreen_exit : Symbols.fullscreen,
-          ),
-          _WindowButton(
-            tooltip: '退出',
-            onPressed: () => windowManager.close(),
-            icon: Symbols.close,
-            color: scheme.error,
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _WindowButton(
+          tooltip: _isFullScreen ? '退出全屏' : '全屏',
+          onPressed: _isProcessing ? null : _toggleFullScreen,
+          icon: _isFullScreen ? Symbols.close_fullscreen : Symbols.open_in_full,
+        ),
+        _WindowButton(
+          tooltip: '最小化',
+          onPressed: windowManager.minimize,
+          icon: Symbols.remove,
+        ),
+        _WindowButton(
+          tooltip: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
+          onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
+          icon: _isMaximized ? Symbols.fullscreen_exit : Symbols.fullscreen,
+        ),
+        _WindowButton(
+          tooltip: '退出',
+          onPressed: () => windowManager.close(),
+          icon: Symbols.close,
+          color: scheme.error,
+        ),
+      ],
     );
   }
 }

@@ -298,6 +298,8 @@ class AppPreference {
 
   int startPage = 0;
 
+  String? ignoredUpdateTag;
+
   var playbackPref = PlaybackPreference(
     PlayMode.forward,
     0.2,
@@ -341,6 +343,7 @@ class AppPreference {
         "audiosDefaultSortMigrated": true,
         "sidebarCollapsedLarge": sidebarCollapsedLarge,
         "startPage": startPage,
+        "ignoredUpdateTag": ignoredUpdateTag,
         "playbackPref": playbackPref.toMap(),
         "desktopLyricPref": desktopLyricPref.toMap(),
         "nowPlayingPagePref": nowPlayingPagePref.toMap(),
@@ -396,6 +399,7 @@ class AppPreference {
       );
       instance.sidebarCollapsedLarge =
           prefMap["sidebarCollapsedLarge"] ?? false;
+      instance.ignoredUpdateTag = prefMap["ignoredUpdateTag"]?.toString();
       final needNormalizeStartPage = prefMap["startPage"] != 0;
       // 鏃х増浼氭妸鏈€鍚庣偣鍑荤殑渚ф爮椤甸潰鍐欐垚鍚姩椤碉紱娌℃湁鏄惧紡璁剧疆鏃剁粺涓€鍥炲埌闊充箰椤点€?
       instance.startPage = 0;

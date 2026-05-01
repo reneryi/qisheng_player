@@ -1,0 +1,11 @@
+{
+  "tag_name": "v1.1.0",
+  "name": "Qisheng Player v1.1.0",
+  "body_path": "docs/releases/v1.1.0.md",
+  "draft": false,
+  "prerelease": false,
+  "assets": [
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.1.0-Windows-x64.zip",
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.1.0-Setup-x64.exe"
+  ]
+}

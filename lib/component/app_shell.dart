@@ -7,6 +7,7 @@ import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
+import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -38,38 +39,41 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveBuilder(
-      builder: (context, screenType) {
-        final useDrawer = screenType == ScreenType.small;
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          drawer: useDrawer ? const SideNav() : null,
-          drawerScrimColor: Theme.of(context).colorScheme.scrim,
-          body: MainLayoutFrame(
-            titleBar: const TitleBar(),
-            overlay: const BottomPlayerBar(),
-            child: switch (screenType) {
-              ScreenType.small => _ShellPagePanel(
-                  page: widget.page,
-                  pageIdentity: widget.pageIdentity,
-                ),
-              ScreenType.medium => _ShellWideContent(
-                  page: widget.page,
-                  pageIdentity: widget.pageIdentity,
-                  sideNav: const SideNav(),
-                ),
-              ScreenType.large => _ShellWideContent(
-                  page: widget.page,
-                  pageIdentity: widget.pageIdentity,
-                  sideNav: SideNav(
-                    collapsed: largeSidebarCollapsed,
-                    onToggleCollapsed: _toggleLargeSidebar,
+    return ValueListenableBuilder<int>(
+      valueListenable: AudioLibrary.revision,
+      builder: (context, _, __) => ResponsiveBuilder(
+        builder: (context, screenType) {
+          final useDrawer = screenType == ScreenType.small;
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            drawer: useDrawer ? const SideNav() : null,
+            drawerScrimColor: Theme.of(context).colorScheme.scrim,
+            body: MainLayoutFrame(
+              titleBar: const TitleBar(),
+              overlay: const BottomPlayerBar(),
+              child: switch (screenType) {
+                ScreenType.small => _ShellPagePanel(
+                    page: widget.page,
+                    pageIdentity: widget.pageIdentity,
                   ),
-                ),
-            },
-          ),
-        );
-      },
+                ScreenType.medium => _ShellWideContent(
+                    page: widget.page,
+                    pageIdentity: widget.pageIdentity,
+                    sideNav: const SideNav(),
+                  ),
+                ScreenType.large => _ShellWideContent(
+                    page: widget.page,
+                    pageIdentity: widget.pageIdentity,
+                    sideNav: SideNav(
+                      collapsed: largeSidebarCollapsed,
+                      onToggleCollapsed: _toggleLargeSidebar,
+                    ),
+                  ),
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 }
