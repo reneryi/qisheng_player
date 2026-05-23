@@ -323,6 +323,7 @@ class PlaybackService extends PlaybackController {
         playService.desktopLyricService
             .sendPlayerStateMessage(playerState == PlayerState.playing);
         playService.desktopLyricService.sendNowPlayingMessage(nowPlaying!);
+        playService.lyricService.refreshCurrentLyricLine();
       });
     } catch (err) {
       LOGGER.e("[load and play] $err");

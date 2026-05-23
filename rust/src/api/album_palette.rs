@@ -51,7 +51,8 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
         .filter_map(average_bucket)
         .collect::<Vec<_>>();
 
-    colors.sort_by(|left, right| right.weight.cmp(&left.weight));
+    // 根据颜色权重进行降序排序
+    colors.sort_by_key(|color| std::cmp::Reverse(color.weight));
 
     let mut result = Vec::with_capacity(colors.len());
     for color in colors {

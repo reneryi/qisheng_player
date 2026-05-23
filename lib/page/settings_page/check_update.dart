@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -9,35 +9,88 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:github/github.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-Future<Release> fetchLatestRelease() {
-  return AppSettings.github.repositories
-      .listReleases(
-        RepositorySlug(
-          AppSettings.releaseRepoOwner,
-          AppSettings.releaseRepoName,
-        ),
-      )
-      .first;
+class ReleaseVersion implements Comparable<ReleaseVersion> {
+  const ReleaseVersion(this.major, this.minor, this.patch);
+
+  final int major;
+  final int minor;
+  final int patch;
+
+  static final _versionPattern = RegExp(r'^[vV]?(\d+)\.(\d+)\.(\d+)$');
+
+  static ReleaseVersion? parse(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    final match = _versionPattern.firstMatch(value);
+    if (match == null) return null;
+    return ReleaseVersion(
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    );
+  }
+
+  @override
+  int compareTo(ReleaseVersion other) {
+    final majorCompare = major.compareTo(other.major);
+    if (majorCompare != 0) return majorCompare;
+    final minorCompare = minor.compareTo(other.minor);
+    if (minorCompare != 0) return minorCompare;
+    return patch.compareTo(other.patch);
+  }
+
+  bool operator >(ReleaseVersion other) => compareTo(other) > 0;
 }
 
-int _versionValue(String version) {
-  final normalized = version.trim().replaceFirst(RegExp(r'^[vV]'), '');
-  final parts = normalized.split('.');
-  final major = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
-  final minor = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
-  final patch = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
-  return major * 1000000 + minor * 1000 + patch;
+Stream<Release> fetchReleases() {
+  return AppSettings.github.repositories.listReleases(
+    RepositorySlug(
+      AppSettings.releaseRepoOwner,
+      AppSettings.releaseRepoName,
+    ),
+  );
+}
+
+@visibleForTesting
+Release? findLatestStableRelease(
+  Iterable<Release> releases, {
+  String currentVersion = AppSettings.version,
+}) {
+  final current = ReleaseVersion.parse(currentVersion);
+  if (current == null) {
+    LOGGER.w('[update check] invalid current version: $currentVersion');
+    return null;
+  }
+
+  Release? latest;
+  ReleaseVersion? latestVersion;
+  for (final release in releases) {
+    if (release.isDraft == true || release.isPrerelease == true) continue;
+    final version = ReleaseVersion.parse(release.tagName);
+    if (version == null) {
+      LOGGER.w('[update check] ignore invalid release tag: ${release.tagName}');
+      continue;
+    }
+    if (version.compareTo(current) <= 0) continue;
+    if (latestVersion == null || version > latestVersion) {
+      latest = release;
+      latestVersion = version;
+    }
+  }
+  return latest;
 }
 
 bool isNewerRelease(Release release) {
-  final tag = release.tagName;
-  if (tag == null || tag.trim().isEmpty) return false;
-  return _versionValue(tag) > _versionValue(AppSettings.version);
+  if (release.isDraft == true || release.isPrerelease == true) return false;
+  final releaseVersion = ReleaseVersion.parse(release.tagName);
+  final currentVersion = ReleaseVersion.parse(AppSettings.version);
+  if (releaseVersion == null || currentVersion == null) return false;
+  return releaseVersion > currentVersion;
 }
 
 Future<Release?> checkForNewRelease() async {
-  final release = await fetchLatestRelease();
-  return isNewerRelease(release) ? release : null;
+  final releases = await fetchReleases().toList();
+  return findLatestStableRelease(releases);
 }
 
 class StartupUpdatePrompt extends StatefulWidget {
@@ -55,6 +108,9 @@ class StartupUpdatePrompt extends StatefulWidget {
 }
 
 class _StartupUpdatePromptState extends State<StartupUpdatePrompt> {
+  static const _maxCheckAttempts = 3;
+  static const _retryDelay = Duration(milliseconds: 800);
+
   bool _checked = false;
 
   @override
@@ -70,32 +126,44 @@ class _StartupUpdatePromptState extends State<StartupUpdatePrompt> {
   }
 
   Future<void> _check() async {
-    try {
-      final release = await widget.checkForRelease();
-      if (release == null) return;
-      if (release.tagName == AppPreference.instance.ignoredUpdateTag) return;
-      if (!mounted) return;
-      final hasDialogContext = await _waitForDialogContext();
-      if (!hasDialogContext || !mounted) {
-        LOGGER.w('[update check] navigator context unavailable');
+    for (var attempt = 1; attempt <= _maxCheckAttempts; attempt++) {
+      try {
+        final release = await widget.checkForRelease();
+        if (!mounted) return;
+        await _showReleaseIfNeeded(release);
         return;
+      } catch (err, trace) {
+        LOGGER.e("[update check] attempt $attempt failed: $err",
+            stackTrace: trace);
+        if (attempt >= _maxCheckAttempts) return;
+        await Future<void>.delayed(_retryDelay);
+        if (!mounted) return;
       }
-      final dialogContext = _dialogContext;
-      if (dialogContext == null || !dialogContext.mounted) return;
-      await showDialog(
-        context: dialogContext,
-        builder: (context) => NewestUpdateView(
-          release: release,
-          showIgnoreAction: true,
-          onIgnore: () async {
-            AppPreference.instance.ignoredUpdateTag = release.tagName;
-            await AppPreference.instance.save();
-          },
-        ),
-      );
-    } catch (err, trace) {
-      LOGGER.e("[update check] $err", stackTrace: trace);
     }
+  }
+
+  Future<void> _showReleaseIfNeeded(Release? release) async {
+    if (release == null) return;
+    if (release.tagName == AppPreference.instance.ignoredUpdateTag) return;
+    if (!mounted) return;
+    final hasDialogContext = await _waitForDialogContext();
+    if (!hasDialogContext || !mounted) {
+      LOGGER.w('[update check] navigator context unavailable');
+      return;
+    }
+    final dialogContext = _dialogContext;
+    if (dialogContext == null || !dialogContext.mounted) return;
+    await showDialog(
+      context: dialogContext,
+      builder: (context) => NewestUpdateView(
+        release: release,
+        showIgnoreAction: true,
+        onIgnore: () async {
+          AppPreference.instance.ignoredUpdateTag = release.tagName;
+          await AppPreference.instance.save();
+        },
+      ),
+    );
   }
 
   Future<bool> _waitForDialogContext() async {

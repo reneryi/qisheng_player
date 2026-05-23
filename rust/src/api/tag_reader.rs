@@ -1537,9 +1537,15 @@ fn _update_index_below_1_1_0(
     sink: &StreamSink<IndexActionState>,
 ) -> Result<(), io::Error> {
     let mut audio_folders_json: Vec<serde_json::Value> = vec![];
-    let folders = index.as_array().unwrap();
+    // 检查并转换 index 为数组，避免 JSON 损坏导致 panic 崩溃
+    let folders = index.as_array().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "index.json 不是数组格式")
+    })?;
     for item in folders {
-        let path = item["path"].as_str().unwrap();
+        // 检查并提取文件夹路径，避免路径字段缺失导致 panic 崩溃
+        let path = item["path"].as_str().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "文件夹项缺少 path 属性")
+        })?;
         let _ = sink.add(IndexActionState {
             progress: audio_folders_json.len() as f64 / folders.len() as f64,
             message: String::from("正在扫描 ") + path,
@@ -1590,7 +1596,10 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
     }
 
     let force_refresh_all = version.unwrap_or(0) < CURRENT_INDEX_VERSION;
-    let folders = index["folders"].as_array_mut().unwrap();
+    // 检查 folders 是否为数组，避免因 index.json 损坏或格式错误导致崩溃
+    let folders = index["folders"].as_array_mut().ok_or_else(|| {
+        anyhow::anyhow!("index.json 的 'folders' 属性缺失或不是数组格式")
+    })?;
 
     // 删除访问不到的文件夹记录
     folders.retain(|item| {

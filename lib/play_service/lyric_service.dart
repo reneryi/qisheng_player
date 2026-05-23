@@ -9,7 +9,9 @@ import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/music_matcher.dart';
+import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// 歌词相关状态与行为接口，便于 UI 与测试注入。
@@ -24,13 +26,45 @@ abstract class LyricController extends ChangeNotifier {
 
 /// 只通知 lyric 变更
 class LyricService extends LyricController {
-  final PlayService playService;
+  final PlaybackController _playbackService;
+  final DesktopLyricController _desktopLyricService;
+  final Future<Lyric?> Function(Audio audio, bool localFirst) _getDefaultLyric;
+  final Future<Lyric?> Function(Audio audio) _getLocalLyric;
+  final Future<Lyric?> Function(Audio audio) _getOnlineDefaultLyric;
 
   late StreamSubscription _positionStreamSubscription;
-  LyricService(this.playService) {
-    _positionStreamSubscription =
-        playService.playbackService.positionStream.listen((pos) {
+  int _lyricLoadVersion = 0;
+
+  LyricService(PlayService playService)
+      : _playbackService = playService.playbackService,
+        _desktopLyricService = playService.desktopLyricService,
+        _getDefaultLyric = _loadDefaultLyric,
+        _getLocalLyric = Lrc.fromAudioPath,
+        _getOnlineDefaultLyric = getMostMatchedLyric {
+    _listenToPositionStream();
+  }
+
+  @visibleForTesting
+  LyricService.forTest({
+    required PlaybackController playbackService,
+    required DesktopLyricController desktopLyricService,
+    required Future<Lyric?> Function(Audio audio, bool localFirst)
+        getDefaultLyric,
+    Future<Lyric?> Function(Audio audio)? getLocalLyric,
+    Future<Lyric?> Function(Audio audio)? getOnlineDefaultLyric,
+  })  : _playbackService = playbackService,
+        _desktopLyricService = desktopLyricService,
+        _getDefaultLyric = getDefaultLyric,
+        _getLocalLyric = getLocalLyric ?? Lrc.fromAudioPath,
+        _getOnlineDefaultLyric = getOnlineDefaultLyric ?? getMostMatchedLyric {
+    _listenToPositionStream();
+  }
+
+  void _listenToPositionStream() {
+    _positionStreamSubscription = _playbackService.positionStream.listen((pos) {
+      final version = _lyricLoadVersion;
       currLyricFuture.then((value) {
+        if (version != _lyricLoadVersion) return;
         if (value == null) return;
         if (_nextLyricLine >= value.lines.length) return;
         final posInMs = (pos * 1000).round();
@@ -41,13 +75,29 @@ class LyricService extends LyricController {
           changed = true;
         }
         if (changed) {
-          _notifyCurrentLyricLine(value);
+          _notifyCurrentLyricLine(value, version: version);
         }
       });
     });
   }
 
-  Audio? _getNowPlaying() => playService.playbackService.nowPlaying;
+  static Future<Lyric?> _loadDefaultLyric(
+    Audio audio,
+    bool localFirst,
+  ) async {
+    if (audio.isCueTrack) {
+      return Lrc.fromAudioPath(audio);
+    }
+
+    if (localFirst) {
+      return (await Lrc.fromAudioPath(audio)) ??
+          (await getMostMatchedLyric(audio));
+    }
+    return (await getMostMatchedLyric(audio)) ??
+        (await Lrc.fromAudioPath(audio));
+  }
+
+  Audio? _getNowPlaying() => _playbackService.nowPlaying;
 
   /// 供 widget 使用
   Future<Lyric?> currLyricFuture = Future.value(null);
@@ -66,54 +116,54 @@ class LyricService extends LyricController {
 
   /// 重新计算歌词进行到第几行
   void findCurrLyricLine() {
+    final version = _lyricLoadVersion;
     currLyricFuture.then((value) {
-      if (value == null) return;
-      if (value.lines.isEmpty) return;
-
-      final next = value.lines.indexWhere(
-        (element) =>
-            element.start.inMilliseconds / 1000 >
-            playService.playbackService.position,
-      );
-      _nextLyricLine = next == -1 ? value.lines.length : next;
-      _notifyCurrentLyricLine(value);
+      if (version != _lyricLoadVersion) return;
+      _findAndNotifyCurrentLyricLine(value, version: version);
     });
   }
 
-  void _notifyCurrentLyricLine(Lyric lyric) {
+  void _findAndNotifyCurrentLyricLine(
+    Lyric? lyric, {
+    required int version,
+  }) {
+    if (version != _lyricLoadVersion) return;
+    if (lyric == null) return;
+    if (lyric.lines.isEmpty) return;
+
+    final next = lyric.lines.indexWhere(
+      (element) =>
+          element.start.inMilliseconds / 1000 > _playbackService.position,
+    );
+    _nextLyricLine = next == -1 ? lyric.lines.length : next;
+    _notifyCurrentLyricLine(lyric, version: version);
+  }
+
+  void _notifyCurrentLyricLine(
+    Lyric lyric, {
+    required int version,
+  }) {
+    if (version != _lyricLoadVersion) return;
     if (lyric.lines.isEmpty) return;
     final currLineIndex =
         currentLyricLineIndex.clamp(0, lyric.lines.length - 1).toInt();
     _lyricLineStreamController.add(currLineIndex);
 
-    playService.desktopLyricService.canSendMessage.then((canSend) {
+    _desktopLyricService.canSendMessage.then((canSend) {
+      if (version != _lyricLoadVersion) return;
       if (!canSend) return;
 
-      playService.desktopLyricService
-          .sendLyricLineMessage(lyric.lines[currLineIndex]);
+      _desktopLyricService.sendLyricLineMessage(lyric.lines[currLineIndex]);
     });
   }
 
   void refreshCurrentLyricLine() {
+    final version = _lyricLoadVersion;
     currLyricFuture.then((value) {
+      if (version != _lyricLoadVersion) return;
       if (value == null) return;
-      _notifyCurrentLyricLine(value);
+      _notifyCurrentLyricLine(value, version: version);
     });
-  }
-
-  Future<Lyric?> _getLyricDefault(bool localFirst) async {
-    final nowPlaying = _getNowPlaying();
-    if (nowPlaying == null) return Future.value(null);
-    if (nowPlaying.isCueTrack) {
-      return Lrc.fromAudioPath(nowPlaying);
-    }
-
-    if (localFirst) {
-      return (await Lrc.fromAudioPath(nowPlaying)) ??
-          (await getMostMatchedLyric(nowPlaying));
-    }
-    return (await getMostMatchedLyric(nowPlaying)) ??
-        (await Lrc.fromAudioPath(nowPlaying));
   }
 
   /// 根据默认歌词来源获取歌词：
@@ -124,12 +174,14 @@ class LyricService extends LyricController {
     if (nowPlaying == null) return;
 
     currLyricFuture.ignore();
+    final version = ++_lyricLoadVersion;
 
     if (nowPlaying.isCueTrack) {
-      currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+      currLyricFuture = _getLocalLyric(nowPlaying);
       currLyricFuture.then((value) {
+        if (version != _lyricLoadVersion) return;
         _nextLyricLine = 0;
-        findCurrLyricLine();
+        _findAndNotifyCurrentLyricLine(value, version: version);
       });
       notifyListeners();
       return;
@@ -137,10 +189,11 @@ class LyricService extends LyricController {
 
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
     if (lyricSource == null) {
-      currLyricFuture = _getLyricDefault(AppSettings.instance.localLyricFirst);
+      currLyricFuture =
+          _getDefaultLyric(nowPlaying, AppSettings.instance.localLyricFirst);
     } else {
       if (lyricSource.source == LyricSourceType.local) {
-        currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+        currLyricFuture = _getLocalLyric(nowPlaying);
       } else {
         currLyricFuture = getOnlineLyric(
           qqSongId: lyricSource.qqSongId,
@@ -151,8 +204,9 @@ class LyricService extends LyricController {
     }
 
     currLyricFuture.then((value) {
+      if (version != _lyricLoadVersion) return;
       _nextLyricLine = 0;
-      findCurrLyricLine();
+      _findAndNotifyCurrentLyricLine(value, version: version);
     });
 
     notifyListeners();
@@ -163,10 +217,12 @@ class LyricService extends LyricController {
     if (nowPlaying == null) return;
 
     currLyricFuture.ignore();
+    final version = ++_lyricLoadVersion;
 
-    currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+    currLyricFuture = _getLocalLyric(nowPlaying);
     currLyricFuture.then((value) {
-      findCurrLyricLine();
+      if (version != _lyricLoadVersion) return;
+      _findAndNotifyCurrentLyricLine(value, version: version);
     });
 
     notifyListeners();
@@ -177,19 +233,22 @@ class LyricService extends LyricController {
     if (nowPlaying == null) return;
 
     currLyricFuture.ignore();
+    final version = ++_lyricLoadVersion;
 
     if (nowPlaying.isCueTrack) {
-      currLyricFuture = Lrc.fromAudioPath(nowPlaying);
+      currLyricFuture = _getLocalLyric(nowPlaying);
       currLyricFuture.then((value) {
-        findCurrLyricLine();
+        if (version != _lyricLoadVersion) return;
+        _findAndNotifyCurrentLyricLine(value, version: version);
       });
       notifyListeners();
       return;
     }
 
-    currLyricFuture = getMostMatchedLyric(nowPlaying);
+    currLyricFuture = _getOnlineDefaultLyric(nowPlaying);
     currLyricFuture.then((value) {
-      findCurrLyricLine();
+      if (version != _lyricLoadVersion) return;
+      _findAndNotifyCurrentLyricLine(value, version: version);
     });
 
     notifyListeners();
@@ -197,10 +256,12 @@ class LyricService extends LyricController {
 
   void useSpecificLyric(Lyric lyric) {
     currLyricFuture.ignore();
+    final version = ++_lyricLoadVersion;
 
     currLyricFuture = Future.value(lyric);
     currLyricFuture.then((value) {
-      findCurrLyricLine();
+      if (version != _lyricLoadVersion) return;
+      _findAndNotifyCurrentLyricLine(value, version: version);
     });
 
     notifyListeners();

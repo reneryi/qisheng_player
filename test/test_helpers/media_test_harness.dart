@@ -327,6 +327,10 @@ class FakeLyricController extends LyricController {
 }
 
 class FakeDesktopLyricController extends DesktopLyricController {
+  final sentLyricLines = <LyricLine>[];
+  final sentNowPlaying = <Audio>[];
+  final sentPlayerStates = <bool>[];
+
   @override
   Future<Process?> get desktopLyric async => null;
 
@@ -337,19 +341,25 @@ class FakeDesktopLyricController extends DesktopLyricController {
   bool get isStarting => false;
 
   @override
-  Future<bool> get canSendMessage async => false;
+  Future<bool> get canSendMessage async => true;
 
   @override
   void killDesktopLyric({bool disablePreference = true}) {}
 
   @override
-  void sendLyricLineMessage(LyricLine line) {}
+  void sendLyricLineMessage(LyricLine line) {
+    sentLyricLines.add(line);
+  }
 
   @override
-  void sendNowPlayingMessage(Audio nowPlaying) {}
+  void sendNowPlayingMessage(Audio nowPlaying) {
+    sentNowPlaying.add(nowPlaying);
+  }
 
   @override
-  void sendPlayerStateMessage(bool isPlaying) {}
+  void sendPlayerStateMessage(bool isPlaying) {
+    sentPlayerStates.add(isPlaying);
+  }
 
   @override
   void sendThemeMessage(ColorScheme scheme) {}
