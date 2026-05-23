@@ -51,6 +51,17 @@ Stream<Release> fetchReleases() {
   );
 }
 
+bool _isQishengRelease(Release release) {
+  final name = release.name?.trim().toLowerCase() ?? '';
+  if (name.startsWith('qisheng player')) return true;
+
+  final assets = release.assets ?? const <ReleaseAsset>[];
+  return assets.any((asset) {
+    final assetName = asset.name?.trim().toLowerCase() ?? '';
+    return assetName.startsWith('qisheng-player-v');
+  });
+}
+
 @visibleForTesting
 Release? findLatestStableRelease(
   Iterable<Release> releases, {
@@ -66,6 +77,10 @@ Release? findLatestStableRelease(
   ReleaseVersion? latestVersion;
   for (final release in releases) {
     if (release.isDraft == true || release.isPrerelease == true) continue;
+    if (!_isQishengRelease(release)) {
+      LOGGER.w('[update check] ignore non-qisheng release: ${release.tagName}');
+      continue;
+    }
     final version = ReleaseVersion.parse(release.tagName);
     if (version == null) {
       LOGGER.w('[update check] ignore invalid release tag: ${release.tagName}');
@@ -82,6 +97,7 @@ Release? findLatestStableRelease(
 
 bool isNewerRelease(Release release) {
   if (release.isDraft == true || release.isPrerelease == true) return false;
+  if (!_isQishengRelease(release)) return false;
   final releaseVersion = ReleaseVersion.parse(release.tagName);
   final currentVersion = ReleaseVersion.parse(AppSettings.version);
   if (releaseVersion == null || currentVersion == null) return false;

@@ -8,15 +8,18 @@ import 'package:qisheng_player/utils.dart';
 
 Release _release({
   required String tagName,
+  String? name,
   bool isDraft = false,
   bool isPrerelease = false,
+  List<ReleaseAsset>? assets,
 }) =>
     Release(
       tagName: tagName,
-      name: 'Qisheng Player $tagName',
+      name: name ?? 'Qisheng Player $tagName',
       body: 'test release',
       isDraft: isDraft,
       isPrerelease: isPrerelease,
+      assets: assets,
     );
 
 GoRouter _buildRouter() => GoRouter(
@@ -57,6 +60,24 @@ void main() {
         _release(tagName: 'v1.2.3'),
         _release(tagName: 'v1.2.4', isDraft: true),
         _release(tagName: 'v1.2.2'),
+      ],
+      currentVersion: '1.2.2',
+    );
+
+    expect(latest?.tagName, 'v1.2.3');
+  });
+
+  test('findLatestStableRelease ignores historical fork releases', () {
+    final latest = findLatestStableRelease(
+      [
+        _release(
+          tagName: 'v1.6.2',
+          name: 'v1.6.2',
+          assets: [
+            ReleaseAsset(name: 'coriander_player-1.6.2-windows-x64.zip'),
+          ],
+        ),
+        _release(tagName: 'v1.2.3'),
       ],
       currentVersion: '1.2.2',
     );
