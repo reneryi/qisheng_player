@@ -317,12 +317,14 @@ class PlaybackService extends PlaybackController {
       );
       _rememberPlaybackSession(save: true);
 
+      final loadedAudio = nowPlaying!;
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
+        if (nowPlaying?.path != loadedAudio.path) return;
 
         playService.desktopLyricService
             .sendPlayerStateMessage(playerState == PlayerState.playing);
-        playService.desktopLyricService.sendNowPlayingMessage(nowPlaying!);
+        playService.desktopLyricService.sendNowPlayingMessage(loadedAudio);
         playService.lyricService.refreshCurrentLyricLine();
       });
     } catch (err) {
@@ -599,6 +601,7 @@ class PlaybackService extends PlaybackController {
       ThemeProvider.instance.applyThemeFromAudio(audio);
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
+        if (nowPlaying?.path != audio.path) return;
         playService.desktopLyricService.sendNowPlayingMessage(audio);
       });
     }

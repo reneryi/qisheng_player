@@ -21,6 +21,10 @@ import 'package:path/path.dart' as path;
 
 import 'package:desktop_lyric/message.dart' as msg;
 
+@visibleForTesting
+String buildDesktopLyricMessageFrame(msg.Message message) =>
+    "${message.buildMessageJson()}\n";
+
 abstract class DesktopLyricController extends ChangeNotifier {
   Future<Process?> get desktopLyric;
   bool get isStarting;
@@ -583,7 +587,7 @@ class DesktopLyricService extends DesktopLyricController {
 
   void sendMessage(msg.Message message) {
     desktopLyric.then((value) {
-      value?.stdin.write(message.buildMessageJson());
+      value?.stdin.write(buildDesktopLyricMessageFrame(message));
     }).catchError((err, trace) {
       LOGGER.e(err, stackTrace: trace);
     });

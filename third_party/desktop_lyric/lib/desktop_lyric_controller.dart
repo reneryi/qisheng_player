@@ -59,6 +59,10 @@ class DesktopLyricController {
     return _instance!;
   }
 
+  static DesktopLyricController createForTest() => DesktopLyricController._(
+        listenToStdin: false,
+      );
+
   String? _normalizedFontName(String? raw) {
     final value = raw?.trim();
     if (value == null || value.isEmpty) return null;
@@ -132,6 +136,17 @@ class DesktopLyricController {
     }
   }
 
+  void _handleMessageLine(String line) {
+    try {
+      _handleMessageMap(json.decode(line) as Map);
+    } catch (err, stack) {
+      stderr.writeln(err);
+      stderr.writeln(stack);
+    }
+  }
+
+  void parseStdinChunkForTest(String chunk) => _parseStdinChunk(chunk);
+
   void _parseStdinChunk(String chunk) {
     _stdinPending += chunk;
 
@@ -140,7 +155,7 @@ class DesktopLyricController {
       final line = _stdinPending.substring(0, newlineIndex).trim();
       _stdinPending = _stdinPending.substring(newlineIndex + 1);
       if (line.isNotEmpty) {
-        _handleMessageMap(json.decode(line) as Map);
+        _handleMessageLine(line);
       }
       newlineIndex = _stdinPending.indexOf('\n');
     }
@@ -155,14 +170,16 @@ class DesktopLyricController {
     }
   }
 
-  DesktopLyricController._() {
-    stdin.transform(utf8.decoder).listen((event) {
-      try {
-        _parseStdinChunk(event);
-      } catch (err, stack) {
-        stderr.writeln(err);
-        stderr.writeln(stack);
-      }
-    });
+  DesktopLyricController._({bool listenToStdin = true}) {
+    if (listenToStdin) {
+      stdin.transform(utf8.decoder).listen((event) {
+        try {
+          _parseStdinChunk(event);
+        } catch (err, stack) {
+          stderr.writeln(err);
+          stderr.writeln(stack);
+        }
+      });
+    }
   }
 }

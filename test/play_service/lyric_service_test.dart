@@ -104,4 +104,57 @@ void main() {
       'current lyric',
     );
   });
+
+  test(
+      'LyricService resends current line after auto next now playing clears desktop lyric',
+      () async {
+    final firstAudio = TestAudio(
+      title: 'First',
+      artist: 'Artist',
+      album: 'Album',
+      path: r'E:\Music\first.flac',
+    );
+    final secondAudio = TestAudio(
+      title: 'Second',
+      artist: 'Artist',
+      album: 'Album',
+      path: r'E:\Music\second.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: firstAudio,
+      queue: [firstAudio, secondAudio],
+    );
+    final desktopLyric = FakeDesktopLyricController();
+    final service = LyricService.forTest(
+      playbackService: playback,
+      desktopLyricService: desktopLyric,
+      getDefaultLyric: (audio, _) => Future.value(
+        lyricWithLine('${audio.title} lyric'),
+      ),
+    );
+
+    addTearDown(service.dispose);
+    addTearDown(playback.dispose);
+
+    playback.setNowPlaying(secondAudio, queue: [firstAudio, secondAudio]);
+    service.updateLyric();
+    await Future<void>.delayed(Duration.zero);
+
+    desktopLyric.sendNowPlayingMessage(secondAudio);
+    service.refreshCurrentLyricLine();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(desktopLyric.sentMessages, hasLength(3));
+    expect(desktopLyric.sentMessages[0], isA<LrcLine>());
+    expect(
+      (desktopLyric.sentMessages[0] as LrcLine).content,
+      'Second lyric',
+    );
+    expect(desktopLyric.sentMessages[1], secondAudio);
+    expect(desktopLyric.sentMessages[2], isA<LrcLine>());
+    expect(
+      (desktopLyric.sentMessages[2] as LrcLine).content,
+      'Second lyric',
+    );
+  });
 }

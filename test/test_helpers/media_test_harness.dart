@@ -330,6 +330,7 @@ class FakeDesktopLyricController extends DesktopLyricController {
   final sentLyricLines = <LyricLine>[];
   final sentNowPlaying = <Audio>[];
   final sentPlayerStates = <bool>[];
+  final sentMessages = <Object>[];
 
   @override
   Future<Process?> get desktopLyric async => null;
@@ -349,16 +350,19 @@ class FakeDesktopLyricController extends DesktopLyricController {
   @override
   void sendLyricLineMessage(LyricLine line) {
     sentLyricLines.add(line);
+    sentMessages.add(line);
   }
 
   @override
   void sendNowPlayingMessage(Audio nowPlaying) {
     sentNowPlaying.add(nowPlaying);
+    sentMessages.add(nowPlaying);
   }
 
   @override
   void sendPlayerStateMessage(bool isPlaying) {
     sentPlayerStates.add(isPlaying);
+    sentMessages.add(isPlaying);
   }
 
   @override
