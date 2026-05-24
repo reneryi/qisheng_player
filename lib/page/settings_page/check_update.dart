@@ -95,18 +95,53 @@ Release? findLatestStableRelease(
   return latest;
 }
 
-bool isNewerRelease(Release release) {
+@visibleForTesting
+Release? findFirstNewerStableRelease(
+  Iterable<Release> releases, {
+  String currentVersion = AppSettings.version,
+}) {
+  final current = ReleaseVersion.parse(currentVersion);
+  if (current == null) {
+    LOGGER.w('[update check] invalid current version: $currentVersion');
+    return null;
+  }
+
+  for (final release in releases) {
+    if (isNewerReleaseForVersion(release, current)) {
+      return release;
+    }
+  }
+  return null;
+}
+
+@visibleForTesting
+bool isNewerReleaseForVersion(Release release, ReleaseVersion currentVersion) {
   if (release.isDraft == true || release.isPrerelease == true) return false;
   if (!_isQishengRelease(release)) return false;
   final releaseVersion = ReleaseVersion.parse(release.tagName);
-  final currentVersion = ReleaseVersion.parse(AppSettings.version);
-  if (releaseVersion == null || currentVersion == null) return false;
+  if (releaseVersion == null) return false;
   return releaseVersion > currentVersion;
 }
 
+bool isNewerRelease(Release release) {
+  final currentVersion = ReleaseVersion.parse(AppSettings.version);
+  if (currentVersion == null) return false;
+  return isNewerReleaseForVersion(release, currentVersion);
+}
+
 Future<Release?> checkForNewRelease() async {
-  final releases = await fetchReleases().toList();
-  return findLatestStableRelease(releases);
+  final currentVersion = ReleaseVersion.parse(AppSettings.version);
+  if (currentVersion == null) {
+    LOGGER.w('[update check] invalid current version: ${AppSettings.version}');
+    return null;
+  }
+
+  await for (final release in fetchReleases()) {
+    if (isNewerReleaseForVersion(release, currentVersion)) {
+      return release;
+    }
+  }
+  return null;
 }
 
 class StartupUpdatePrompt extends StatefulWidget {

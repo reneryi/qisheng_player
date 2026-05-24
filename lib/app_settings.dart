@@ -90,7 +90,7 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  static const String version = "1.2.5";
+  static const String version = "1.2.6";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
 

@@ -97,6 +97,48 @@ void main() {
     expect(latest, isNull);
   });
 
+  test('findFirstNewerStableRelease returns the first usable newest release',
+      () {
+    final latest = findFirstNewerStableRelease(
+      [
+        _release(tagName: 'v1.7.1', isPrerelease: true),
+        _release(tagName: 'v1.2.5'),
+        _release(tagName: 'v1.2.4'),
+      ],
+      currentVersion: '1.2.4',
+    );
+
+    expect(latest?.tagName, 'v1.2.5');
+  });
+
+  test('release stream can stop as soon as the newest usable release is found',
+      () async {
+    var yieldedCount = 0;
+
+    Stream<Release> releaseStream() async* {
+      yieldedCount += 1;
+      yield _release(tagName: 'v1.7.1', isPrerelease: true);
+
+      yieldedCount += 1;
+      yield _release(tagName: 'v1.2.5');
+
+      yieldedCount += 1;
+      yield _release(tagName: 'v1.2.4');
+    }
+
+    Release? latest;
+    final currentVersion = ReleaseVersion.parse('1.2.4')!;
+    await for (final release in releaseStream()) {
+      if (isNewerReleaseForVersion(release, currentVersion)) {
+        latest = release;
+        break;
+      }
+    }
+
+    expect(latest?.tagName, 'v1.2.5');
+    expect(yieldedCount, 2);
+  });
+
   testWidgets('StartupUpdatePrompt shows dialog from above router child', (
     tester,
   ) async {
