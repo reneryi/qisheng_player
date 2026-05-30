@@ -1,7 +1,6 @@
 // ignore_for_file: annotate_overrides
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -66,15 +65,14 @@ class LyricService extends LyricController {
       currLyricFuture.then((value) {
         if (version != _lyricLoadVersion) return;
         if (value == null) return;
-        if (_nextLyricLine >= value.lines.length) return;
-        final posInMs = (pos * 1000).round();
-        bool changed = false;
-        while (_nextLyricLine < value.lines.length &&
-            posInMs > value.lines[_nextLyricLine].start.inMilliseconds) {
-          _nextLyricLine += 1;
-          changed = true;
-        }
-        if (changed) {
+        if (value.lines.isEmpty) return;
+
+        // 播放位置可能因为托盘隐藏恢复、循环播放、设备恢复或底层跳变而
+        // 回退/跳跃。这里不能只向前推进，否则到达最后一句后就无法纠正，
+        // 会导致所有歌词视图长期停在旧行或最后一句。
+        final nextLyricLine = _resolveNextLyricLine(value, pos);
+        if (_nextLyricLine != nextLyricLine) {
+          _nextLyricLine = nextLyricLine;
           _notifyCurrentLyricLine(value, version: version);
         }
       });
@@ -105,7 +103,18 @@ class LyricService extends LyricController {
   /// 下一行歌词
   int _nextLyricLine = 0;
 
-  int get currentLyricLineIndex => max(_nextLyricLine - 1, 0);
+  int get currentLyricLineIndex {
+    final current = _nextLyricLine - 1;
+    return current < 0 ? 0 : current;
+  }
+
+  int _resolveNextLyricLine(Lyric lyric, double position) {
+    if (lyric.lines.isEmpty) return 0;
+    final next = lyric.lines.indexWhere(
+      (element) => element.start.inMilliseconds / 1000 > position,
+    );
+    return next == -1 ? lyric.lines.length : next;
+  }
 
   late final StreamController<int> _lyricLineStreamController =
       StreamController.broadcast(onListen: () {
@@ -131,11 +140,7 @@ class LyricService extends LyricController {
     if (lyric == null) return;
     if (lyric.lines.isEmpty) return;
 
-    final next = lyric.lines.indexWhere(
-      (element) =>
-          element.start.inMilliseconds / 1000 > _playbackService.position,
-    );
-    _nextLyricLine = next == -1 ? lyric.lines.length : next;
+    _nextLyricLine = _resolveNextLyricLine(lyric, _playbackService.position);
     _notifyCurrentLyricLine(lyric, version: version);
   }
 
@@ -175,12 +180,12 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _nextLyricLine = 0;
 
     if (nowPlaying.isCueTrack) {
       currLyricFuture = _getLocalLyric(nowPlaying);
       currLyricFuture.then((value) {
         if (version != _lyricLoadVersion) return;
-        _nextLyricLine = 0;
         _findAndNotifyCurrentLyricLine(value, version: version);
       });
       notifyListeners();
@@ -205,7 +210,6 @@ class LyricService extends LyricController {
 
     currLyricFuture.then((value) {
       if (version != _lyricLoadVersion) return;
-      _nextLyricLine = 0;
       _findAndNotifyCurrentLyricLine(value, version: version);
     });
 
@@ -218,6 +222,7 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _nextLyricLine = 0;
 
     currLyricFuture = _getLocalLyric(nowPlaying);
     currLyricFuture.then((value) {
@@ -234,6 +239,7 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _nextLyricLine = 0;
 
     if (nowPlaying.isCueTrack) {
       currLyricFuture = _getLocalLyric(nowPlaying);
@@ -257,6 +263,7 @@ class LyricService extends LyricController {
   void useSpecificLyric(Lyric lyric) {
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _nextLyricLine = 0;
 
     currLyricFuture = Future.value(lyric);
     currLyricFuture.then((value) {

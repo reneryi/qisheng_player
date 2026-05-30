@@ -227,14 +227,22 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
     });
   }
 
-  void _jumpToActiveLine({bool animated = true}) {
+  void _jumpToActiveLine({bool animated = true, int attempt = 0}) {
     if (_activeLine < 0 || _activeLine >= _lineKeys.length) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
+      if (!_scrollController.hasClients) {
+        _retryJumpToActiveLine(animated: animated, attempt: attempt);
+        return;
+      }
+
       final targetContext = _lineKeys[_activeLine].currentContext;
-      if (targetContext == null || !targetContext.mounted) return;
+      if (targetContext == null || !targetContext.mounted) {
+        _retryJumpToActiveLine(animated: animated, attempt: attempt);
+        return;
+      }
 
       Scrollable.ensureVisible(
         targetContext,
@@ -242,6 +250,14 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
         duration: animated ? context.motion.lyricScrollDuration : Duration.zero,
         curve: context.motion.normal,
       );
+    });
+  }
+
+  void _retryJumpToActiveLine({required bool animated, required int attempt}) {
+    if (attempt >= 3) return;
+    Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
+      if (!mounted) return;
+      _jumpToActiveLine(animated: animated, attempt: attempt + 1);
     });
   }
 

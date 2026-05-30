@@ -87,6 +87,18 @@ class _LyricHorizontalScrollAreaState
   var currContent = "开始播放音乐";
   var _scrollGeneration = 0;
 
+  int _safeCurrentLineIndex() {
+    if (widget.lyric.lines.isEmpty) return 0;
+    return widget.lyricController.currentLyricLineIndex
+        .clamp(0, widget.lyric.lines.length - 1)
+        .toInt();
+  }
+
+  String _currentLineText() {
+    if (widget.lyric.lines.isEmpty) return "开始播放音乐";
+    return _lineText(widget.lyric.lines[_safeCurrentLineIndex()]);
+  }
+
   String _lineText(LyricLine line) {
     final showTranslation =
         AppPreference.instance.nowPlayingPagePref.showTranslation;
@@ -104,9 +116,7 @@ class _LyricHorizontalScrollAreaState
   @override
   void initState() {
     super.initState();
-    if (widget.lyric.lines.isNotEmpty) {
-      currContent = _lineText(widget.lyric.lines.first);
-    }
+    currContent = _currentLineText();
 
     lyricLineStreamSubscription = widget.lyricController.lyricLineStream.listen(
       (line) {
@@ -157,9 +167,7 @@ class _LyricHorizontalScrollAreaState
     if (oldWidget.lyric == widget.lyric) return;
     _scrollGeneration++;
     _pendingScrollTimer?.cancel();
-    currContent = widget.lyric.lines.isEmpty
-        ? "开始播放音乐"
-        : _lineText(widget.lyric.lines.first);
+    currContent = _currentLineText();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scrollController.hasClients) return;
       scrollController.jumpTo(0);

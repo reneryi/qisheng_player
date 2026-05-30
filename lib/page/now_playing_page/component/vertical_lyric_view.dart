@@ -166,19 +166,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     final nextLyricLine = next == -1 ? widget.lyric.lines.length : next;
     lyricTiles = _generateLyricTiles(max(nextLyricLine - 1, 0));
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      final targetContext = currentLyricTileKey.currentContext;
-      if (targetContext == null) return;
-
-      if (targetContext.mounted) {
-        Scrollable.ensureVisible(
-          targetContext,
-          alignment: 0.25,
-          duration: context.motion.lyricScrollDuration,
-          curve: context.motion.emphasized,
-        );
-      }
-    });
+    _scrollCurrentLyricIntoView(animated: false);
   }
 
   @override
@@ -235,18 +223,40 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     lyricTiles = _generateLyricTiles(safeIndex);
     setState(() {});
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      final targetContext = currentLyricTileKey.currentContext;
-      if (targetContext == null) return;
+    _scrollCurrentLyricIntoView();
+  }
 
-      if (targetContext.mounted) {
-        Scrollable.ensureVisible(
-          targetContext,
-          alignment: 0.25,
-          duration: context.motion.lyricScrollDuration,
-          curve: context.motion.emphasized,
-        );
+  void _scrollCurrentLyricIntoView({bool animated = true, int attempt = 0}) {
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      if (!mounted) return;
+      if (!scrollController.hasClients) {
+        _retryScrollCurrentLyricIntoView(animated: animated, attempt: attempt);
+        return;
       }
+
+      final targetContext = currentLyricTileKey.currentContext;
+      if (targetContext == null || !targetContext.mounted) {
+        _retryScrollCurrentLyricIntoView(animated: animated, attempt: attempt);
+        return;
+      }
+
+      Scrollable.ensureVisible(
+        targetContext,
+        alignment: 0.25,
+        duration: animated ? context.motion.lyricScrollDuration : Duration.zero,
+        curve: context.motion.emphasized,
+      );
+    });
+  }
+
+  void _retryScrollCurrentLyricIntoView({
+    required bool animated,
+    required int attempt,
+  }) {
+    if (attempt >= 3) return;
+    Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
+      if (!mounted) return;
+      _scrollCurrentLyricIntoView(animated: animated, attempt: attempt + 1);
     });
   }
 

@@ -233,6 +233,26 @@ class PlaybackService extends PlaybackController {
     _rememberPlaybackSessionThrottled();
   }
 
+  /// 在窗口从托盘/最小化状态恢复后补发一次播放与歌词快照。
+  ///
+  /// 该方法用于修正隐藏窗口期间可能错过的进度事件、歌词行事件和播放状态，
+  /// 让顶部歌词、右侧歌词预览、详情页歌词滚动在恢复窗口后立即对齐当前播放
+  /// 位置，而不是等待下一次自然歌词行变化。
+  void resyncPlaybackSnapshot() {
+    try {
+      _player.resyncPlaybackSnapshot();
+      _handleRawPosition(_player.position);
+      playService.lyricService.findCurrLyricLine();
+      unawaited(_smtc.updateState(
+        state: playerState == PlayerState.playing
+            ? SMTCState.playing
+            : SMTCState.paused,
+      ));
+    } catch (err) {
+      LOGGER.e("[resync playback snapshot] $err");
+    }
+  }
+
   double get length => _resolveNowPlayingLength();
 
   double get position => _toDisplayPosition(_player.position);

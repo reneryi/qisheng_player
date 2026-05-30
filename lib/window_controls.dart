@@ -4,7 +4,8 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart' show ResizeEdge;
+import 'package:window_manager/window_manager.dart'
+    show ResizeEdge, WindowListener, windowManager;
 
 class WindowBackdropModeResult {
   const WindowBackdropModeResult({
@@ -69,6 +70,9 @@ class WindowControls {
       MethodChannel("qisheng_player/window_controls");
   static bool _initialized = false;
   static WindowBackdropModeResult? _lastBackdropResult;
+  static final _windowListener = _PlaybackWindowListener();
+  static Timer? _resumeSyncTimer;
+  static int _resumeSyncGeneration = 0;
 
   static WindowBackdropModeResult? get lastBackdropResult =>
       _lastBackdropResult;
@@ -194,11 +198,34 @@ class WindowControls {
     }
   }
 
+  static void resyncPlaybackAfterWindowActivated({String reason = 'window'}) {
+    final generation = ++_resumeSyncGeneration;
+    _resumeSyncTimer?.cancel();
+    _resumeSyncTimer = Timer(const Duration(milliseconds: 80), () {
+      _resyncPlaybackSnapshot(reason: reason);
+      Timer(const Duration(milliseconds: 220), () {
+        if (generation != _resumeSyncGeneration) return;
+        _resyncPlaybackSnapshot(reason: '$reason delayed');
+      });
+    });
+  }
+
+  static void _resyncPlaybackSnapshot({required String reason}) {
+    final playbackService = PlayService.instance.playbackService;
+    playbackService.resyncPlaybackSnapshot();
+    unawaited(_syncPlayingState(playbackService.playerState));
+  }
+
   static void init() {
     if (_initialized) return;
     _initialized = true;
 
     final playbackService = PlayService.instance.playbackService;
+    unawaited(
+      windowManager.ensureInitialized().then((_) {
+        windowManager.addListener(_windowListener);
+      }),
+    );
     unawaited(
       setWindowBackdropMode(AppSettings.instance.windowBackdropMode),
     );
@@ -224,7 +251,22 @@ class WindowControls {
             playbackService.start();
           }
           return;
+        case "window_restored_from_tray":
+          resyncPlaybackAfterWindowActivated(reason: 'tray restore');
+          return;
       }
     });
+  }
+}
+
+class _PlaybackWindowListener with WindowListener {
+  @override
+  void onWindowFocus() {
+    WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window focus');
+  }
+
+  @override
+  void onWindowRestore() {
+    WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window restore');
   }
 }

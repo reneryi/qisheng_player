@@ -946,6 +946,9 @@ void FlutterWindow::RestoreFromTray() {
   SetForegroundWindow(GetHandle());
   was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
   PostMessage(GetHandle(), kRefreshThumbButtonsMessage, 0, 0);
+  if (media_control_channel_) {
+    media_control_channel_->InvokeMethod("window_restored_from_tray", nullptr);
+  }
 }
 
 void FlutterWindow::ExitApplication() {

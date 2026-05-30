@@ -1072,7 +1072,12 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   void _handleLyricLineChange(int index) {
     if (!mounted || widget.lyric.lines.isEmpty) return;
     final safeIndex = index.clamp(0, widget.lyric.lines.length - 1).toInt();
-    if (_currentLineIndex == safeIndex) return;
+    if (_currentLineIndex == safeIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToLine(safeIndex);
+      });
+      return;
+    }
     setState(() {
       _currentLineIndex = safeIndex;
     });
@@ -1143,9 +1148,13 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     return offset;
   }
 
-  void _scrollToLine(int index, {bool animated = true}) {
-    if (!scrollController.hasClients || widget.lyric.lines.isEmpty) return;
+  void _scrollToLine(int index, {bool animated = true, int attempt = 0}) {
+    if (widget.lyric.lines.isEmpty) return;
     if (index < 0 || index >= widget.lyric.lines.length) return;
+    if (!scrollController.hasClients) {
+      _retryScrollToLine(index, animated: animated, attempt: attempt);
+      return;
+    }
 
     final estimatedCurrentHeight = _estimatedLineHeight(
       widget.lyric.lines[index],
@@ -1166,6 +1175,18 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
       return;
     }
     scrollController.jumpTo(resolved);
+  }
+
+  void _retryScrollToLine(
+    int index, {
+    required bool animated,
+    required int attempt,
+  }) {
+    if (attempt >= 3) return;
+    Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
+      if (!mounted) return;
+      _scrollToLine(index, animated: animated, attempt: attempt + 1);
+    });
   }
 
   double _lineOpacity({required int index, required bool isCurrent}) {

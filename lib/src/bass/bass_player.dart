@@ -181,6 +181,32 @@ class BassPlayer {
     );
   }
 
+  /// 重新发送一次当前底层播放快照。
+  ///
+  /// 主窗口隐藏到托盘期间，Flutter 帧调度或 Dart 定时器可能被系统影响。
+  /// 窗口恢复后调用该方法可以立即补发当前位置/播放状态；如果底层仍在播放
+  /// 但位置定时器已经失效，则重新创建定时器，避免歌词和进度条长期停住。
+  void resyncPlaybackSnapshot() {
+    final currentState = playerState;
+    _positionStreamController.add(position);
+
+    if (currentState == PlayerState.stopped && _isStreamAtEnd()) {
+      if (!_completionEmitted) {
+        _completionEmitted = true;
+        _emitPlayerState(PlayerState.completed);
+      }
+      return;
+    }
+
+    _emitPlayerState(currentState);
+
+    if (currentState == PlayerState.playing &&
+        (_positionUpdater == null || !_positionUpdater!.isActive)) {
+      _positionUpdater?.cancel();
+      _positionUpdater = _getPositionUpdater();
+    }
+  }
+
   void _bassInit() {
     if (_bass.BASS_Init(
             1, 48000, BASS.BASS_DEVICE_REINIT, ffi.nullptr, ffi.nullptr) ==

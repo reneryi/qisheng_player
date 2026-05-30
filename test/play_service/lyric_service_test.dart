@@ -20,6 +20,19 @@ void main() {
         LrcSource.local,
       );
 
+  Lrc lyricWithLines(List<String> contents) => Lrc(
+        List.generate(
+          contents.length,
+          (index) => LrcLine(
+            Duration(seconds: index * 5),
+            contents[index],
+            isBlank: false,
+            length: const Duration(seconds: 5),
+          ),
+        ),
+        LrcSource.local,
+      );
+
   test('LyricService ignores stale lyric loads after switching songs',
       () async {
     final firstAudio = TestAudio(
@@ -155,6 +168,47 @@ void main() {
     expect(
       (desktopLyric.sentMessages[2] as LrcLine).content,
       'Second lyric',
+    );
+  });
+
+  test(
+      'LyricService corrects current line when playback position moves backward',
+      () async {
+    final audio = TestAudio(
+      title: 'Song',
+      artist: 'Artist',
+      album: 'Album',
+      path: r'E:\Music\rewind.flac',
+    );
+    final playback = FakePlaybackController(audio: audio, queue: [audio]);
+    final desktopLyric = FakeDesktopLyricController();
+    final service = LyricService.forTest(
+      playbackService: playback,
+      desktopLyricService: desktopLyric,
+      getDefaultLyric: (_, __) => Future.value(
+        lyricWithLines(['first line', 'second line', 'third line']),
+      ),
+    );
+
+    addTearDown(service.dispose);
+    addTearDown(playback.dispose);
+
+    service.updateLyric();
+    await Future<void>.delayed(Duration.zero);
+    desktopLyric.sentLyricLines.clear();
+
+    playback.seek(13);
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      (desktopLyric.sentLyricLines.last as LrcLine).content,
+      'third line',
+    );
+
+    playback.seek(2);
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      (desktopLyric.sentLyricLines.last as LrcLine).content,
+      'first line',
     );
   });
 }
