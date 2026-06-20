@@ -1,4 +1,5 @@
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -46,6 +47,11 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       subtitle: formatMusicCount(contentList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
+        audioIndex: i,
+        playlist: contentList,
+        multiSelectController: multiSelectController,
+      ),
+      gridBuilder: (context, item, i, multiSelectController) => AudioGridTile(
         audioIndex: i,
         playlist: contentList,
         multiSelectController: multiSelectController,

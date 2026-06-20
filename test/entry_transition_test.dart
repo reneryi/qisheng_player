@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/entry.dart';
+import 'package:qisheng_player/entry.dart';
 import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,10 +16,11 @@ void main() {
       slidePage.reverseTransitionDuration,
       nowPlayingPage.reverseTransitionDuration,
     );
-    expect(slidePage.transitionDuration, const Duration(milliseconds: 430));
+    // 极简主义测试：验证空间 Hero 转场的持续时间已更新为 520ms 和 380ms
+    expect(slidePage.transitionDuration, const Duration(milliseconds: 520));
     expect(
       slidePage.reverseTransitionDuration,
-      const Duration(milliseconds: 300),
+      const Duration(milliseconds: 380),
     );
   });
 

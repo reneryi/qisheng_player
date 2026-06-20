@@ -1,9 +1,10 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/component/fluid_gradient_background.dart';
 import 'package:qisheng_player/component/app_shell.dart';
 import 'package:qisheng_player/page/album_detail_page.dart';
 import 'package:qisheng_player/page/albums_page.dart';
@@ -83,11 +84,11 @@ Widget _buildAppRouteTransition(
     opacity: Tween<double>(begin: 0.72, end: 1).animate(backdropReveal),
     child: SlideTransition(
       position: Tween<Offset>(
-        begin: const Offset(0, 0.03),
+        begin: const Offset(0, 0.05), // 极简空间感：增加进入滑行距离到 0.05
         end: Offset.zero,
       ).animate(contentReveal),
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.988, end: 1).animate(contentReveal),
+        scale: Tween<double>(begin: 0.96, end: 1).animate(contentReveal), // 极简空间感：页面从 0.96 微缩放展开，空间感更强
         child: FadeTransition(
           opacity: Tween<double>(begin: 0.8, end: 1).animate(contentReveal),
           child: AnimatedBuilder(
@@ -129,8 +130,8 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 430),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
+          transitionDuration: const Duration(milliseconds: 520), // 延长至 520ms 以便给共享元素 Hero 动画提供充分舒展的飞行时间
+          reverseTransitionDuration: const Duration(milliseconds: 380), // 延长至 380ms
         );
 
   static Widget _transitionsBuilder(
@@ -157,8 +158,8 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 430),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
+          transitionDuration: const Duration(milliseconds: 520), // 正在播放页面过渡时长同步为 520ms
+          reverseTransitionDuration: const Duration(milliseconds: 380),
         );
 
   static Widget _transitionsBuilder(
@@ -244,7 +245,8 @@ class Entry extends StatelessWidget {
                 child: StartupUpdatePrompt(
                   child: Listener(
                     onPointerDown: HotkeysHelper.handlePointerDown,
-                    child: routedChild,
+                    // 挂载全局流体情感交融背景，让其充满在所有窗口最底层
+                    child: FluidGradientBackground(child: routedChild),
                   ),
                 ),
               );

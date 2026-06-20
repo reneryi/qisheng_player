@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
@@ -71,6 +71,7 @@ class CpMotionPressable extends StatefulWidget {
     this.selectedGlow = false,
     this.hoverShadowOpacity,
     this.selectedGlowOpacity,
+    this.border = true, // 是否绘制外边边框，默认为 true。增加此参数以便实现无边框悬浮呼吸效果。
   });
 
   final Widget child;
@@ -87,6 +88,7 @@ class CpMotionPressable extends StatefulWidget {
   final bool selectedGlow;
   final double? hoverShadowOpacity;
   final double? selectedGlowOpacity;
+  final bool border; // 是否绘制边框标志
 
   @override
   State<CpMotionPressable> createState() => _CpMotionPressableState();
@@ -148,14 +150,16 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
               decoration: BoxDecoration(
                 color: background,
                 borderRadius: radius,
-                border: Border.all(
-                  color: active
-                      ? widget.selected
-                          ? scheme.primary.withValues(alpha: 0.34)
-                          : scheme.outlineVariant.withValues(alpha: 0.52)
-                      : Colors.transparent,
-                  width: 1,
-                ),
+                border: widget.border
+                    ? Border.all(
+                        color: active
+                            ? widget.selected
+                                ? scheme.primary.withValues(alpha: 0.34)
+                                : scheme.outlineVariant.withValues(alpha: 0.52)
+                            : Colors.transparent,
+                        width: 1,
+                      )
+                    : null,
                 boxShadow: shadows,
               ),
               child: widget.child,

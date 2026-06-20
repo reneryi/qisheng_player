@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/audio_lyric_preview_panel.dart';
+import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
@@ -81,6 +82,13 @@ class _AudiosPageState extends State<AudiosPage> {
       subtitle: _buildSubtitle(contentList.length),
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
+        audioIndex: i,
+        playlist: contentList,
+        showPlayCount: AppPreference.instance.audiosPagePref.sortMethod == 5,
+        focus: item == widget.locateTo,
+        multiSelectController: multiSelectController,
+      ),
+      gridBuilder: (context, item, i, multiSelectController) => AudioGridTile(
         audioIndex: i,
         playlist: contentList,
         showPlayCount: AppPreference.instance.audiosPagePref.sortMethod == 5,

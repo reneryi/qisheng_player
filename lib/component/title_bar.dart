@@ -17,25 +17,38 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
 class TitleBar extends StatelessWidget {
-  const TitleBar({super.key});
+  const TitleBar({super.key, this.transparent = false});
+
+  // 是否将背景透明化，用于在已有一体卡片内嵌套或者在沉浸页中悬浮时隐藏边框
+  final bool transparent;
 
   @override
   Widget build(BuildContext context) {
     final chrome = context.chrome;
     return ResponsiveBuilder(
       builder: (context, screenType) {
+        final childWidget = SizedBox(
+          height: chrome.titleBarHeight,
+          child: switch (screenType) {
+            ScreenType.small => const _TitleBarSmall(),
+            ScreenType.medium => const _TitleBarMedium(),
+            ScreenType.large => const _TitleBarLarge(),
+          },
+        );
+
+        // 如果是透明模式，直接使用 Padding 包裹，去掉外部的 AppSurface 卡片白框与模糊
+        if (transparent) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: childWidget,
+          );
+        }
+
         return AppSurface(
           variant: AppSurfaceVariant.glass,
           radius: context.surfaces.radiusXxl,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: SizedBox(
-            height: chrome.titleBarHeight,
-            child: switch (screenType) {
-              ScreenType.small => const _TitleBarSmall(),
-              ScreenType.medium => const _TitleBarMedium(),
-              ScreenType.large => const _TitleBarLarge(),
-            },
-          ),
+          child: childWidget,
         );
       },
     );

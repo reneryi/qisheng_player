@@ -228,6 +228,17 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
                             multiSelectController,
                           ),
                         ),
+                      ContentView.grid => SliverGrid.builder(
+                          gridDelegate: gridDelegate,
+                          itemCount: widget.secondaryContent.length,
+                          itemBuilder: (context, i) =>
+                              widget.secondaryContentBuilder(
+                            context,
+                            widget.secondaryContent[i],
+                            i,
+                            multiSelectController,
+                          ),
+                        ),
                     },
                     SliverToBoxAdapter(
                       child: Padding(

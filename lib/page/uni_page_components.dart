@@ -146,17 +146,20 @@ class ContentViewSwitch<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var isListView = contentView == ContentView.list;
+    final (icon, tooltip, nextView) = switch (contentView) {
+      ContentView.list => (Symbols.list, "列表视图", ContentView.table),
+      ContentView.table => (Symbols.table, "表格视图", ContentView.grid),
+      ContentView.grid => (Symbols.grid_view, "网格视图", ContentView.list),
+    };
+
     return IconButton.filledTonal(
       enableFeedback: false,
-      tooltip: "切换页面视图：当前为${isListView ? "列表" : "表格"}",
+      tooltip: "切换页面视图：当前为$tooltip",
       style: const ButtonStyle(
         fixedSize: WidgetStatePropertyAll(Size(48, 48)),
       ),
-      onPressed: () => setContentView(
-        isListView ? ContentView.table : ContentView.list,
-      ),
-      icon: Icon(isListView ? Symbols.list : Symbols.table),
+      onPressed: () => setContentView(nextView),
+      icon: Icon(icon),
     );
   }
 }

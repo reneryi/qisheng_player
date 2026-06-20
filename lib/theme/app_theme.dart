@@ -42,6 +42,9 @@ class AppTheme {
       splashFactory: InkRipple.splashFactory,
       fontFamily: fontFamily,
       fontFamilyFallback: const [
+        'MiSans',
+        'HarmonyOS Sans SC',
+        'OPPO Sans',
         'Segoe UI Variable Text',
         'Segoe UI Variable Display',
         'Microsoft YaHei UI',
@@ -265,6 +268,7 @@ class AppTheme {
     final (topTintAlpha, bottomTintAlpha, scrimFactor, backdropSigmaScale) =
         _resolveBackdropChromeProfile(windowBackdropMode);
 
+    // 极简奢华风格 (Modern Minimalist)：定义侧边栏和主页面的微弱 Zinc 灰度级差与 0 间距
     return AppChromeTokens(
       windowBgTop: Color.alphaBlend(
         scheme.primary.withValues(alpha: topTintAlpha),
@@ -277,14 +281,16 @@ class AppTheme {
       windowScrim: windowScrim.withValues(alpha: windowScrim.a * scrimFactor),
       titleBarSurface: scheme.surfaceContainerHigh,
       titleBarStroke: scheme.outlineVariant,
-      sideNavSurface: scheme.surfaceContainer,
-      pagePanelSurface: scheme.surfaceContainer,
+      // 侧边栏使用 Zinc 950 (深色) / Zinc 100 (浅色)
+      sideNavSurface: isDark ? const Color(0xFF09090B) : const Color(0xFFF4F4F5),
+      // 主内容面板使用 Zinc 900 (深色) / 纯白 (浅色)
+      pagePanelSurface: isDark ? const Color(0xFF121214) : const Color(0xFFFFFFFF),
       dockSurface: scheme.surfaceContainerHigh,
-      sideNavExpandedWidth: 168,
+      sideNavExpandedWidth: 160, // 稍微收窄左侧栏避免占比过大
       sideNavCollapsedWidth: 76,
       titleBarHeight: 56,
       dockHeight: 92,
-      shellGap: 12,
+      shellGap: 12, // 悬浮一体画板设计：将多余间隔设为 12 像素，产生完美的四周悬浮间距与呼吸感
       shellContentMaxWidth: 2400,
       backdropBlurSigma: backdropSigma * backdropSigmaScale,
       searchBarExpandedWidthLarge: 336,

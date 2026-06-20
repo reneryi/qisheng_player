@@ -44,7 +44,8 @@ enum SortOrder {
 
 enum ContentView {
   list,
-  table;
+  table,
+  grid;
 
   static ContentView? fromString(String contentView) {
     for (var value in ContentView.values) {
@@ -140,6 +141,7 @@ class UniPage<T> extends StatefulWidget {
     this.titleAction,
     required this.contentList,
     required this.contentBuilder,
+    this.gridBuilder,
     this.primaryAction,
     required this.enableShufflePlay,
     required this.enableSortMethod,
@@ -168,6 +170,7 @@ class UniPage<T> extends StatefulWidget {
 
   final List<T> contentList;
   final ContentBuilder<T> contentBuilder;
+  final ContentBuilder<T>? gridBuilder;
 
   final Widget? primaryAction;
 
@@ -445,6 +448,26 @@ class _UniPageState<T> extends State<UniPage<T>> {
               i,
               multiSelectController,
             ),
+          ),
+        ContentView.grid => GridView.builder(
+            controller: scrollController,
+            padding: listPadding,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 0.72,
+            ),
+            itemCount: widget.contentList.length,
+            itemBuilder: (context, i) {
+              final builder = widget.gridBuilder ?? widget.contentBuilder;
+              return builder(
+                context,
+                widget.contentList[i],
+                i,
+                multiSelectController,
+              );
+            },
           ),
       },
     );

@@ -1,13 +1,14 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
-import 'package:qisheng_player/component/cp/cp_components.dart';
+
 import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -49,8 +50,8 @@ class _AppShellState extends State<AppShell> {
             drawer: useDrawer ? const SideNav() : null,
             drawerScrimColor: Theme.of(context).colorScheme.scrim,
             body: MainLayoutFrame(
-              titleBar: const TitleBar(),
-              overlay: const BottomPlayerBar(),
+              titleBar: const SizedBox.shrink(), // 移除外层独立的顶栏
+              overlay: null, // 移除外层独立的底栏
               child: switch (screenType) {
                 ScreenType.small => _ShellPagePanel(
                     page: widget.page,
@@ -89,13 +90,24 @@ class _ShellPagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 窄屏模式下，重新启用带有毛玻璃的 CpSurface 面板，使主内容区域形成半透悬浮质感
+    // 重构：将透明顶栏和底栏以垂直列排版装入面板中
     return CpSurface(
       tone: CpSurfaceTone.panel,
-      radius: 24,
-      padding: const EdgeInsets.all(16),
-      child: _ShellPageTransition(
-        pageIdentity: pageIdentity,
-        child: page,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        children: [
+          const TitleBar(transparent: true), // 嵌入透明顶栏
+          const SizedBox(height: 12),
+          Expanded(
+            child: _ShellPageTransition(
+              pageIdentity: pageIdentity,
+              child: page,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const BottomPlayerBar(transparent: true), // 嵌入透明底栏
+        ],
       ),
     );
   }
@@ -120,15 +132,27 @@ class _ShellWideContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         sideNav,
+        // 还原左右分栏间的 shellGap 空隙，产生呼吸感，突出悬浮效果
         SizedBox(width: chrome.shellGap),
         Expanded(
+          // 还原主内容区域的 CpSurface 磨砂玻璃气泡框，悬浮于底色之上
+          // 重构：将透明顶栏和底栏以垂直列的形式，整体包在右侧的 CpSurface 画板大卡片里
           child: CpSurface(
             tone: CpSurfaceTone.panel,
-            radius: 24,
-            padding: const EdgeInsets.all(18),
-            child: _ShellPageTransition(
-              pageIdentity: pageIdentity,
-              child: page,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Column(
+              children: [
+                const TitleBar(transparent: true), // 嵌入透明顶栏
+                const SizedBox(height: 12),
+                Expanded(
+                  child: _ShellPageTransition(
+                     pageIdentity: pageIdentity,
+                     child: page,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const BottomPlayerBar(transparent: true), // 嵌入透明底栏
+              ],
             ),
           ),
         ),

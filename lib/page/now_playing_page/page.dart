@@ -1,4 +1,4 @@
-﻿// ignore_for_file: camel_case_types, unused_element
+// ignore_for_file: camel_case_types, unused_element
 
 import 'dart:async';
 import 'dart:io';
@@ -262,7 +262,7 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
                     duration: motion.controlTransitionDuration,
                     curve: motion.fast,
                     opacity: _visible ? 1 : 0,
-                    child: const BottomPlayerBar(),
+                    child: const BottomPlayerBar(transparent: true), // 传入 transparent: true，隐藏底栏毛玻璃背景
                   ),
                 ),
               ),
@@ -285,10 +285,8 @@ class _NowPlayingAppBar extends StatelessWidget {
       end: 0.48,
       beginOffset: const Offset(0, -0.035),
       beginScale: 0.985,
-      child: AppSurface(
-        variant: AppSurfaceVariant.glass,
-        radius: 24,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
         child: SizedBox(
           height: chrome.titleBarHeight,
           child: LayoutBuilder(

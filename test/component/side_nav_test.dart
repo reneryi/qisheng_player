@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -44,7 +44,7 @@ Widget _buildApp({
 }
 
 void main() {
-  testWidgets('SideNav expanded width is 168 with active indicator', (
+  testWidgets('SideNav expanded width is 160 with active indicator', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1400, 900);
@@ -59,9 +59,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // 极简主义测试：验证一体化侧边栏的扩展宽度为 160，且极细指示条为 3x18
     expect(
       tester.getSize(find.byKey(const ValueKey('side-nav-large'))).width,
-      168,
+      160,
     );
     expect(tester.takeException(), isNull);
     expect(find.text('音乐'), findsOneWidget);
@@ -70,8 +71,12 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('side-nav-active-indicator')),
+      findsOneWidget,
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('side-nav-active-indicator'))),
-      const Size(4, 24),
+      const Size(3, 18),
     );
   });
 

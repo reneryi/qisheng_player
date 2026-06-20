@@ -1,8 +1,8 @@
-﻿import 'dart:ui' show lerpDouble;
+import 'dart:ui' show lerpDouble;
 
 import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/responsive_builder.dart';
-import 'package:qisheng_player/component/ui/app_surface.dart';
+
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -123,16 +123,15 @@ class _SideNavShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppSurface(
-      variant: AppSurfaceVariant.glass,
-      glassDensity: AppSurfaceGlassDensity.low,
-      radius: 28,
+    // 拆除外层胶囊背景，改为通透、纯透悬浮设计，只保留最外层的 SafeArea 与 Padding
+    return SafeArea(
+      bottom: false,
       child: AnimatedPadding(
         duration: _sideNavTransitionDuration,
         curve: _sideNavTransitionCurve,
         padding: EdgeInsets.fromLTRB(
           collapsed ? 8 : 12,
-          12,
+          24, // 增加顶部 Padding 使得整体布局更加优雅
           collapsed ? 8 : 12,
           12,
         ),
@@ -154,7 +153,7 @@ class _SideNavShell extends StatelessWidget {
                         destination: destinations[index],
                         onTap: () => onDestinationSelected(index),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6), // 稍微缩小间距
                     ],
                   ],
                 ),
@@ -188,63 +187,19 @@ class _SideNavBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accents = context.accents;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          height: 56,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.1),
-                accents.accent.withValues(alpha: 0.08),
-              ],
-            ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            boxShadow: [
-              BoxShadow(
-                color: accents.accentGlow.withValues(alpha: 0.16),
-                blurRadius: 22,
-                spreadRadius: -8,
-              ),
-            ],
+    // 极简主义品牌标志：去掉金属光泽和复杂的渐变，仅保留一颗精致的呼吸图标
+    return SizedBox(
+      height: 56,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Symbols.graphic_eq,
+            color: accents.accent,
+            size: 24,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accents.accent.withValues(alpha: 0.24),
-                      Colors.white.withValues(alpha: 0.08),
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accents.accentGlow.withValues(alpha: 0.28),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: const _MetalNavIcon(
-                  icon: Symbols.graphic_eq,
-                  selected: true,
-                  size: 23,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -253,7 +208,7 @@ class _MetalNavIcon extends StatelessWidget {
   const _MetalNavIcon({
     required this.icon,
     required this.selected,
-    this.size = 24,
+    this.size = 21, // 调大至 21 像素以与新字号平衡
   });
 
   final IconData icon;
@@ -264,53 +219,13 @@ class _MetalNavIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
-    final glowSize = size + 24;
-    return SizedBox(
-      width: glowSize,
-      height: glowSize,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AnimatedOpacity(
-            opacity: selected ? 1 : 0,
-            duration: context.motion.controlTransitionDuration,
-            curve: context.motion.normal,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    accents.accentGlow.withValues(alpha: 0.42),
-                    accents.accent.withValues(alpha: 0.18),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-              child: SizedBox.square(dimension: glowSize),
-            ),
-          ),
-          ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) {
-              return LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: selected
-                    ? [
-                        Colors.white,
-                        accents.accent,
-                        Color.lerp(accents.accent, Colors.white, 0.45)!,
-                      ]
-                    : [
-                        scheme.onSurface.withValues(alpha: 0.78),
-                        scheme.onSurface.withValues(alpha: 0.56),
-                      ],
-              ).createShader(bounds);
-            },
-            child: Icon(icon, size: size, color: Colors.white),
-          ),
-        ],
-      ),
+    // 极简图标设计：直接根据选中状态输出纯色，去除了渐变遮罩和大面积光晕
+    return Icon(
+      icon,
+      size: size,
+      color: selected
+          ? accents.accent
+          : scheme.onSurface.withValues(alpha: 0.52),
     );
   }
 }
@@ -335,111 +250,89 @@ class _SideNavItem extends StatefulWidget {
 class _SideNavItemState extends State<_SideNavItem> {
   bool _hovered = false;
   bool _focused = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
-    final highlight = widget.selected
-        ? accents.selectionTint
+    final motion = context.motion;
+    final isDark = scheme.brightness == Brightness.dark;
+
+    // 极简高亮逻辑：在无边框背景下，使用纯粹低饱和度的灰度背景色做悬浮与选中过渡
+    final highlightColor = widget.selected
+        ? (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05))
         : (_hovered || _focused)
-            ? Colors.white.withValues(alpha: 0.055)
+            ? (isDark ? Colors.white.withValues(alpha: 0.035) : Colors.black.withValues(alpha: 0.02))
             : Colors.transparent;
 
     final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: _sideNavTransitionDuration,
-        curve: _sideNavTransitionCurve,
-        height: 58,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          color: highlight,
-          gradient: widget.selected
-              ? LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    accents.accent.withValues(alpha: 0.2),
-                    accents.accent.withValues(alpha: 0.1),
-                    Colors.white.withValues(alpha: 0.02),
-                  ],
-                )
-              : null,
-          border: Border.all(
-            color: widget.selected
-                ? accents.accent.withValues(alpha: 0.28)
-                : _focused
-                    ? accents.accentFocusRing.withValues(alpha: 0.28)
-                    : Colors.transparent,
-          ),
-          boxShadow: widget.selected
-              ? [
-                  BoxShadow(
-                    color: accents.accentGlow.withValues(alpha: 0.26),
-                    blurRadius: 26,
-                    spreadRadius: -6,
-                  ),
-                ]
-              : null,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: FocusableActionDetector(
-            onShowFocusHighlight: (value) {
-              if (_focused == value) return;
-              setState(() => _focused = value);
-            },
-            child: InkWell(
-              enableFeedback: false,
-              borderRadius: BorderRadius.circular(20),
-              onTap: widget.onTap,
-              child: Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: _sideNavTransitionDuration,
-                    curve: _sideNavTransitionCurve,
-                    left: 0,
-                    top: widget.selected ? 16 : 28,
-                    child: AnimatedContainer(
-                      key: widget.selected
-                          ? const ValueKey('side-nav-active-indicator')
-                          : null,
-                      duration: _sideNavTransitionDuration,
-                      curve: _sideNavTransitionCurve,
-                      width: 4,
-                      height: widget.selected ? 24 : 0,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.92),
-                            accents.accent.withValues(alpha: 0.95),
-                            accents.accent.withValues(alpha: 0.75),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: accents.accentGlow.withValues(alpha: 0.5),
-                            blurRadius: 12,
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.985 : 1.0,
+          duration: motion.microInteractionDuration,
+          curve: motion.fast,
+          child: AnimatedContainer(
+            duration: _sideNavTransitionDuration,
+            curve: _sideNavTransitionCurve,
+            height: 48, // 从 58 调矮至 48，更加简洁干练
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12), // 更加挺拔的 12px 圆角
+              color: highlightColor,
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: FocusableActionDetector(
+                onShowFocusHighlight: (value) {
+                  if (_focused == value) return;
+                  setState(() => _focused = value);
+                },
+                child: InkWell(
+                  enableFeedback: false,
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: widget.onTap,
+                  child: Stack(
+                    children: [
+                      // 极简侧边指示条：一条纤细的、无阴影的选中滑块
+                      AnimatedPositioned(
+                        duration: _sideNavTransitionDuration,
+                        curve: _sideNavTransitionCurve,
+                        left: 0,
+                        top: widget.selected ? 15 : 24,
+                        child: AnimatedContainer(
+                          key: widget.selected
+                              ? const ValueKey('side-nav-active-indicator')
+                              : null,
+                          duration: _sideNavTransitionDuration,
+                          curve: _sideNavTransitionCurve,
+                          width: 3,
+                          height: widget.selected ? 18 : 0,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: accents.accent,
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Positioned.fill(
+                        child: _SideNavItemContent(
+                          collapsed: widget.collapsed,
+                          selected: widget.selected,
+                          icon: widget.destination.icon,
+                          label: widget.destination.label,
+                          textColor: widget.selected ? accents.accent : scheme.onSurface,
+                        ),
+                      ),
+                    ],
                   ),
-                  Positioned.fill(
-                    child: _SideNavItemContent(
-                      collapsed: widget.collapsed,
-                      selected: widget.selected,
-                      icon: widget.destination.icon,
-                      label: widget.destination.label,
-                      textColor: scheme.onSurface,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -475,8 +368,8 @@ class _SideNavItemContent extends StatelessWidget {
       curve: _sideNavTransitionCurve,
       builder: (context, progress, _) {
         final resolvedProgress = Curves.easeOutCubic.transform(progress);
-        final horizontalPadding = lerpDouble(8, 14, progress) ?? 14;
-        final labelSlide = 10 * (1 - resolvedProgress);
+        final horizontalPadding = lerpDouble(10, 12, progress) ?? 12;
+        final labelSlide = 8 * (1 - resolvedProgress);
 
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -493,13 +386,14 @@ class _SideNavItemContent extends StatelessWidget {
                 child: _MetalNavIcon(
                   icon: icon,
                   selected: selected,
+                  size: 21, // 显式传参以修复 analyzer 警告
                 ),
               ),
               IgnorePointer(
                 ignoring: resolvedProgress < 0.98,
                 child: ClipRect(
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 42),
+                    padding: const EdgeInsets.only(left: 36),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Transform.translate(
@@ -514,7 +408,7 @@ class _SideNavItemContent extends StatelessWidget {
                               color: textColor,
                               fontSize: 15,
                               fontWeight:
-                                  selected ? FontWeight.w700 : FontWeight.w500,
+                                  selected ? FontWeight.w600 : FontWeight.w500,
                             ),
                           ),
                         ),

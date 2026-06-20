@@ -520,6 +520,9 @@ class _FontSelector extends StatelessWidget {
     return TextStyle(
       fontFamily: family,
       fontFamilyFallback: const [
+        'MiSans',
+        'HarmonyOS Sans SC',
+        'OPPO Sans',
         'Segoe UI Variable Text',
         'Microsoft YaHei UI',
         'Microsoft YaHei',

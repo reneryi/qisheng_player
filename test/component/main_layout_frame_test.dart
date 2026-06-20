@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/ui/liquid_gradient_background.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +33,7 @@ void main() {
         dockHeight: 90,
         shellGap: 24,
       ),
-      0,
+      24, // 重构：在没有底栏且需要保留 Dock 空间时，预期返回 shellGap（此处为 24）以留出底部悬浮高度
     );
   });
 

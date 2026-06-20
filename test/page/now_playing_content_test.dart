@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
@@ -54,10 +54,10 @@ void main() {
     final titleText = tester.widget<Text>(find.text('Immersive Song'));
     final artistText =
         tester.widget<Text>(find.text('Immersive Artist / Guest Artist'));
-    expect(titleText.textAlign, TextAlign.left);
+    expect(titleText.textAlign, TextAlign.center); // 重构：非 compact 模式下歌曲标题已设为居中对齐
     expect(titleText.style?.fontWeight, FontWeight.w800);
     expect(titleText.style?.decoration, TextDecoration.none);
-    expect(artistText.textAlign, TextAlign.left);
+    expect(artistText.textAlign, TextAlign.center); // 重构：非 compact 模式下歌手文字已设为居中对齐
     expect(artistText.style?.fontWeight, FontWeight.w400);
     expect(artistText.style?.decoration, TextDecoration.none);
     expect(

@@ -16,32 +16,63 @@ Color resolveThemeDominantColor({
   return dynamicDominantColor ?? fallbackColor;
 }
 
-List<Color> buildDynamicBackgroundGradient(Color dominantColor) {
+/// 依据主导颜色和明暗模式动态生成 3 色流体渐变背景
+List<Color> buildDynamicBackgroundGradient(Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
-  final normalized = hsl
-      .withSaturation(hsl.saturation.clamp(0.34, 0.68).toDouble())
-      .withLightness(hsl.lightness.clamp(0.38, 0.56).toDouble())
-      .toColor();
-  const deepNavy = Color(0xFF061321);
-  const inkBlue = Color(0xFF0B2034);
-  const tealHaze = Color(0xFF0A4A57);
 
-  final top = Color.lerp(
-    deepNavy,
-    Color.lerp(const Color(0xFF0F3045), normalized, 0.26)!,
-    0.48,
-  )!;
-  final middle = Color.lerp(
-    inkBlue,
-    Color.lerp(tealHaze, normalized, 0.3)!,
-    0.5,
-  )!;
-  final bottom = Color.lerp(
-    const Color(0xFF041A24),
-    Color.lerp(const Color(0xFF063C44), normalized, 0.24)!,
-    0.42,
-  )!;
-  return [top, middle, bottom];
+  if (brightness == Brightness.dark) {
+    // 暗色模式：生成低饱和度、低亮度的同色系暗色流光背景
+    final baseSat = hsl.saturation.clamp(0.12, 0.32); // 控制饱和度，避免过于鲜艳影响文字可读性
+    final baseLight = hsl.lightness.clamp(0.06, 0.12); // 保持沉稳的深色暗底
+
+    // top 颜色：色相微调 -12 度，稍微亮一丁点
+    final top = hsl
+        .withHue((hsl.hue - 12) % 360)
+        .withSaturation(baseSat)
+        .withLightness((baseLight * 1.15).clamp(0.0, 1.0))
+        .toColor();
+
+    // middle 颜色：保持原色相
+    final middle = hsl
+        .withSaturation(baseSat)
+        .withLightness(baseLight)
+        .toColor();
+
+    // bottom 颜色：色相微调 +12 度，稍暗，形成过渡
+    final bottom = hsl
+        .withHue((hsl.hue + 12) % 360)
+        .withSaturation((baseSat * 0.85).clamp(0.0, 1.0))
+        .withLightness((baseLight * 0.85).clamp(0.0, 1.0))
+        .toColor();
+
+    return [top, middle, bottom];
+  } else {
+    // 明亮模式：生成淡雅、高亮度的白昼同色系清爽背景
+    final baseSat = hsl.saturation.clamp(0.06, 0.18); // 极低饱和度，温和不刺眼
+    final baseLight = hsl.lightness.clamp(0.92, 0.96); // 极高亮度，保持类似宣纸的洁净感
+
+    // top 颜色：色相微调 -10 度
+    final top = hsl
+        .withHue((hsl.hue - 10) % 360)
+        .withSaturation(baseSat)
+        .withLightness(baseLight)
+        .toColor();
+
+    // middle 颜色
+    final middle = hsl
+        .withSaturation((baseSat * 1.15).clamp(0.0, 1.0))
+        .withLightness((baseLight * 0.97).clamp(0.0, 1.0))
+        .toColor();
+
+    // bottom 颜色：色相微调 +10 度
+    final bottom = hsl
+        .withHue((hsl.hue + 10) % 360)
+        .withSaturation((baseSat * 0.95).clamp(0.0, 1.0))
+        .withLightness((baseLight * 1.01).clamp(0.0, 1.0))
+        .toColor();
+
+    return [top, middle, bottom];
+  }
 }
 
 Color buildGlassTint(Color dominantColor, Brightness brightness) {
@@ -131,6 +162,7 @@ class ThemeProvider extends ChangeNotifier {
 
   List<Color> get backgroundGradient => buildDynamicBackgroundGradient(
         dominantColor,
+        effectiveBrightness,
       );
 
   Color get glassTint => buildGlassTint(

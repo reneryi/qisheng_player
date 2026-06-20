@@ -116,6 +116,7 @@ class _ImmersiveModeView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // 恢复极致沉浸体验：移去在背景与内容之间的半透明卡片遮罩，直接让底层的流光动态渐变透出来
         const Positioned.fill(
           child: AbsorbPointer(
             child: SizedBox.expand(),
@@ -132,6 +133,7 @@ class _ImmersiveModeView extends StatelessWidget {
               final gap = compact ? 24.0 : 32.0;
 
               if (stacked) {
+                // 垂直堆叠下：封面精致收小在上，大歌词在下
                 return Column(
                   children: [
                     const Expanded(
@@ -147,6 +149,7 @@ class _ImmersiveModeView extends StatelessWidget {
                 );
               }
 
+              // 杂志级排版大歌词流：左侧放置占比 4 的精致小封面与歌曲信息，右侧放置占比 6 的大歌词
               return Row(
                 children: [
                   const Expanded(
@@ -701,48 +704,73 @@ class _ImmersiveArtworkStage extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final preferredMinSize = compact ? 180.0 : 300.0;
-        final absoluteMinSize = compact ? 96.0 : 180.0;
-        final maxSize = compact ? 320.0 : 520.0;
-        final reservedForText = compact ? 112.0 : 128.0;
-        final maxCoverByHeight = (constraints.maxHeight - reservedForText)
-            .clamp(absoluteMinSize, maxSize)
-            .toDouble();
-        final minSize = preferredMinSize <= maxCoverByHeight
-            ? preferredMinSize
-            : absoluteMinSize;
-        final size = (constraints.biggest.shortestSide * 0.78)
-            .clamp(minSize, maxCoverByHeight)
-            .toDouble();
+        // 极简主义设计：非小屏下由原本的 200 放大至 320 像素以呈现海报感，小屏 120 像素
+        final size = compact ? 120.0 : 320.0;
 
         return SizedBox.expand(
           child: Stack(
             children: [
               const Positioned.fill(child: _ArtworkStageHitAbsorber()),
-              Center(
+              Align(
+                // 大屏下整体居中对齐以展现海报式视觉美感，小屏则靠左对齐
+                alignment: compact ? Alignment.centerLeft : Alignment.center,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment:
+                      compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
                   children: [
                     _NowPlayingArtwork(
                       size: size,
-                      radius: 34,
+                      radius: compact ? 14 : 24, // 大屏下圆角适当增大，让界面更加圆润美观
                       large: true,
-                      showBackdropGlow: true,
+                      showBackdropGlow: false, // 去除臃肿的背景毛玻璃光晕，恢复极简纯净
                     ),
-                    SizedBox(height: compact ? 20 : 26),
-                    SizedBox(
-                      width: size * 0.86,
-                      child: _NowPlayingStagedReveal(
-                        begin: 0.24,
-                        end: 0.68,
-                        beginOffset: const Offset(0, 0.06),
-                        child: _NowPlayingTrackIdentity(compact: compact),
-                      ),
+                    SizedBox(height: compact ? 12 : 24), // 微调纵向间距为 24 像素，增加呼吸感
+                    _NowPlayingStagedReveal(
+                      begin: 0.24,
+                      end: 0.68,
+                      beginOffset: const Offset(0, 0.06),
+                      child: _NowPlayingTrackIdentity(compact: compact),
+                    ),
+                    const SizedBox(height: 8), // 微调纵向间距，增加高度缓冲
+                    // 引入极简高质感的音频参数元数据行
+                    const _NowPlayingStagedReveal(
+                      begin: 0.3,
+                      end: 0.75,
+                      child: _ImmersiveMetadataStrip(),
                     ),
                   ],
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// 极简主义画册排版：以超细细体文字左对齐显示音频格式、采样率与比特率参数
+class _ImmersiveMetadataStrip extends StatelessWidget {
+  const _ImmersiveMetadataStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Selector<PlaybackController, Audio?>(
+      selector: (_, playback) => playback.nowPlaying,
+      builder: (context, audio, _) {
+        if (audio == null) return const SizedBox.shrink();
+        final rate = audio.sampleRate != null ? '${(audio.sampleRate! / 1000).toStringAsFixed(1)}kHz' : '';
+        final bit = audio.bitrate != null ? '${audio.bitrate}kbps' : '';
+        final ext = audio.fileExtension.toUpperCase();
+        return Text(
+          '$ext · $rate · $bit',
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.46),
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0.8,
           ),
         );
       },
@@ -764,19 +792,21 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
         return ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: Align(
-            alignment: Alignment.centerLeft,
+            // 大屏下整体居中对齐以和封面居中保持对称，小屏则左对齐
+            alignment: compact ? Alignment.centerLeft : Alignment.center,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
               children: [
                 Text(
                   audio?.displayTitle ?? '正在播放',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.left,
+                  textAlign: compact ? TextAlign.left : TextAlign.center,
                   style: TextStyle(
                     color: scheme.onSurface,
-                    fontSize: compact ? 22 : 28,
+                    fontSize: compact ? 22 : 30, // 非 compact 模式下歌曲标题字号调大至 30 像素，更显大气
                     fontWeight: FontWeight.w800,
                     height: 1.08,
                     decoration: TextDecoration.none,
@@ -789,7 +819,7 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
                   audio?.displayArtist ?? '暂无播放',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.left,
+                  textAlign: compact ? TextAlign.left : TextAlign.center,
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.64),
                     fontSize: compact ? 14 : 16,
@@ -1051,8 +1081,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
 
   int _currentLineIndex = 0;
 
-  double get _primaryFontSize => widget.compact ? 28 : 32;
-  double get _secondaryFontSize => widget.compact ? 18 : 20;
+  double get _primaryFontSize => widget.compact ? 28 : 36; // 杂志级排版：主歌词字号调大至 36
+  double get _secondaryFontSize => widget.compact ? 18 : 22; // 杂志级排版：副歌词字号调大至 22
   double get _translationFontSize => widget.compact ? 14 : 16;
   double get _verticalPadding => widget.compact ? 140 : 200;
 
@@ -1190,12 +1220,9 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   }
 
   double _lineOpacity({required int index, required bool isCurrent}) {
-    if (isCurrent) return 1;
-    final distance = (index - _currentLineIndex).abs();
-    if (index < _currentLineIndex) {
-      return (0.5 - distance * 0.055).clamp(0.24, 0.5).toDouble();
-    }
-    return (0.38 - distance * 0.05).clamp(0.18, 0.38).toDouble();
+    if (isCurrent) return 1.0;
+    // 极简奢华对比：已播放过的歌词显示 0.32 不透明度，未播放的使用较淡的 0.22，清晰区隔当前行
+    return index < _currentLineIndex ? 0.32 : 0.22;
   }
 
   Color _lineColor(
@@ -1219,13 +1246,13 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     final style = TextStyle(
       color: lineColor,
       fontSize: isCurrent ? _primaryFontSize : _secondaryFontSize,
-      fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
-      height: 1.18,
+      fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w600, // 高对比字重
+      height: 1.15,
       shadows: isCurrent
           ? [
               Shadow(
-                color: scheme.primary.withValues(alpha: 0.34),
-                blurRadius: 18,
+                color: scheme.primary.withValues(alpha: 0.18), // 减淡阴影光晕
+                blurRadius: 12,
               ),
             ]
           : null,
@@ -1240,7 +1267,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
               ((snapshot.data ?? playbackService.position) * 1000)
                   .roundToDouble();
           return RichText(
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left, // 杂志排版：居左对齐
             text: TextSpan(
               children: [
                 for (final word in line.words)
@@ -1269,7 +1296,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                           stops: [0, progress, progress, 1],
                         ).createShader(bounds);
                       },
-                      child: Text(word.content, style: style),
+                      child: Text(word.content, style: style, textAlign: TextAlign.left),
                     ),
                   ),
               ],
@@ -1283,10 +1310,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
       duration: motion.controlTransitionDuration,
       curve: motion.normal,
       style: style,
-      textAlign: TextAlign.center,
+      textAlign: TextAlign.left, // 杂志排版：居左对齐
       child: Text(
         _primaryText(line),
-        textAlign: TextAlign.center,
+        textAlign: TextAlign.left,
       ),
     );
   }
@@ -1306,7 +1333,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             controller: scrollController,
             padding: EdgeInsets.symmetric(
               vertical: _verticalPadding,
-              horizontal: widget.compact ? 12 : 20,
+              horizontal: widget.compact ? 20 : 48, // 增加左侧缩进呼吸空间
             ),
             itemCount: widget.lyric.lines.length,
             itemBuilder: (context, index) {
@@ -1341,7 +1368,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                         horizontal: 12,
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start, // 杂志排版：歌词左对齐
                         children: [
                           _primaryLineWidget(
                             line: line,
@@ -1362,10 +1389,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                                 fontWeight: FontWeight.w400,
                                 height: 1.25,
                               ),
-                              textAlign: TextAlign.center,
+                              textAlign: TextAlign.left, // 翻译行左对齐
                               child: Text(
                                 translation,
-                                textAlign: TextAlign.center,
+                                textAlign: TextAlign.left,
                               ),
                             ),
                           ],

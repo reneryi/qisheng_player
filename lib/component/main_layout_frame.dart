@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/ui/liquid_gradient_background.dart';
@@ -13,7 +13,11 @@ double resolveMainLayoutDockInset({
   required double dockHeight,
   required double shellGap,
 }) {
-  return reserveDockSpace && hasOverlay ? dockHeight + shellGap * 2 : 0.0;
+  if (reserveDockSpace && hasOverlay) {
+    return dockHeight + shellGap * 2;
+  }
+  // 重构：没有 bottom overlay（底栏）时，如果需要保留空间，则返回 shellGap，以产生底部悬浮高度
+  return reserveDockSpace ? shellGap : 0.0;
 }
 
 class MainLayoutFrame extends StatelessWidget {
@@ -45,10 +49,12 @@ class MainLayoutFrame extends StatelessWidget {
       shellGap: chrome.shellGap,
     );
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const _MainLayoutBackground(),
+    return Material(
+      type: MaterialType.transparency, // 全局防黄线下划线容器：确保所有沉浸页面、顶栏、底栏均有 Material 上下文
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const _MainLayoutBackground(),
         Padding(
           padding: EdgeInsets.fromLTRB(
             chrome.shellGap,
@@ -59,7 +65,8 @@ class MainLayoutFrame extends StatelessWidget {
           child: Column(
             children: [
               titleBar,
-              _SilentShellGap(height: chrome.shellGap),
+              if (titleBar is! SizedBox) // 如果顶栏是 SizedBox（如 SizedBox.shrink()），则不渲染顶部的 Gap，避免间距过大
+                _SilentShellGap(height: chrome.shellGap),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(bottom: dockInset),
@@ -99,8 +106,9 @@ class MainLayoutFrame extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SilentShellGap extends StatelessWidget {

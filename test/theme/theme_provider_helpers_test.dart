@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/theme/album_palette.dart';
+import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +22,7 @@ void main() {
   });
 
   test('buildDynamicBackgroundGradient returns a 3-stop darkened gradient', () {
-    final gradient = buildDynamicBackgroundGradient(const Color(0xFF53A4FF));
+    final gradient = buildDynamicBackgroundGradient(const Color(0xFF53A4FF), Brightness.dark);
 
     expect(gradient, hasLength(3));
     expect(gradient.first.computeLuminance(),
