@@ -90,7 +90,8 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  static const String version = "1.2.8";
+  // 当前播放器的全局静态版本号，更新为 1.2.9
+  static const String version = "1.2.9";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
 

@@ -1,6 +1,29 @@
-﻿# WORKLOG
+# WORKLOG
 
 本文件记录重要实现、验证结果与后续注意事项。
+
+## 2026-06-25 - qisheng_player v1.2.9 整合与 Bug 修复
+
+### 背景
+
+- 在 1.2.8 大悬浮画板与沉浸播放页的改造中，引入了主界面对全局导航状态 `AppNavigationState.instance` 的监听。
+- 用户实测点击控制栏跳转播放详情页时出现无响应卡死，原因为在 GoRouter pageBuilder 构建阶段，rememberLocation 同步调用了 notifyListeners() 导致了 widget 树 build 期间的 setState/markNeedsBuild 渲染死锁。
+- 此外，在 1.2.8 改动中遗漏了底栏的渐隐渐显组件 AnimatedOpacity，并且转场时间与主转场时间不同步，导致了两个相关单元测试断言报错。
+- 需要将上述问题修复，并将版本升级整合为 `v1.2.9` 正式稳定版。
+
+### 实现
+
+- **异步状态刷新通知**：修改 `lib/navigation_state.dart` 中的 `rememberLocation` 方法，将其中的 `notifyListeners()` 调用改为包裹在 `WidgetsBinding.instance.addPostFrameCallback((_) { notifyListeners(); })` 中，延迟到当前帧 build 结束后执行，完美杜绝了 build 期间的状态重绘冲突。
+- **重构播放详情页底栏动效**：在 `lib/page/now_playing_page/page.dart` 中为底栏回填了漏掉的 `AnimatedOpacity` 动画组件，重现精美淡入淡出，并满足了 UI 单元测试的组件查找条件。
+- **对齐全局转场时间**：将 `NowPlayingTransitionPage` 路由类的 transitionDuration/reverseTransitionDuration 统一改为 `520ms` 和 `380ms`，与主页面路由完全对齐，解决了测试断言的时长匹配错误。
+- **Hero 精准定位与冲突防护**：底栏组件增加 `disableHero` 逻辑并在播放页内显式传递 `true` 以屏蔽重复 Hero tag，并在底层 AppShell 转场间锁定控制栏物理坐标不动，实现封面 100% 精准无闪烁落回控制栏。
+- **版本更新**：修改 `pubspec.yaml` 与 `lib/app_settings.dart` 中的版本号，均升级为 `1.2.9`。
+
+### 验证
+
+- `flutter analyze` 静态分析完全通过。
+- `flutter test` 所有 115 个测试用例全部百分之百通过。
+- 发布前执行 Windows Release 构建与打包压缩。
 
 ## 2026-05-17 - qisheng_player v1.2.2 小补丁
 

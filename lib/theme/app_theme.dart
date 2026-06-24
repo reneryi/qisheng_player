@@ -109,10 +109,12 @@ class AppTheme {
       ),
       listTileTheme: const ListTileThemeData(enableFeedback: false),
       menuTheme: AppComponentThemes.menuTheme(surfaces),
-      menuButtonTheme: const MenuButtonThemeData(
-        style: ButtonStyle(
-          enableFeedback: false,
-        ),
+      // 注册全局菜单项按钮主题以应用全新的无边框、精致圆角及状态颜色高亮交互
+      menuButtonTheme: AppComponentThemes.menuButtonTheme(
+        colorScheme,
+        surfaces,
+        accents,
+        visuals,
       ),
       popupMenuTheme: const PopupMenuThemeData(enableFeedback: false),
       segmentedButtonTheme: AppComponentThemes.segmentedButtonTheme(

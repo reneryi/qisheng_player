@@ -26,6 +26,21 @@ class AppNavigationState extends ChangeNotifier {
 
   static final AppNavigationState instance = AppNavigationState._();
 
+  // 侧边栏及 Shell 页面对应的路由次序列表，用于判断侧边栏切换时的滑动方向
+  static const List<String> _shellPagesOrder = [
+    app_paths.AUDIOS_PAGE,
+    app_paths.ARTISTS_PAGE,
+    app_paths.ALBUMS_PAGE,
+    app_paths.FOLDERS_PAGE,
+    app_paths.PLAYLISTS_PAGE,
+    app_paths.SETTINGS_PAGE,
+    app_paths.SEARCH_PAGE,
+  ];
+
+  // 记录转场的横向滑动方向：1 表示自右向左（前进），-1 表示自左向右（后退）
+  int _slideDirection = 1;
+  int get slideDirection => _slideDirection;
+
   String _lastShellLocation = app_paths.AUDIOS_PAGE;
   final List<AppNavigationEntry> _history = [
     const AppNavigationEntry(app_paths.AUDIOS_PAGE),
@@ -63,6 +78,24 @@ class AppNavigationState extends ChangeNotifier {
       return;
     }
 
+    // 检查当前页面与上一页面路径，判定横向滑动过渡方向
+    final newIndex = _shellPagesOrder.indexWhere((p) => location.startsWith(p));
+    final oldIndex = _shellPagesOrder.indexWhere((p) => _lastShellLocation.startsWith(p));
+
+    final isNewDetail = location.contains('/detail') || location.contains('/result') || location.contains('/issue');
+    final isOldDetail = _lastShellLocation.contains('/detail') || _lastShellLocation.contains('/result') || _lastShellLocation.contains('/issue');
+
+    if (isNewDetail && !isOldDetail) {
+      // 从主列表进入详情子页面：向左滑入
+      _slideDirection = 1;
+    } else if (!isNewDetail && isOldDetail) {
+      // 从详情子页面退回主列表：向右滑出退回
+      _slideDirection = -1;
+    } else if (newIndex != -1 && oldIndex != -1 && newIndex != oldIndex) {
+      // 侧边栏同级主页面切换：右侧页面则向左滑入，左侧页面向右滑入
+      _slideDirection = newIndex > oldIndex ? 1 : -1;
+    }
+
     if (_isShellLocation(location)) {
       _lastShellLocation = location;
     }
@@ -83,7 +116,11 @@ class AppNavigationState extends ChangeNotifier {
     }
     _history.add(AppNavigationEntry(location, extra: extra));
     _historyIndex = _history.length - 1;
-    notifyListeners();
+    
+    // 避免在 widget 树 build 期间同步触发 notifyListeners 导致 markNeedsBuild 异常或卡死
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   AppNavigationEntry? moveHistoryBackEntry() {
@@ -120,6 +157,8 @@ class AppNavigationState extends ChangeNotifier {
 
   void openNowPlaying(BuildContext context) {
     if (currentEntry.location == app_paths.NOW_PLAYING_PAGE) return;
+    // 在跳转前主动将状态置为 true，使底层首帧就能感知并准备缩放
+    setNowPlayingPageActive(true);
     context.push(app_paths.NOW_PLAYING_PAGE);
   }
 
@@ -131,6 +170,10 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   bool closeNowPlaying(BuildContext context, {String? fallback}) {
+    // 移除 setNowPlayingPageActive(false) 的提前调用。
+    // 我们必须让其在播放详情页正式 dispose（销毁）时才重置状态，
+    // 这样在整个退场转场的飞行期间，底层主界面会一直保持在 isNowPlayingAbove 静止分支中（仅淡出蒙版），
+    // 确保控制栏封面的屏幕物理坐标绝对不动，让大封面 Hero 能够精准重合降落，解决错位闪烁 Bug。
     final previous = prepareNowPlayingClose();
     if (context.canPop()) {
       context.pop();
@@ -249,4 +292,18 @@ class AppNavigationState extends ChangeNotifier {
     if (sourceKey == null) return true;
     return identical(active.sourceKey, sourceKey);
   }
+
+  // 记录当前播放详情页是否正处于显示生命周期（包含转场期间）
+  bool _nowPlayingPageActive = false;
+
+  // 获取当前播放详情页的活跃状态
+  bool get nowPlayingPageActive => _nowPlayingPageActive;
+
+  // 更新播放详情页的活跃状态，并通知所有关联的路由监听器进行重绘
+  void setNowPlayingPageActive(bool active) {
+    if (_nowPlayingPageActive == active) return;
+    _nowPlayingPageActive = active;
+    notifyListeners();
+  }
 }
+

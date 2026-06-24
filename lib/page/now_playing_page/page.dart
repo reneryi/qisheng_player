@@ -132,8 +132,31 @@ class _NowPlayingStagedReveal extends StatelessWidget {
   }
 }
 
-class NowPlayingPage extends StatelessWidget {
+class NowPlayingPage extends StatefulWidget {
   const NowPlayingPage({super.key});
+
+  @override
+  State<NowPlayingPage> createState() => _NowPlayingPageState();
+}
+
+class _NowPlayingPageState extends State<NowPlayingPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 页面初始化时，标记播放详情页处于活跃状态。使用 addPostFrameCallback 避开当前 build 周期调用 notifyListeners
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppNavigationState.instance.setNowPlayingPageActive(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    // 页面销毁时，还原播放详情页活跃状态。同样使用 addPostFrameCallback 避开 build 周期
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppNavigationState.instance.setNowPlayingPageActive(false);
+    });
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +285,10 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
                     duration: motion.controlTransitionDuration,
                     curve: motion.fast,
                     opacity: _visible ? 1 : 0,
-                    child: const BottomPlayerBar(transparent: true), // 传入 transparent: true，隐藏底栏毛玻璃背景
+                    child: const BottomPlayerBar(
+                      transparent: true,
+                      disableHero: true, // 在播放详情页内的控制栏禁用 Hero 动画，防止与中央大封面产生重复 Hero 标签冲突
+                    ), // 传入 transparent: true，隐藏底栏毛玻璃背景
                   ),
                 ),
               ),
@@ -319,6 +345,7 @@ class _NowPlayingBackBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       enableFeedback: false,
       tooltip: '返回',
@@ -328,6 +355,27 @@ class _NowPlayingBackBtn extends StatelessWidget {
             fallback: navigation.lastShellLocation);
       },
       icon: const Icon(Symbols.navigate_before),
+      // 重构：定义沉浸式 Style，彻底移除默认状态及交互时的物理背景底色和描边
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.transparent,
+        side: BorderSide.none,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+      ).copyWith(
+        // 通过状态属性动态控制图标前景色透明度和高亮颜色，实现无背景圆底的交互效果
+        iconColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return scheme.onSurface.withValues(alpha: 0.34);
+          }
+          if (states.contains(WidgetState.pressed)) {
+            return scheme.primary; // 按下时高亮品牌色
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return scheme.onSurface; // 悬停时高亮至 100% 不透明
+          }
+          return scheme.onSurface.withValues(alpha: 0.62); // 默认显示为半透明
+        }),
+      ),
     );
   }
 }

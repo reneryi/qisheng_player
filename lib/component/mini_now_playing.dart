@@ -1,4 +1,5 @@
-﻿import 'package:qisheng_player/app_brand.dart';
+import 'package:qisheng_player/app_brand.dart';
+import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/rectangle_progress_indicator.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/now_playing_navigation.dart';
@@ -97,34 +98,40 @@ class _NowPlayingForeground extends StatelessWidget {
                   SizedBox(
                     width: 52,
                     height: 52,
-                    child: nowPlaying != null
-                        ? FutureBuilder(
-                            future: nowPlaying.cover,
-                            builder: (context, snapshot) =>
-                                switch (snapshot.connectionState) {
-                              ConnectionState.done => snapshot.data == null
-                                  ? placeholder
-                                  : ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image(
-                                        image: snapshot.data!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) =>
-                                            placeholder,
+                    child: Hero(
+                      tag: nowPlayingArtworkHeroTag,
+                      // 使用自定义的高抛弧线 Tween，让飞跃轨迹极其显著
+                      createRectTween: (begin, end) =>
+                          CustomIntenseArcTween(begin: begin, end: end),
+                      child: nowPlaying != null
+                          ? FutureBuilder(
+                              future: nowPlaying.cover,
+                              builder: (context, snapshot) =>
+                                  switch (snapshot.connectionState) {
+                                ConnectionState.done => snapshot.data == null
+                                    ? placeholder
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Image(
+                                          image: snapshot.data!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              placeholder,
+                                        ),
+                                      ),
+                                _ => const Center(
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
                                       ),
                                     ),
-                              _ => const Center(
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
                                   ),
-                                ),
-                            },
-                          )
-                        : placeholder,
+                              },
+                            )
+                          : placeholder,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

@@ -46,10 +46,15 @@ bool canPaintSliderAtWidth(double width) {
 }
 
 class BottomPlayerBar extends StatelessWidget {
-  const BottomPlayerBar({super.key, this.transparent = false});
+  const BottomPlayerBar({
+    super.key,
+    this.transparent = false,
+    this.disableHero = false, // 新增：是否禁用 Hero 共享元素动画，用于防止在播放详情页内部渲染底栏时与中间大封面产生冲突
+  });
 
   // 是否将背景透明化，用于在一体化卡片内嵌套或者在沉浸页中悬浮时隐藏边框
   final bool transparent;
+  final bool disableHero;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +65,10 @@ class BottomPlayerBar extends StatelessWidget {
         return Row(
           children: [
             Expanded(
-              child: _BottomBarTrackSection(dense: layout.dense),
+              child: _BottomBarTrackSection(
+                dense: layout.dense,
+                disableHero: disableHero, // 传递参数
+              ),
             ),
             const SizedBox(width: 24),
             Expanded(
@@ -101,9 +109,13 @@ class BottomPlayerBar extends StatelessWidget {
 }
 
 class _BottomBarTrackSection extends StatelessWidget {
-  const _BottomBarTrackSection({required this.dense});
+  const _BottomBarTrackSection({
+    required this.dense,
+    required this.disableHero, // 新增
+  });
 
   final bool dense;
+  final bool disableHero;
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +140,11 @@ class _BottomBarTrackSection extends StatelessWidget {
           },
           child: Row(
             children: [
-              _TrackCover(size: dense ? 52 : 58, audio: audio),
+              _TrackCover(
+                size: dense ? 52 : 58,
+                audio: audio,
+                disableHero: disableHero, // 传递参数
+              ),
               SizedBox(width: dense ? 12 : 16),
               Expanded(
                 child: Column(
@@ -172,10 +188,12 @@ class _TrackCover extends StatelessWidget {
   const _TrackCover({
     required this.size,
     required this.audio,
+    required this.disableHero, // 新增：是否禁用 Hero 动效
   });
 
   final double size;
   final Audio? audio;
+  final bool disableHero;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +277,8 @@ class _TrackCover extends StatelessWidget {
             child: RepaintBoundary(child: artwork),
           );
 
-          if (isNowPlayingRoute(context)) {
+          if (disableHero) {
+            // 如果禁用 Hero，直接返回旋转动画子树，避免多 Hero 重复 Tag 冲突
             return _SpinningArtwork(
               spinning: spinning,
               child: framedArtwork,
@@ -270,6 +289,9 @@ class _TrackCover extends StatelessWidget {
             spinning: spinning,
             child: Hero(
               tag: nowPlayingArtworkHeroTag,
+              // 使用统一的自定义高抛弧线插值器，在退场时呈完美弧度飞回控制栏
+              createRectTween: (begin, end) =>
+                  CustomIntenseArcTween(begin: begin, end: end),
               flightShuttleBuilder: nowPlayingArtworkFlightShuttleBuilder,
               child: framedArtwork,
             ),
@@ -1056,6 +1078,7 @@ class _ExclusiveModeControl extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: playback.wasapiExclusive,
       builder: (context, exclusive, _) => CpIconButton(
+        variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
         tooltip: "独占模式：${exclusive ? '已启用' : '已禁用'}",
         onPressed: () => playback.useExclusiveMode(!exclusive),
         icon: Center(
@@ -1112,24 +1135,22 @@ class _VolumeControlState extends State<_VolumeControl> {
         return MouseRegion(
           onEnter: (_) => setState(() => _hovering = true),
           onExit: (_) => setState(() => _hovering = false),
-          child: Container(
+          child: SizedBox(
             height: 42,
-            padding: EdgeInsets.only(right: showSlider ? 8 : 0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: Colors.white.withValues(alpha: 0.07),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CpIconButton(
-                  tooltip: '音量',
-                  onPressed: () {
-                    final next = current <= 0 ? 0.5 : 0.0;
-                    playback.setVolumeDsp(next);
-                  },
-                  icon: AnimatedSwitcher(
+            child: Padding(
+              padding: EdgeInsets.only(right: showSlider ? 8 : 0),
+              // 重构：移除外层 Container 的彩色背景底色与描边边框，令音量滑块与图标干净地浮动在底部控制栏
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CpIconButton(
+                    variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
+                    tooltip: '音量',
+                    onPressed: () {
+                      final next = current <= 0 ? 0.5 : 0.0;
+                      playback.setVolumeDsp(next);
+                    },
+                    icon: AnimatedSwitcher(
                     duration: motion.microInteractionDuration,
                     switchInCurve: motion.emphasized,
                     switchOutCurve: motion.fast,
@@ -1213,7 +1234,8 @@ class _VolumeControlState extends State<_VolumeControl> {
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -1233,6 +1255,7 @@ class _DesktopLyricControl extends StatelessWidget {
                 snapshot.connectionState == ConnectionState.done;
             final enabled = snapshot.data != null;
             return CpIconButton(
+              variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
               tooltip: '桌面歌词${enabled ? "已开启" : "已关闭"}',
               onPressed: ready
                   ? enabled
@@ -1333,31 +1356,17 @@ class _QueueEntryButton extends StatelessWidget {
     return ValueListenableBuilder<List<Audio>>(
       valueListenable: playback.playlist,
       builder: (context, playlist, _) {
-        final label = dense ? '' : '队列 ${playlist.length}';
         final canOpenQueue = playlist.isNotEmpty || playback.nowPlaying != null;
 
-        return Tooltip(
-          message: canOpenQueue ? '打开播放队列' : '暂无播放队列',
-          child: dense
-              ? CpIconButton(
-                  onPressed:
-                      canOpenQueue ? () => _openQueueDialog(context) : null,
-                  icon: Badge(
-                    label: Text('${playlist.length}'),
-                    child: const Icon(Symbols.queue_music),
-                  ),
-                )
-              : OutlinedButton.icon(
-                  onPressed:
-                      canOpenQueue ? () => _openQueueDialog(context) : null,
-                  icon: const Icon(Symbols.queue_music),
-                  label: Text(label),
-                  style: OutlinedButton.styleFrom(
-                    fixedSize: const Size.fromHeight(42),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    enableFeedback: false,
-                  ),
-                ),
+        // 重构：根据用户设计决议，无论宽窄屏均完全移除边框胶囊 OutlinedButton 和“队列”文本，统一简化为只带 Badge 的沉浸式图标按钮
+        return CpIconButton(
+          variant: CpButtonVariant.immersive,
+          tooltip: canOpenQueue ? '打开播放队列' : '暂无播放队列',
+          onPressed: canOpenQueue ? () => _openQueueDialog(context) : null,
+          icon: Badge(
+            label: Text('${playlist.length}'),
+            child: const Icon(Symbols.queue_music),
+          ),
         );
       },
     );

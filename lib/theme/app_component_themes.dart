@@ -365,12 +365,84 @@ class AppComponentThemes {
   ) {
     return MenuThemeData(
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(surfaces.surfaceFloating),
+        // 重构：菜单容器使用 88% 的半透明底色以形成玻璃通透感，使界面富有呼吸感
+        backgroundColor: WidgetStatePropertyAll(
+          surfaces.surfaceFloating.withValues(alpha: 0.88),
+        ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(surfaces.radiusLg),
-            side: BorderSide(color: surfaces.strokeSubtle),
+            // 降低描边边框的对比度，使之更加柔和不生硬
+            side: BorderSide(color: surfaces.strokeSubtle.withValues(alpha: 0.38)),
+          ),
+        ),
+        // 提升阴影高度并搭配淡晕投影，以在视觉上将弹出菜单卡片立体化悬浮
+        elevation: const WidgetStatePropertyAll(12),
+        shadowColor: WidgetStatePropertyAll(
+          surfaces.shadowColor.withValues(alpha: 0.28),
+        ),
+      ),
+    );
+  }
+
+  // 新增：菜单项按钮的全局主题配置，完全移除所有物理描边，只使用纯色半透明高亮和微圆角
+  static MenuButtonThemeData menuButtonTheme(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    AppAccentTokens accents,
+    AppVisualTokens visuals,
+  ) {
+    return MenuButtonThemeData(
+      style: ButtonStyle(
+        enableFeedback: false,
+        minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        ),
+        // 彻底移除所有交互状态下的描边，消除悬停时有方框边框的割裂感
+        side: const WidgetStatePropertyAll(BorderSide.none),
+        // 移除多余的阴影以保持平滑
+        elevation: const WidgetStatePropertyAll(0),
+        // 悬停 (Hover) 和聚焦 (Focus) 时以渐变的半透底色高亮，没有物理框线
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return Colors.transparent;
+          }
+          if (states.contains(WidgetState.pressed)) {
+            return accents.accentSoft; // 点击时呈现品牌软底色
+          }
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
+            final isDark = scheme.brightness == Brightness.dark;
+            return isDark
+                ? Colors.white.withValues(alpha: 0.08) // 深色模式下用微弱白色
+                : Colors.black.withValues(alpha: 0.04); // 浅色模式下用微弱黑色
+          }
+          return Colors.transparent;
+        }),
+        // 按下时字体呈高亮品牌色，默认状态下保持 onSurface 颜色
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return scheme.onSurface.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.pressed)) {
+            return accents.accent;
+          }
+          return scheme.onSurface;
+        }),
+        iconColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return scheme.onSurface.withValues(alpha: 0.38);
+          }
+          if (states.contains(WidgetState.pressed)) {
+            return accents.accent;
+          }
+          return scheme.onSurface.withValues(alpha: 0.82);
+        }),
+        // 形状采用微圆角设计，摆脱生硬的直角框框
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(surfaces.radiusSm),
           ),
         ),
       ),

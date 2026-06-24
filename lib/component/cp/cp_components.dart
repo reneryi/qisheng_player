@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
-enum CpButtonVariant { primary, secondary, outline, ghost, destructive }
+enum CpButtonVariant { primary, secondary, outline, ghost, destructive, immersive } // 按钮变体，新增 immersive 表示沉浸式样式
 
 enum CpSurfaceTone { panel, card, subtle, floating }
 
@@ -394,6 +394,31 @@ class CpButton extends StatelessWidget {
           ),
           child: content,
         ),
+      // 沉浸式文本按钮样式分支：完全透明背景，通过 WidgetStateProperty 动态高亮文本和图标
+      CpButtonVariant.immersive => TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            padding: padding,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            backgroundColor: Colors.transparent,
+          ).copyWith(
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              final scheme = Theme.of(context).colorScheme;
+              if (states.contains(WidgetState.disabled)) {
+                return scheme.onSurface.withValues(alpha: 0.34);
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return scheme.primary; // 按下时为品牌强调色
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return scheme.onSurface; // 悬停时文本完全高亮
+              }
+              return scheme.onSurface.withValues(alpha: 0.62); // 默认状态下为半透明
+            }),
+          ),
+          child: content,
+        ),
     };
   }
 }
@@ -460,6 +485,29 @@ class CpIconButton extends StatelessWidget {
           backgroundColor: scheme.errorContainer,
           foregroundColor: scheme.onErrorContainer,
           shape: glassShape,
+        ),
+      // 沉浸式按钮样式：默认完全透明无描边，悬停与按下时仅改变图标颜色/亮度，无任何背景色和物理边框
+      CpButtonVariant.immersive => IconButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: scheme.onSurface.withValues(alpha: 0.62),
+          side: BorderSide.none,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: glassShape,
+        ).copyWith(
+          // 动态调整图标颜色以满足交互反馈（Hover 高亮，Pressed 显示强调色）
+          iconColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.onSurface.withValues(alpha: 0.34);
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return scheme.primary; // 按下时呈现主题高亮强调色
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return scheme.onSurface; // 悬停时图标完全高亮不透明
+            }
+            return scheme.onSurface.withValues(alpha: 0.62); // 默认显示 62% 不透明度
+          }),
         ),
     };
   }

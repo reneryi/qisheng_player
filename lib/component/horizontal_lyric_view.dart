@@ -5,7 +5,6 @@ import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
-import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,41 +22,35 @@ class HorizontalLyricView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final surfaces = context.surfaces;
     final lyricController = _resolveLyricController(context);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(surfaces.radiusLg),
-      ),
-      child: ListenableBuilder(
-        listenable: lyricController,
-        builder: (context, _) => FutureBuilder(
-          future: lyricController.currLyricFuture,
-          builder: (context, snapshot) {
-            if (snapshot.data == null) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "开始播放音乐",
-                    style: TextStyle(
-                      color: scheme.onSecondaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
+    // 重构：彻底移除外层 DecoratedBox 带来的灰色胶囊底色与圆角，令歌词以沉浸式浮动形式呈现
+    return ListenableBuilder(
+      listenable: lyricController,
+      builder: (context, _) => FutureBuilder(
+        future: lyricController.currLyricFuture,
+        builder: (context, snapshot) {
+          if (snapshot.data == null) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "开始播放音乐",
+                  style: TextStyle(
+                    color: scheme.onSurface, // 重构：文字颜色替换为 onSurface 以确保沉浸在渐变背景上的易读性
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              );
-            }
-
-            return _LyricHorizontalScrollArea(
-              snapshot.data!,
-              lyricController: lyricController,
+              ),
             );
-          },
-        ),
+          }
+
+          return _LyricHorizontalScrollArea(
+            snapshot.data!,
+            lyricController: lyricController,
+          );
+        },
       ),
     );
   }
@@ -216,7 +209,7 @@ class _LyricHorizontalScrollAreaState
                 currContent,
                 key: ValueKey(currContent),
                 style: TextStyle(
-                  color: scheme.onSecondaryContainer,
+                  color: scheme.onSurface, // 重构：前景色调整为 onSurface 以配合沉浸式背景的高对比度表现
                   fontWeight: FontWeight.w700,
                   shadows: [
                     Shadow(

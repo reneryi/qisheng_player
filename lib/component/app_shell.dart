@@ -4,6 +4,7 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 
 import 'package:qisheng_player/component/main_layout_frame.dart';
+import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
@@ -181,11 +182,14 @@ class _ShellPageTransition extends StatelessWidget {
       child: child,
       builder: (context, value, transitionedChild) {
         final fade = value.clamp(0.0, 1.0);
-        final offsetY = (1 - fade) * 10;
+        // 获取当前的横向滑入滑动方向（1 为自右向左，-1 为自左向右）
+        final direction = AppNavigationState.instance.slideDirection;
+        final offsetX = (1 - fade) * 20.0 * direction;
         return Opacity(
           opacity: fade,
           child: Transform.translate(
-            offset: Offset(0, offsetY),
+            // 将原有的垂直位移变更为配合方向判定的水平横向滑入淡出
+            offset: Offset(offsetX, 0),
             child: transitionedChild,
           ),
         );

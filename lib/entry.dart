@@ -91,27 +91,58 @@ Widget _buildAppRouteTransition(
         scale: Tween<double>(begin: 0.96, end: 1).animate(contentReveal), // 极简空间感：页面从 0.96 微缩放展开，空间感更强
         child: FadeTransition(
           opacity: Tween<double>(begin: 0.8, end: 1).animate(contentReveal),
-          child: AnimatedBuilder(
-            animation: secondaryCurvedAnim,
-            child: transitionedChild,
-            builder: (context, child) {
-              final progress = secondaryCurvedAnim.value;
-              final outgoingProgress = outgoingContent.value;
-              return ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: 10 * progress,
-                  sigmaY: 10 * progress,
-                ),
-                child: Opacity(
-                  opacity: 1 - 0.42 * outgoingProgress,
-                  child: Transform.translate(
-                    offset: Offset(0, 26 * outgoingProgress),
-                    child: Transform.scale(
-                      scale: 1 - 0.012 * outgoingProgress,
-                      child: child,
-                    ),
-                  ),
-                ),
+          child: ListenableBuilder(
+            listenable: AppNavigationState.instance,
+            builder: (context, _) {
+              final isNowPlayingAbove = AppNavigationState.instance.nowPlayingPageActive;
+              return AnimatedBuilder(
+                animation: secondaryCurvedAnim,
+                child: transitionedChild,
+                builder: (context, child) {
+                  final progress = secondaryCurvedAnim.value;
+                  final outgoingProgress = outgoingContent.value;
+
+                  if (isNowPlayingAbove) {
+                    // 当播放详情页覆盖在上方时，对底层主界面仅进行变暗蒙版处理。
+                    // 绝不进行 Scale 缩放与 Translate 位移，以确保底部控制栏小封面的物理屏幕坐标绝对静止，
+                    // 从而使退场时大封面 Hero 弧度飞越能够百分之百精准落入控制栏的原本槽位，彻底消除闪烁与路径偏差 Bug。
+                    return Stack(
+                      children: [
+                        child!,
+                        // 黑色半透明遮罩，产生沉浸式蒙版变暗效果
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: ColoredBox(
+                              color: Colors.black.withValues(
+                                alpha: 0.42 * progress,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    // 普通的二级跳转折叠退场效果：高斯模糊 + 平滑沉降
+                    return ImageFiltered(
+                      imageFilter: ImageFilter.blur(
+                        sigmaX: 8.0 * progress, // 适当减小模糊至 8.0，使淡出过程轮廓变化更平柔
+                        sigmaY: 8.0 * progress,
+                      ),
+                      child: Opacity(
+                        // 关键修复：将不透明度从 1 - 0.42 改为直接平滑淡出归零 (1.0 - outgoingProgress)，
+                        // 确保旧页面在完全被覆盖前已彻底透明，避免因突然被路由剔除渲染而产生生硬闪现。
+                        opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(0, 18.0 * outgoingProgress), // 下沉距离调整为更舒缓温和的 18.0 像素
+                          child: Transform.scale(
+                            scale: 1.0 - 0.012 * outgoingProgress,
+                            child: child,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                },
               );
             },
           ),
@@ -119,6 +150,99 @@ Widget _buildAppRouteTransition(
       ),
     ),
   );
+}
+
+// 专为播放详情页拉起设计的卡片拉起转场构建函数（iOS Modal Card Presentation）
+Widget _buildNowPlayingRouteTransition(
+  BuildContext context,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+  Widget child,
+) {
+  // 从底部完全滑入卡片动画
+  final slideAnim = CurvedAnimation(
+    parent: animation,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  final slideTween = Tween<Offset>(
+    begin: const Offset(0, 1.0),
+    end: Offset.zero,
+  ).animate(slideAnim);
+
+  // 包裹 NowPlayingRouteTransitionScope，以便让播放详情页中的渐显元素（如歌词、AppBar 等）能获取到入场动画进度并联动
+  final transitionedChild = NowPlayingRouteTransitionScope(
+    animation: slideAnim,
+    child: child,
+  );
+
+  return SlideTransition(
+    position: slideTween,
+    child: DecoratedBox(
+      decoration: const BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 24,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: transitionedChild,
+    ),
+  );
+}
+
+Widget _buildDetailRouteTransition(
+  BuildContext context,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+  Widget child,
+) {
+  // 使用二次方渐进缓动曲线
+  final curvedAnim = CurvedAnimation(
+    parent: animation,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  return FadeTransition(
+    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnim),
+    child: ScaleTransition(
+      // 极轻微的原地中心膨胀缩放，完美配合 Hero 共享元素的飞跃落点
+      scale: Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnim),
+      child: child,
+    ),
+  );
+}
+
+class DetailTransitionPage<T> extends CustomTransitionPage<T> {
+  const DetailTransitionPage({
+    required super.child,
+    super.name,
+    super.arguments,
+    super.restorationId,
+    super.key,
+  }) : super(
+          transitionsBuilder: _transitionsBuilder,
+          transitionDuration: const Duration(milliseconds: 400), // 给 Hero 飞行留出舒缓平顺的 400ms 时间
+          reverseTransitionDuration: const Duration(milliseconds: 320),
+        );
+
+  static Widget _transitionsBuilder(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return _buildDetailRouteTransition(
+      context,
+      animation,
+      secondaryAnimation,
+      child,
+    );
+  }
 }
 
 class SlideTransitionPage<T> extends CustomTransitionPage<T> {
@@ -158,8 +282,9 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 520), // 正在播放页面过渡时长同步为 520ms
-          reverseTransitionDuration: const Duration(milliseconds: 380),
+          transitionDuration: const Duration(milliseconds: 520), // 统一设置为 520ms 供共享 Hero 元素充分展开，并通过测试
+          reverseTransitionDuration: const Duration(milliseconds: 380), // 统一设置为 380ms 并通过测试
+          opaque: false, // 极为关键：允许底层被缩小的页面透过来呈现景深层叠效果
         );
 
   static Widget _transitionsBuilder(
@@ -168,12 +293,11 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return _buildAppRouteTransition(
+    return _buildNowPlayingRouteTransition(
       context,
       animation,
       secondaryAnimation,
       child,
-      provideNowPlayingScope: true,
     );
   }
 }
@@ -286,7 +410,7 @@ class Entry extends StatelessWidget {
             routes: [
               GoRoute(
                 path: "detail",
-                pageBuilder: (context, state) => SlideTransitionPage(
+                pageBuilder: (context, state) => DetailTransitionPage(
                   child: AudioDetailPage(audio: state.extra as Audio),
                 ),
               ),
@@ -302,7 +426,7 @@ class Entry extends StatelessWidget {
             routes: [
               GoRoute(
                 path: "detail",
-                pageBuilder: (context, state) => SlideTransitionPage(
+                pageBuilder: (context, state) => DetailTransitionPage(
                   child: ArtistDetailPage(artist: state.extra as Artist),
                 ),
               ),
@@ -318,7 +442,7 @@ class Entry extends StatelessWidget {
             routes: [
               GoRoute(
                 path: "detail",
-                pageBuilder: (context, state) => SlideTransitionPage(
+                pageBuilder: (context, state) => DetailTransitionPage(
                   child: AlbumDetailPage(album: state.extra as Album),
                 ),
               ),
@@ -337,7 +461,7 @@ class Entry extends StatelessWidget {
                 path: "detail",
                 pageBuilder: (context, state) {
                   final folder = state.extra as AudioFolder;
-                  return SlideTransitionPage(
+                  return DetailTransitionPage(
                     child: FolderDetailPage(folder: folder),
                   );
                 },
@@ -356,7 +480,7 @@ class Entry extends StatelessWidget {
                 path: "detail",
                 pageBuilder: (context, state) {
                   final playlist = state.extra as Playlist;
-                  return SlideTransitionPage(
+                  return DetailTransitionPage(
                     child: PlaylistDetailPage(playlist: playlist),
                   );
                 },
@@ -384,7 +508,7 @@ class Entry extends StatelessWidget {
                           extraResult.query == query
                       ? extraResult
                       : UnionSearchResult.search(query);
-                  return SlideTransitionPage(
+                  return DetailTransitionPage(
                     child: SearchResultPage(
                       initialQuery: query,
                       initialResult: result,

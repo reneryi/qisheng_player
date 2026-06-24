@@ -971,6 +971,9 @@ class _NowPlayingArtwork extends StatelessWidget {
                     ),
                     child: Hero(
                       tag: nowPlayingArtworkHeroTag,
+                      // 使用自定义的高抛弧线 Tween，让飞跃轨迹极其显著
+                      createRectTween: (begin, end) =>
+                          CustomIntenseArcTween(begin: begin, end: end),
                       flightShuttleBuilder:
                           nowPlayingArtworkFlightShuttleBuilder,
                       child: heroArtwork,

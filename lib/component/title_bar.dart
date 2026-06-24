@@ -5,6 +5,7 @@ import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/horizontal_lyric_view.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
+import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/navigation_state.dart';
@@ -134,24 +135,14 @@ class _TitleLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return WindowDragRegion(
-      child: Container(
+      // 重构：移除原本 Container 的彩色背景与外发光阴影，将应用图标以极简纯粹的形式浮动显示
+      child: SizedBox(
         width: 34,
         height: 34,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: scheme.primary.withValues(alpha: 0.14),
-          boxShadow: [
-            BoxShadow(
-              color: scheme.primary.withValues(alpha: 0.22),
-              blurRadius: 18,
-              spreadRadius: -3,
-            ),
-          ],
+        child: Center(
+          child: Image.asset('app_icon.ico', width: 24, height: 24),
         ),
-        alignment: Alignment.center,
-        child: Image.asset('app_icon.ico', width: 24, height: 24),
       ),
     );
   }
@@ -319,8 +310,9 @@ class NavBackBtn extends StatelessWidget {
     return ListenableBuilder(
       listenable: navigation,
       builder: (context, _) {
-        return IconButton(
-          enableFeedback: false,
+        // 重构：使用沉浸式按钮变体 CpIconButton(variant: CpButtonVariant.immersive)
+        return CpIconButton(
+          variant: CpButtonVariant.immersive,
           tooltip: '返回',
           onPressed: context.canPop() || navigation.canGoBack
               ? () => navigation.navigateBack(context, fallback: '')
@@ -341,8 +333,9 @@ class NavForwardBtn extends StatelessWidget {
     return ListenableBuilder(
       listenable: navigation,
       builder: (context, _) {
-        return IconButton(
-          enableFeedback: false,
+        // 重构：使用沉浸式按钮变体 CpIconButton(variant: CpButtonVariant.immersive)
+        return CpIconButton(
+          variant: CpButtonVariant.immersive,
           tooltip: '前进',
           onPressed: navigation.canGoForward
               ? () => navigation.navigateForward(context)
@@ -506,11 +499,35 @@ class _WindowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final defaultColor = color ?? scheme.onSurface;
+
     return IconButton(
       enableFeedback: false,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: Icon(icon, color: color),
+      icon: Icon(icon),
+      // 重构：定义完全沉浸式的 ButtonStyle，消除默认与交互时的所有物理底色及描边边框
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.transparent,
+        side: BorderSide.none,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+      ).copyWith(
+        // 通过状态属性动态控制图标前景色透明度和高亮颜色，实现无圆底纯色悬停效果
+        iconColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return defaultColor.withValues(alpha: 0.34);
+          }
+          if (states.contains(WidgetState.pressed)) {
+            return color ?? scheme.primary; // 按下时非退出按钮显示强调色，退出按钮显示原色（如 error 红色）
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return defaultColor; // 悬停状态下图标呈现完全不透明高亮
+          }
+          return defaultColor.withValues(alpha: 0.62); // 默认状态显示为 62% 不透明度的半透明图标
+        }),
+      ),
     );
   }
 }
