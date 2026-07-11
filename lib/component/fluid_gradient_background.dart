@@ -5,6 +5,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:provider/provider.dart';
+import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 
@@ -136,7 +138,25 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = context.watch<ThemeProvider>();
+    final backdropMode = theme.windowBackdropMode;
 
+    // 若当前不是极光流体模式，需做材质隔离
+    if (backdropMode != WindowBackdropMode.fluid) {
+      // 1. 如果是关闭材质效果，需要显示实色的主题底色作为软件不透光背景
+      if (backdropMode == WindowBackdropMode.none) {
+        return Container(
+          color: isDark
+              ? const Color(0xFF0F141C) // 极简暗黑实色背景
+              : const Color(0xFFF3F6FB), // 洁净亮白实色背景
+          child: widget.child,
+        );
+      }
+      // 2. 如果是云母、云母 Alt、亚克力等原生系统材质，底层必须保持完全透明，让原生桌面背景透过来
+      return widget.child;
+    }
+
+    // 极光流体模式 (Flutter 软件渲染)
     return Stack(
       fit: StackFit.expand,
       children: [

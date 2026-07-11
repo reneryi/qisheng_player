@@ -1,4 +1,6 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
+import 'package:flutter/scheduler.dart' show Ticker; // 引入 Ticker 用于旋转封面物理阻尼计算
 import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/waveform_slider.dart';
@@ -317,45 +319,104 @@ class _SpinningArtwork extends StatefulWidget {
 
 class _SpinningArtworkState extends State<_SpinningArtwork>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final Ticker _ticker; // 手动物理引擎轮询计时器
+  double _angle = 0.0; // 累计旋转角度（以弧度为单位）
+  double _speed = 0.0; // 当前角速度（以弧度/秒为单位）
+
+  // 目标速度 (设定每 18 秒转完一整圈)
+  static const double _targetSpeed = 2.0 * math.pi / 18.0;
+  // 加速度 (从零静止到满速大约需 1.5 秒，实现顺滑起步)
+  static const double _acceleration = _targetSpeed / 1.5;
+  // 阻尼减速度 (暂停时由摩擦阻尼惯性滑行，到完全静止大约需 1.8 秒)
+  static const double _deceleration = _targetSpeed / 1.8;
+
+  bool _isAligning = false; // 是否处于暂停后的“回正归位”动画中
+  double _alignStartAngle = 0.0; // 回正起始角度
+  double _alignEndAngle = 0.0; // 回正目标角度
+  double _alignProgress = 0.0; // 回正动画进度 (0.0 -> 1.0)
+  static const double _alignDuration = 0.8; // 回正回正过渡所需秒数 (0.8秒)
+
+  Duration _lastElapsed = Duration.zero; // 记录上一次 Tick 触发的时间
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 18),
-    );
-    _syncAnimation();
+    _ticker = createTicker(_onTick);
+    _ticker.start();
   }
 
-  @override
-  void didUpdateWidget(covariant _SpinningArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncAnimation();
-  }
-
-  void _syncAnimation() {
-    if (widget.spinning) {
-      if (!_controller.isAnimating) {
-        _controller.repeat();
-      }
+  // 物理模拟核心：逐帧计算角度与角速度
+  void _onTick(Duration elapsed) {
+    if (_lastElapsed == Duration.zero) {
+      _lastElapsed = elapsed;
       return;
     }
-    _controller.stop();
+    // 计算两帧之间的时间差 dt（秒），加 clamp 做时间突变安全防线
+    final double dt = ((elapsed.inMicroseconds - _lastElapsed.inMicroseconds) / 1000000.0).clamp(0.0, 0.1);
+    _lastElapsed = elapsed;
+
+    if (!mounted) return;
+
+    if (widget.spinning) {
+      // 处于播放状态：终止任何可能正在进行的回正，且以恒定加速度平滑提速
+      _isAligning = false;
+      if (_speed < _targetSpeed) {
+        _speed = math.min(_speed + _acceleration * dt, _targetSpeed);
+      }
+      _angle += _speed * dt;
+      setState(() {});
+    } else {
+      // 处于暂停状态：
+      if (_isAligning) {
+        // 若处于回正状态，使用 easeOutCubic 曲线进行平滑插值过渡
+        _alignProgress += dt / _alignDuration;
+        if (_alignProgress >= 1.0) {
+          _alignProgress = 1.0;
+          _isAligning = false;
+          _angle = _alignEndAngle;
+        } else {
+          final curve = Curves.easeOutCubic.transform(_alignProgress);
+          _angle = _alignStartAngle + (_alignEndAngle - _alignStartAngle) * curve;
+        }
+        setState(() {});
+      } else {
+        // 若不处于回正状态，则应用物理阻尼减速
+        if (_speed > 0.0) {
+          _speed = math.max(_speed - _deceleration * dt, 0.0);
+          _angle += _speed * dt;
+          setState(() {});
+        } else {
+          // 速度完全降为 0 后，计算最近的下一个 0 度位置 (即 2*pi 的完整倍数)
+          final double fullRotations = (_angle / (2.0 * math.pi)).ceilToDouble();
+          _alignStartAngle = _angle;
+          _alignEndAngle = fullRotations * 2.0 * math.pi;
+
+          // 若偏移小于临界值直接归零，否则启动 0.8s 的平滑回正动画
+          if ((_alignEndAngle - _alignStartAngle).abs() < 0.01) {
+            _angle = _alignEndAngle;
+          } else {
+            _isAligning = true;
+            _alignProgress = 0.0;
+          }
+          setState(() {});
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // RotationTransition 接受的 turns 比例范围为 0.0 到 1.0 (表示一整圈)
+    final double turns = _angle / (2.0 * math.pi);
     return RotationTransition(
-      turns: Tween<double>(begin: 0, end: 1).animate(_controller),
+      turns: AlwaysStoppedAnimation(turns),
       child: widget.child,
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ticker.dispose(); // 销毁 Ticker 防止泄漏
     super.dispose();
   }
 }

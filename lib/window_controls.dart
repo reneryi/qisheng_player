@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
@@ -80,17 +80,32 @@ class WindowControls {
   static Future<WindowBackdropModeResult> setWindowBackdropMode(
     WindowBackdropMode mode,
   ) async {
+    // 极光流体模式在原生窗口层不需要透明材质支持，因此在原生端使用 none 进行渲染
+    final effectiveMode = mode == WindowBackdropMode.fluid ? WindowBackdropMode.none : mode;
     try {
       final appliedMode = await _channel.invokeMapMethod<Object?, Object?>(
         "set_window_backdrop_mode",
-        {"mode": mode.name},
+        {"mode": effectiveMode.name},
       );
-      final result = appliedMode == null
+      var result = appliedMode == null
           ? WindowBackdropModeResult.fallback(
               mode,
               fallbackReason: 'empty_platform_response',
             )
           : WindowBackdropModeResult.fromMap(appliedMode, mode);
+
+      // 新增：如果原本请求的是极光流体，虽然我们为了关闭原生材质传给底层 none，
+      // 但由于极光流体已成功在 Dart/Flutter 层生效，我们在这里把 appliedMode 纠正为 fluid，
+      // 并判定为应用成功，从而避免触发回退 SnackBar 提示。
+      if (mode == WindowBackdropMode.fluid) {
+        result = const WindowBackdropModeResult(
+          requestedMode: WindowBackdropMode.fluid,
+          appliedMode: WindowBackdropMode.fluid,
+          nativeBackdropSupported: true, // 软件渲染的流体材质是必定支持的
+          nativeApplySucceeded: true,    // 标记为成功应用状态
+        );
+      }
+
       _lastBackdropResult = result;
       return result;
     } on PlatformException {

@@ -237,16 +237,29 @@ class CpSurface extends StatelessWidget {
           CpSurfaceTone.floating => surfaces.radiusXxl,
         };
     final isDark = scheme.brightness == Brightness.dark;
+    
+    // 基础面板及容器颜色设定
     final baseColor = switch (tone) {
       CpSurfaceTone.panel => scheme.surfaceContainer,
       CpSurfaceTone.card => scheme.surfaceContainerHighest,
       CpSurfaceTone.subtle => scheme.surfaceContainerLow,
       CpSurfaceTone.floating => scheme.surfaceContainerHighest,
     };
+    
+    // 自适应不透明度计算：绑定 AppSurfaceTokens 的 panelAlpha 和 glassAlpha
+    // 能够根据当前设置的背景材质（云母/亚克力等）做出完美的透明度反应，防止挡住系统桌面背景
+    final resolvedOpacity = switch (tone) {
+      CpSurfaceTone.panel => surfaces.panelAlpha * (isDark ? 0.72 : 0.75),
+      CpSurfaceTone.floating => surfaces.panelAlpha * (isDark ? 0.76 : 0.82),
+      CpSurfaceTone.card => surfaces.glassAlpha * (isDark ? 0.88 : 0.92),
+      CpSurfaceTone.subtle => surfaces.glassAlpha * (isDark ? 0.64 : 0.68),
+    };
+    
     final color = Color.alphaBlend(
       scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
-      baseColor.withValues(alpha: _toneOpacity(isDark)),
+      baseColor.withValues(alpha: resolvedOpacity),
     );
+    
     final shadow = tone == CpSurfaceTone.floating
         ? [
             BoxShadow(
@@ -261,7 +274,15 @@ class CpSurface extends StatelessWidget {
             ),
           ]
         : const <BoxShadow>[];
+        
     final applyBlur = surfaces.backdropStrategy != AppBackdropStrategy.solid;
+
+    // 微光渐变描边优化：混合主导强调色和白色，使边框在暗黑与亮色下均有温润的情感氛围微光
+    final glowBorderColor = Color.lerp(
+      scheme.primary.withValues(alpha: isDark ? 0.18 : 0.36),
+      Colors.white.withValues(alpha: isDark ? 0.12 : 0.44),
+      0.72, // 72% 白色与 28% 主题色混合
+    )!;
 
     final content = AnimatedContainer(
       duration: motion.panelTransitionDuration,
@@ -286,7 +307,8 @@ class CpSurface extends StatelessWidget {
         ),
         border: border
             ? Border.all(
-                color: Colors.white.withValues(alpha: isDark ? 0.14 : 0.5),
+                color: glowBorderColor,
+                width: 1.0,
               )
             : null,
         boxShadow: shadow,
@@ -310,15 +332,6 @@ class CpSurface extends StatelessWidget {
             )
           : content,
     );
-  }
-
-  double _toneOpacity(bool isDark) {
-    return switch (tone) {
-      CpSurfaceTone.panel => isDark ? 0.34 : 0.36,
-      CpSurfaceTone.card => isDark ? 0.3 : 0.32,
-      CpSurfaceTone.subtle => isDark ? 0.22 : 0.24,
-      CpSurfaceTone.floating => isDark ? 0.36 : 0.44,
-    };
   }
 
   double _toneSigmaScale() {

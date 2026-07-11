@@ -723,7 +723,7 @@ class _ImmersiveArtworkStage extends StatelessWidget {
                       size: size,
                       radius: compact ? 14 : 24, // 大屏下圆角适当增大，让界面更加圆润美观
                       large: true,
-                      showBackdropGlow: false, // 去除臃肿的背景毛玻璃光晕，恢复极简纯净
+                      showBackdropGlow: true, // 启用弥散的动态呼吸光晕特效
                     ),
                     SizedBox(height: compact ? 12 : 24), // 微调纵向间距为 24 像素，增加呼吸感
                     _NowPlayingStagedReveal(
@@ -848,7 +848,7 @@ class _ArtworkStageHitAbsorber extends StatelessWidget {
   }
 }
 
-class _NowPlayingArtwork extends StatelessWidget {
+class _NowPlayingArtwork extends StatefulWidget {
   const _NowPlayingArtwork({
     required this.size,
     required this.radius,
@@ -862,6 +862,29 @@ class _NowPlayingArtwork extends StatelessWidget {
   final bool showBackdropGlow;
 
   @override
+  State<_NowPlayingArtwork> createState() => _NowPlayingArtworkState();
+}
+
+class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _glowController; // 4s 超慢专辑封面呼吸发光控制器
+
+  @override
+  void initState() {
+    super.initState();
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true); // 双向无限循环，实现平滑吸纳膨胀的呼吸感
+  }
+
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
@@ -871,9 +894,10 @@ class _NowPlayingArtwork extends StatelessWidget {
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
-        final useLargeCover = large && effectsLevel == UiEffectsLevel.visual;
+        final useLargeCover = widget.large && effectsLevel == UiEffectsLevel.visual;
         final enableBackdropGlow =
-            showBackdropGlow && effectsLevel == UiEffectsLevel.visual;
+            widget.showBackdropGlow &&
+            effectsLevel == UiEffectsLevel.visual;
         final future = audio == null
             ? null
             : (useLargeCover ? audio.largeCover : audio.mediumCover);
@@ -884,23 +908,23 @@ class _NowPlayingArtwork extends StatelessWidget {
             final provider = snapshot.data;
             final placeholder = DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
+                borderRadius: BorderRadius.circular(widget.radius),
                 color: Colors.white.withValues(alpha: 0.06),
               ),
               child: Icon(
                 provider == null ? Symbols.music_note : Symbols.broken_image,
                 color: scheme.onSurface.withValues(alpha: 0.62),
-                size: size * 0.24,
+                size: widget.size * 0.24,
               ),
             );
 
             Widget image(ImageProvider<Object> imageProvider) {
               return ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
+                borderRadius: BorderRadius.circular(widget.radius),
                 child: Image(
                   image: imageProvider,
-                  width: size,
-                  height: size,
+                  width: widget.size,
+                  height: widget.size,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => placeholder,
                 ),
@@ -909,7 +933,7 @@ class _NowPlayingArtwork extends StatelessWidget {
 
             final mainImage = provider == null ? placeholder : image(provider);
             final imageKey = ValueKey(
-              '${audio?.path ?? 'empty'}:${provider.hashCode}:${size.round()}',
+              '${audio?.path ?? 'empty'}:${provider.hashCode}:${widget.size.round()}',
             );
             final heroArtwork = NowPlayingArtworkHeroFrame(
               child: RepaintBoundary(
@@ -937,30 +961,38 @@ class _NowPlayingArtwork extends StatelessWidget {
             );
 
             return SizedBox(
-              width: size,
-              height: size,
+              width: widget.size,
+              height: widget.size,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   if (enableBackdropGlow && provider != null)
                     Positioned.fill(
                       child: Padding(
-                        padding: EdgeInsets.all(size * 0.08),
-                        child: ImageFiltered(
-                          imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Transform.scale(
-                            scale: 1.08,
-                            child: Opacity(
-                              opacity: 0.58,
-                              child: image(provider),
-                            ),
+                        padding: EdgeInsets.all(widget.size * 0.08),
+                        child: AnimatedBuilder(
+                          animation: _glowController,
+                          builder: (context, staticGlowChild) {
+                            final scaleVal = 1.05 + _glowController.value * 0.07; // 1.05 到 1.12 的呼吸缩放
+                            final opacityVal = 0.38 + _glowController.value * 0.22; // 0.38 到 0.60 的透明度呼吸
+                            return Transform.scale(
+                              scale: scaleVal,
+                              child: Opacity(
+                                opacity: opacityVal,
+                                child: staticGlowChild, // 仅在 GPU 侧对已经模糊好的缓存纹理做变换，杜绝主线程阻塞
+                              ),
+                            );
+                          },
+                          child: ImageFiltered(
+                            imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32), // 将高斯模糊提取为静态 child，确保一整首歌期间只渲染一次
+                            child: image(provider),
                           ),
                         ),
                       ),
                     ),
                   DecoratedBox(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(radius),
+                      borderRadius: BorderRadius.circular(widget.radius),
                       boxShadow: [
                         BoxShadow(
                           color: accents.accentGlow.withValues(alpha: 0.34),
@@ -1084,9 +1116,29 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
 
   int _currentLineIndex = 0;
 
-  double get _primaryFontSize => widget.compact ? 28 : 36; // 杂志级排版：主歌词字号调大至 36
-  double get _secondaryFontSize => widget.compact ? 18 : 22; // 杂志级排版：副歌词字号调大至 22
-  double get _translationFontSize => widget.compact ? 14 : 16;
+  // 缩放交互与状态控制变量
+  double _fontScale = 1.0; // 歌词字体缩放因子，默认 1.0 (从 0.5 到 2.5 范围限制)
+  double _baseScale = 1.0; // 记录捏合手势起始时的基础缩放比例
+  bool _showScaleIndicator = false; // 是否在界面顶部展示“歌词大小: XXX%”的浮层提示
+  Timer? _scaleIndicatorTimer; // 定时器，用于延迟淡出提示胶囊
+
+  // 更新缩放比例并触发提示指示器展示的通用方法
+  void _updateScale(double newScale) {
+    setState(() {
+      _fontScale = newScale.clamp(0.5, 2.5);
+      _showScaleIndicator = true;
+    });
+    _scaleIndicatorTimer?.cancel();
+    _scaleIndicatorTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) {
+        setState(() => _showScaleIndicator = false);
+      }
+    });
+  }
+
+  double get _primaryFontSize => (widget.compact ? 28 : 36) * _fontScale; // 杂志级排版：主歌词字号随缩放系数动态调整
+  double get _secondaryFontSize => (widget.compact ? 18 : 22) * _fontScale; // 杂志级排版：副歌词字号随缩放系数动态调整
+  double get _translationFontSize => (widget.compact ? 14 : 16) * _fontScale; // 翻译行字号随缩放系数动态调整
   double get _verticalPadding => widget.compact ? 140 : 200;
 
   @override
@@ -1165,9 +1217,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     final base = isCurrent
         ? (widget.compact ? 88.0 : 104.0)
         : (widget.compact ? 56.0 : 68.0);
-    return _showTranslation(line)
+    final height = _showTranslation(line)
         ? base + (widget.compact ? 28.0 : 32.0)
         : base;
+    return height * _fontScale; // 必须乘以字号缩放比例，以保证歌词滚动定位在缩放时仍能绝对精准居中
   }
 
   double _estimatedOffsetBefore(int index) {
@@ -1326,94 +1379,202 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
 
-    return RepaintBoundary(
-      child: Material(
-        type: MaterialType.transparency,
-        child: Scrollbar(
-          controller: scrollController,
-          thumbVisibility: true,
-          child: ListView.builder(
-            controller: scrollController,
-            padding: EdgeInsets.symmetric(
-              vertical: _verticalPadding,
-              horizontal: widget.compact ? 20 : 48, // 增加左侧缩进呼吸空间
-            ),
-            itemCount: widget.lyric.lines.length,
-            itemBuilder: (context, index) {
-              final line = widget.lyric.lines[index];
-              final isCurrent = index == _currentLineIndex;
-              final translation = _translationText(line);
-              final lineColor = _lineColor(
-                scheme,
-                index: index,
-                isCurrent: isCurrent,
-              );
+    // 采用 Stack 包裹整个面板，使浮动缩放指示胶囊能够完美悬浮在歌词视口中央上方
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        GestureDetector(
+          // 捕获双指捏合手势以缩放歌词大小
+          onScaleStart: (details) {
+            _baseScale = _fontScale;
+          },
+          onScaleUpdate: (details) {
+            _updateScale(_baseScale * details.scale);
+          },
+          child: Listener(
+            // 捕获桌面端特有的 Ctrl + 鼠标滚轮快捷缩放手势
+            onPointerSignal: (pointerSignal) {
+              if (pointerSignal is PointerScrollEvent) {
+                // 判断硬件键盘的 Control 键是否被按下
+                final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+                if (isCtrlPressed) {
+                  // 滚轮向上滚动增大字号，向下滚动则减小字号
+                  final change = pointerSignal.scrollDelta.dy < 0 ? 0.08 : -0.08;
+                  _updateScale(_fontScale + change);
+                }
+              }
+            },
+            child: RepaintBoundary(
+              child: Material(
+                type: MaterialType.transparency,
+                child: Scrollbar(
+                  controller: scrollController,
+                  thumbVisibility: true,
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: EdgeInsets.symmetric(
+                      vertical: _verticalPadding,
+                      horizontal: widget.compact ? 20 : 48, // 增加左侧缩进呼吸空间
+                    ),
+                    itemCount: widget.lyric.lines.length,
+                    itemBuilder: (context, index) {
+                      final line = widget.lyric.lines[index];
+                      final isCurrent = index == _currentLineIndex;
+                      final translation = _translationText(line);
+                      final lineColor = _lineColor(
+                        scheme,
+                        index: index,
+                        isCurrent: isCurrent,
+                      );
 
-              return AnimatedOpacity(
-                duration: motion.controlTransitionDuration,
-                curve: motion.fast,
-                opacity: _lineOpacity(index: index, isCurrent: isCurrent),
-                child: AnimatedScale(
-                  duration: motion.controlTransitionDuration,
-                  curve: motion.normal,
-                  scale: isCurrent ? 1 : 0.982,
-                  child: InkWell(
-                    enableFeedback: false,
-                    borderRadius: BorderRadius.circular(24),
-                    onTap: () {
-                      playbackService.seek(line.start.inMilliseconds / 1000.0);
-                    },
-                    child: AnimatedPadding(
-                      duration: motion.controlTransitionDuration,
-                      curve: motion.normal,
-                      padding: EdgeInsets.symmetric(
-                        vertical: isCurrent ? 16 : 10,
-                        horizontal: 12,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start, // 杂志排版：歌词左对齐
-                        children: [
-                          _primaryLineWidget(
-                            line: line,
-                            isCurrent: isCurrent,
-                            lineColor: lineColor,
-                            scheme: scheme,
-                          ),
-                          if (_showTranslation(line)) ...[
-                            const SizedBox(height: 8),
-                            AnimatedDefaultTextStyle(
-                              duration: motion.controlTransitionDuration,
-                              curve: motion.fast,
-                              style: TextStyle(
-                                color: isCurrent
-                                    ? scheme.onSurface.withValues(alpha: 0.74)
-                                    : lineColor.withValues(alpha: 0.74),
-                                fontSize: _translationFontSize,
-                                fontWeight: FontWeight.w400,
-                                height: 1.25,
-                              ),
-                              textAlign: TextAlign.left, // 翻译行左对齐
-                              child: Text(
-                                translation,
-                                textAlign: TextAlign.left,
+                      // 设定平滑的高斯模糊目标参数：当前行 0.0（清晰），已播放 0.8（微模糊），未播放 1.8（深模糊以突出当前句）
+                      final double targetBlur = isCurrent
+                          ? 0.0
+                          : (index < _currentLineIndex ? 0.8 : 1.8);
+
+                      return AnimatedOpacity(
+                        duration: motion.controlTransitionDuration,
+                        curve: motion.fast,
+                        opacity: _lineOpacity(index: index, isCurrent: isCurrent),
+                        child: AnimatedScale(
+                          duration: motion.controlTransitionDuration,
+                          curve: motion.normal,
+                          scale: isCurrent ? 1 : 0.982,
+                          child: InkWell(
+                            enableFeedback: false,
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: () {
+                              playbackService.seek(line.start.inMilliseconds / 1000.0);
+                            },
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: targetBlur, end: targetBlur),
+                              duration: motion.panelTransitionDuration,
+                              curve: motion.normal,
+                              builder: (context, animatedBlur, child) {
+                                Widget content = child!;
+                                // 若模糊半径大于临界值，则套上 ImageFiltered 渲染层
+                                if (animatedBlur > 0.05) {
+                                  content = ImageFiltered(
+                                    imageFilter: ImageFilter.blur(
+                                      sigmaX: animatedBlur,
+                                      sigmaY: animatedBlur,
+                                    ),
+                                    child: content,
+                                  );
+                                }
+                                return content;
+                              },
+                              child: AnimatedPadding(
+                                duration: motion.controlTransitionDuration,
+                                curve: motion.normal,
+                                padding: EdgeInsets.symmetric(
+                                  vertical: isCurrent ? 16 : 10,
+                                  horizontal: 12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start, // 杂志排版：歌词左对齐
+                                  children: [
+                                    _primaryLineWidget(
+                                      line: line,
+                                      isCurrent: isCurrent,
+                                      lineColor: lineColor,
+                                      scheme: scheme,
+                                    ),
+                                    if (_showTranslation(line)) ...[
+                                      const SizedBox(height: 8),
+                                      AnimatedDefaultTextStyle(
+                                        duration: motion.controlTransitionDuration,
+                                        curve: motion.fast,
+                                        style: TextStyle(
+                                          color: isCurrent
+                                              ? scheme.onSurface.withValues(alpha: 0.74)
+                                              : lineColor.withValues(alpha: 0.74),
+                                          fontSize: _translationFontSize,
+                                          fontWeight: FontWeight.w400,
+                                          height: 1.25,
+                                        ),
+                                        textAlign: TextAlign.left, // 翻译行左对齐
+                                        child: Text(
+                                          translation,
+                                          textAlign: TextAlign.left,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
-                        ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // 精致的高斯毛玻璃风格缩放比例提示胶囊组件
+        Positioned(
+          top: 32,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _showScaleIndicator ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainer.withValues(alpha: 0.68),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 16,
+                          spreadRadius: -4,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Symbols.zoom_in,
+                          size: 16,
+                          color: scheme.onSurface.withValues(alpha: 0.8),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '歌词大小: ${(_fontScale * 100).round()}%',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
   @override
   void dispose() {
+    _scaleIndicatorTimer?.cancel(); // 清理缩放指示指示器可能残存的定时器
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();
     super.dispose();

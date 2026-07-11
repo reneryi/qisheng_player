@@ -10,14 +10,25 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 enum WindowBackdropMode {
+  /// 自动系统决策模式
   auto,
+  /// Windows 11 原生云母材质
   mica,
+  /// Windows 11 22H2 标签页云母 Alt 材质
+  micaAlt,
+  /// Windows 11 原生亚克力材质
   acrylic,
+  /// 极光流体漂移背景材质（Flutter 软件渲染）
+  fluid,
+  /// 关闭所有窗口特效
   none;
 
   static WindowBackdropMode? fromName(String? value) {
+    if (value == null) return null;
+    // 关键修复：进行大小写不区分匹配，以防底层 C++ 返回全小写的 "micaalt" 无法正确匹配 Dart 枚举 "micaAlt" 导致判定为回退
+    final normalized = value.toLowerCase();
     for (final item in values) {
-      if (item.name == value) return item;
+      if (item.name.toLowerCase() == normalized) return item;
     }
     return null;
   }
@@ -90,8 +101,8 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，更新为 1.2.9
-  static const String version = "1.2.9";
+  // 当前播放器的全局静态版本号，更新为 1.2.10
+  static const String version = "1.2.10";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
 

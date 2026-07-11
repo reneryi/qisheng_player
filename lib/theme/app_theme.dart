@@ -401,8 +401,10 @@ class AppTheme {
   ) {
     return switch (mode) {
       WindowBackdropMode.none => (0.02, 0.01, 1.25, 0.0),
+      WindowBackdropMode.fluid => (0.04, 0.03, 0.92, 1.0), // 流体背景沿用默认偏置
       WindowBackdropMode.auto => (0.04, 0.03, 0.92, 1.0),
       WindowBackdropMode.mica => (0.05, 0.04, 0.82, 1.08),
+      WindowBackdropMode.micaAlt => (0.08, 0.06, 0.72, 1.15), // Mica Alt 采用更鲜明的色调偏置
       WindowBackdropMode.acrylic => (0.12, 0.1, 0.52, 1.55),
     };
   }
@@ -420,6 +422,13 @@ class AppTheme {
           0.72,
           AppBackdropStrategy.solid,
         ),
+      WindowBackdropMode.fluid => (
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          fallbackStrategy,
+        ),
       WindowBackdropMode.auto => (
           0.0,
           0.0,
@@ -427,16 +436,26 @@ class AppTheme {
           1.0,
           fallbackStrategy,
         ),
+      // 优化原生云母材质透明度，大幅度降低不透明度（之前是 -0.02, -0.04）以体现通透感
       WindowBackdropMode.mica => (
-          -0.02,
-          -0.04,
+          -0.18,
+          -0.12,
           0.88,
           0.9,
           AppBackdropStrategy.adaptive,
         ),
+      // 新增云母 Alt 材质透明度配置，使其极度通透并呈现高级灰色调底图
+      WindowBackdropMode.micaAlt => (
+          -0.22,
+          -0.16,
+          1.0,
+          0.95,
+          AppBackdropStrategy.adaptive,
+        ),
+      // 原生亚克力材质：使其相比原来更加通透（之前是 -0.18, -0.08）
       WindowBackdropMode.acrylic => (
+          -0.24,
           -0.18,
-          -0.08,
           1.42,
           1.18,
           AppBackdropStrategy.forceBlur,

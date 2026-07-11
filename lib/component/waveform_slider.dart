@@ -1,9 +1,12 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter; // 引入 ImageFilter 支持气泡毛玻璃滤镜
+import 'package:qisheng_player/utils.dart'; // 引入 utils 以使用 duration 格式化扩展
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
 /// 仿真果冻波形进度条组件
-/// 使用 Canvas 绘制 50 根柱状波形，在播放时正弦律动，拖拽时呈物理果冻状受力挤压和回弹
+/// 使用 Canvas 绘制 52 根柱状声波，播放时伴随正弦波动；鼠标悬停时产生局部物理吸附隆起；
+/// 拖拽时呈现高斯果冻受力扁平化和弹簧物理回弹效果；并在光标处叠置毛玻璃时间气泡提示。
 class WaveformSlider extends StatefulWidget {
   const WaveformSlider({
     super.key,
@@ -31,10 +34,16 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
   late final AnimationController _waveController;
   // 拖动时果冻受力挤压动画控制器 (0.0 -> 1.0)
   late final AnimationController _dragController;
+  // 悬停时引力形变动画控制器 (0.0 -> 1.0)
+  late final AnimationController _hoverController;
 
   bool _isDragging = false;
   double _dragPercent = 0.0; // 当前手指拖拽所在的百分比位置 (0.0 到 1.0)
   double _dragWeight = 0.0;  // 果冻变形权重 (手势按下时平滑到 1.0，松开时回弹到 0)
+
+  bool _isHovering = false;
+  double _hoverPercent = 0.0; // 鼠标当前悬停的百分比位置
+  double _hoverWeight = 0.0;  // 悬停物理引力权重 (0.0 -> 0.45，提供柔和的引力吸附感)
 
   @override
   void initState() {
@@ -58,6 +67,16 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
           _dragWeight = _dragController.value;
         });
       });
+
+    // 悬停引力过渡：悬停淡入 150ms，移出淡出 150ms，以防柱子形变瞬间闪现
+    _hoverController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    )..addListener(() {
+        setState(() {
+          _hoverWeight = _hoverController.value * 0.45; // 最大引力比例设为 45%
+        });
+      });
   }
 
   @override
@@ -76,7 +95,26 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
   void dispose() {
     _waveController.dispose();
     _dragController.dispose();
+    _hoverController.dispose(); // 销毁悬停控制器
     super.dispose();
+  }
+
+  // 鼠标移入或在其上移动时，计算悬停百分比位置并淡入形变
+  void _handleHover(double localX, double totalWidth) {
+    if (widget.max <= 0 || totalWidth <= 0) return;
+    setState(() {
+      _hoverPercent = (localX / totalWidth).clamp(0.0, 1.0);
+      _isHovering = true;
+    });
+    _hoverController.animateTo(1.0, curve: Curves.easeOut);
+  }
+
+  // 鼠标移出进度条区域，淡出形变效果
+  void _handleHoverExit() {
+    setState(() {
+      _isHovering = false;
+    });
+    _hoverController.animateTo(0.0, curve: Curves.easeIn);
   }
 
   void _handleDragStart(double localX, double totalWidth) {
@@ -131,33 +169,90 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
+        // 计算是否展示时间气泡提示，以及该气泡对应的时间数值
+        final showTooltip = (_isHovering || _isDragging) && widget.max > 0;
+        final tooltipPercent = _isDragging ? _dragPercent : _hoverPercent;
+        final tooltipValue = tooltipPercent * widget.max;
 
-        return GestureDetector(
-          onHorizontalDragStart: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
-          onHorizontalDragUpdate: (details) => _handleDragUpdate(details.localPosition.dx, totalWidth),
-          onHorizontalDragEnd: (_) => _handleDragEnd(),
-          onHorizontalDragCancel: () => _handleDragEnd(),
-          onTapDown: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: AnimatedBuilder(
-              animation: _waveController,
-              builder: (context, child) {
-                return CustomPaint(
-                  size: Size(totalWidth, widget.height), // 根据高度属性进行自适应绘制
-                  painter: _WaveformSliderPainter(
-                    percent: currentPercent,
-                    wavePhase: _waveController.value * math.pi * 2,
-                    isDragging: _isDragging,
-                    dragPercent: _dragPercent,
-                    dragWeight: _dragWeight,
-                    isPlaying: widget.isPlaying,
-                    colorScheme: Theme.of(context).colorScheme,
-                  ),
-                );
-              },
+        return Stack(
+          clipBehavior: Clip.none, // 修正为 Clip.none，允许气泡提示浮在波形外面而不被截断
+          children: [
+            GestureDetector(
+              onHorizontalDragStart: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
+              onHorizontalDragUpdate: (details) => _handleDragUpdate(details.localPosition.dx, totalWidth),
+              onHorizontalDragEnd: (_) => _handleDragEnd(),
+              onHorizontalDragCancel: () => _handleDragEnd(),
+              onTapDown: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onHover: (details) => _handleHover(details.localPosition.dx, totalWidth),
+                onExit: (_) => _handleHoverExit(),
+                child: AnimatedBuilder(
+                  animation: _waveController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: Size(totalWidth, widget.height), // 根据高度属性进行自适应绘制
+                      painter: _WaveformSliderPainter(
+                        percent: currentPercent,
+                        wavePhase: _waveController.value * math.pi * 2,
+                        isDragging: _isDragging,
+                        dragPercent: _dragPercent,
+                        dragWeight: _dragWeight,
+                        isHovering: _isHovering,
+                        hoverPercent: _hoverPercent,
+                        hoverWeight: _hoverWeight,
+                        isPlaying: widget.isPlaying,
+                        colorScheme: Theme.of(context).colorScheme,
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
+            // 精致毛玻璃预览时间气泡
+            if (showTooltip)
+              Positioned(
+                // 气泡水平居中对齐当前光标物理位置，并且加 clamp 进行边界溢出保护，防止裁切
+                left: (tooltipPercent * totalWidth - 32.0).clamp(0.0, totalWidth - 64.0),
+                bottom: widget.height + 6.0,
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), // 毛玻璃滤镜
+                      child: Container(
+                        width: 64,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.74),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.14),
+                              blurRadius: 10,
+                              spreadRadius: -2,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          Duration(milliseconds: (tooltipValue * 1000).round()).toStringHMMSS(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -172,6 +267,9 @@ class _WaveformSliderPainter extends CustomPainter {
     required this.isDragging,
     required this.dragPercent,
     required this.dragWeight,
+    required this.isHovering,
+    required this.hoverPercent,
+    required this.hoverWeight,
     required this.isPlaying,
     required this.colorScheme,
   });
@@ -181,6 +279,9 @@ class _WaveformSliderPainter extends CustomPainter {
   final bool isDragging;       // 是否正在被拖拽
   final double dragPercent;    // 拖拽焦点百分比 (0.0 到 1.0)
   final double dragWeight;     // 果冻受力物理形变系数 (0.0 -> 1.0)
+  final bool isHovering;       // 鼠标当前是否处于悬停状态
+  final double hoverPercent;   // 悬停焦点百分比 (0.0 到 1.0)
+  final double hoverWeight;    // 悬停引力物理系数 (0.0 -> 0.45)
   final bool isPlaying;        // 是否播放中
   final ColorScheme colorScheme;
 
@@ -201,19 +302,22 @@ class _WaveformSliderPainter extends CustomPainter {
     // 已播放主色画笔 (高饱和激活主色)
     final activePaint = Paint()
       ..color = colorScheme.primary
-      ..style = PaintingStyle.fill; // 修正为 PaintingStyle
+      ..style = PaintingStyle.fill;
 
     // 未播放背景色画笔 (半透明高雅灰色)
     final inactivePaint = Paint()
-      ..color = colorScheme.onSurface.withValues(alpha: 0.18) // 修正并优化为 withValues
-      ..style = PaintingStyle.fill; // 修正为 PaintingStyle
+      ..color = colorScheme.onSurface.withValues(alpha: 0.18)
+      ..style = PaintingStyle.fill;
 
     // 拖拽触点高亮标记画笔
     final focusPaint = Paint()
-      ..color = colorScheme.secondary.withValues(alpha: 0.4) // 修正并优化为 withValues
+      ..color = colorScheme.secondary.withValues(alpha: 0.4)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
 
-    final double dragIndex = dragPercent * _barCount;
+    // 确定当前的物理形变中心与形变权重 (拖动时以拖拽焦点的果冻效果为主，悬停时则展示引力微澜)
+    final double activeWeight = isDragging ? dragWeight : hoverWeight;
+    final double activePercent = isDragging ? dragPercent : hoverPercent;
+    final double dragIndex = activePercent * _barCount;
 
     // 逐根绘制波形柱
     for (int i = 0; i < _barCount; i++) {
@@ -228,17 +332,23 @@ class _WaveformSliderPainter extends CustomPainter {
         barHeight += sineWave;
       }
 
-      // 3. 极具生命力的【果冻挤压拉伸】物理仿真算法
-      if (dragWeight > 0) {
+      // 3. 极具生命力的【果冻挤压拉伸与悬停引力吸附】物理仿真算法
+      if (activeWeight > 0) {
         final double d = (i - dragIndex).abs();
-        // 触点正下方高斯受力下凹系数 (中心受力向下压扁)
+        // 触点正下方高斯受力形变范围
         final double squishForce = math.exp(-d * d / 20.0);
-        // 触点左右两侧正弦隆起系数 (边缘隆起挤高)
         final double stretchForce = math.exp(-(d - 4.5) * (d - 4.5) / 10.0);
 
         // 应用受力物理混合
-        double scale = 1.0 - 0.55 * squishForce * dragWeight; // 触点下方压缩
-        scale += 0.32 * stretchForce * dragWeight;            // 两侧隆起
+        double scale = 1.0;
+        if (isDragging) {
+          // 正在被拖拽：手指下方受力向下压扁，左右两侧隆起
+          scale -= 0.55 * squishForce * activeWeight;
+          scale += 0.32 * stretchForce * activeWeight;
+        } else {
+          // 仅鼠标悬停：受物理吸附吸引，光标下方柱子微微隆起，给用户极佳的探索反馈
+          scale += 0.26 * squishForce * activeWeight;
+        }
         barHeight *= scale;
       }
 
@@ -281,6 +391,9 @@ class _WaveformSliderPainter extends CustomPainter {
         oldDelegate.isDragging != isDragging ||
         oldDelegate.dragPercent != dragPercent ||
         oldDelegate.dragWeight != dragWeight ||
+        oldDelegate.isHovering != isHovering ||
+        oldDelegate.hoverPercent != hoverPercent ||
+        oldDelegate.hoverWeight != hoverWeight ||
         oldDelegate.isPlaying != isPlaying ||
         oldDelegate.colorScheme != colorScheme;
   }

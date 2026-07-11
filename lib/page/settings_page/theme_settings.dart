@@ -272,7 +272,9 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
     return switch (WindowBackdropMode.fromName(mode)) {
       WindowBackdropMode.auto => "自动",
       WindowBackdropMode.mica => "云母",
+      WindowBackdropMode.micaAlt => "云母 Alt",
       WindowBackdropMode.acrylic => "亚克力",
+      WindowBackdropMode.fluid => "极光流体",
       WindowBackdropMode.none => "关闭",
       null => mode,
     };
@@ -286,6 +288,7 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
       "unsupported_platform" => "系统不支持原生背景材质",
       "system_backdrop_requires_windows_11" => "需要 Windows 11",
       "acrylic_requires_windows_11_22h2" => "亚克力需要 Windows 11 22H2 或更高版本",
+      "mica_alt_requires_windows_11_22h2" => "云母 Alt 需要 Windows 11 22H2 或更高版本",
       "window_handle_unavailable" => "窗口句柄不可用",
       final other => other,
     };
@@ -315,22 +318,26 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
         segments: const [
           ButtonSegment<WindowBackdropMode>(
             value: WindowBackdropMode.auto,
-            icon: Icon(Symbols.auto_awesome),
             label: Text("自动"),
           ),
           ButtonSegment<WindowBackdropMode>(
             value: WindowBackdropMode.mica,
-            icon: Icon(Symbols.layers),
             label: Text("云母"),
           ),
           ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.micaAlt,
+            label: Text("云母 Alt"),
+          ),
+          ButtonSegment<WindowBackdropMode>(
             value: WindowBackdropMode.acrylic,
-            icon: Icon(Symbols.blur_on),
             label: Text("亚克力"),
           ),
           ButtonSegment<WindowBackdropMode>(
+            value: WindowBackdropMode.fluid,
+            label: Text("极光流体"),
+          ),
+          ButtonSegment<WindowBackdropMode>(
             value: WindowBackdropMode.none,
-            icon: Icon(Symbols.block),
             label: Text("关闭"),
           ),
         ],

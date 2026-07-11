@@ -406,6 +406,7 @@ struct TitleSearchData {
 struct BackdropSupportInfo {
   bool native_supported = false;
   bool mica_supported = false;
+  bool mica_alt_supported = false;
   bool acrylic_supported = false;
   std::string auto_mode = "none";
   std::string fallback_reason = "unsupported_platform";
@@ -452,7 +453,7 @@ std::string ToLowerAscii(std::string value) {
 std::string NormalizeBackdropMode(const std::string& value) {
   const std::string normalized = ToLowerAscii(value);
   if (normalized == "auto" || normalized == "mica" ||
-      normalized == "acrylic" || normalized == "none") {
+      normalized == "micaalt" || normalized == "acrylic" || normalized == "none") {
     return normalized;
   }
   return "auto";
@@ -461,6 +462,9 @@ std::string NormalizeBackdropMode(const std::string& value) {
 int BackdropTypeFromMode(const std::string& mode) {
   if (mode == "mica") {
     return DWMSBT_MAINWINDOW;
+  }
+  if (mode == "micaalt") {
+    return DWMSBT_TABBEDWINDOW;
   }
   if (mode == "acrylic") {
     return DWMSBT_TRANSIENTWINDOW;
@@ -501,6 +505,7 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
         true,
         true,
         true,
+        true,
         "mica",
         "",
     };
@@ -510,11 +515,13 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
         true,
         true,
         false,
+        false,
         "mica",
         "acrylic_requires_windows_11_22h2",
     };
   }
   return {
+      false,
       false,
       false,
       false,
@@ -540,6 +547,15 @@ BackdropResolution ResolveBackdropRequest(const std::string& requested_mode) {
     resolution.fallback_reason = support.fallback_reason.empty()
                                      ? "mica_not_supported"
                                      : support.fallback_reason;
+    return resolution;
+  }
+
+  if (target_mode == "micaalt" && !support.mica_alt_supported) {
+    resolution.applied_mode = support.mica_supported ? "mica" : "none";
+    resolution.fallback_reason = support.fallback_reason.empty()
+                                     ? "mica_alt_requires_windows_11_22h2"
+                                     : support.fallback_reason;
+    resolution.backdrop_type = BackdropTypeFromMode(resolution.applied_mode);
     return resolution;
   }
 
@@ -1008,6 +1024,7 @@ flutter::EncodableMap FlutterWindow::SetWindowBackdropMode(
     return EncodeBackdropResolution(resolution);
   }
 
+  bool native_succeeded = false;
   if (!resolution.native_backdrop_supported) {
     const int fallback_type = DWMSBT_NONE;
     DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &fallback_type,
@@ -1015,30 +1032,37 @@ flutter::EncodableMap FlutterWindow::SetWindowBackdropMode(
     if (resolution.applied_mode.empty()) {
       resolution.applied_mode = "none";
     }
-    ApplyRoundedWindowAppearance();
-    return EncodeBackdropResolution(resolution);
+  } else {
+    const HRESULT apply_result = DwmSetWindowAttribute(
+        hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &resolution.backdrop_type,
+        sizeof(resolution.backdrop_type));
+    if (SUCCEEDED(apply_result)) {
+      native_succeeded = true;
+    } else {
+      const int fallback_type = DWMSBT_NONE;
+      DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &fallback_type,
+                            sizeof(fallback_type));
+      resolution.applied_mode = "none";
+      if (resolution.fallback_reason.empty()) {
+        std::ostringstream reason_stream;
+        reason_stream << "native_apply_failed_" << std::hex
+                      << static_cast<unsigned long>(apply_result);
+        resolution.fallback_reason = reason_stream.str();
+      }
+    }
   }
 
-  const HRESULT apply_result = DwmSetWindowAttribute(
-      hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &resolution.backdrop_type,
-      sizeof(resolution.backdrop_type));
-  if (SUCCEEDED(apply_result)) {
-    resolution.native_apply_succeeded = true;
-    ApplyRoundedWindowAppearance();
-    return EncodeBackdropResolution(resolution);
-  }
-
-  const int fallback_type = DWMSBT_NONE;
-  DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &fallback_type,
-                        sizeof(fallback_type));
-  resolution.applied_mode = "none";
-  if (resolution.fallback_reason.empty()) {
-    std::ostringstream reason_stream;
-    reason_stream << "native_apply_failed_" << std::hex
-                  << static_cast<unsigned long>(apply_result);
-    resolution.fallback_reason = reason_stream.str();
-  }
+  resolution.native_apply_succeeded = native_succeeded;
   ApplyRoundedWindowAppearance();
+
+  if (resolution.applied_mode != "none") {
+    MARGINS margins = {-1};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+  } else {
+    MARGINS margins = {0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+  }
+
   return EncodeBackdropResolution(resolution);
 }
 
