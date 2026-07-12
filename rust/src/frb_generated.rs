@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1165197965;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1601402846;
 
 // Section: executor
 
@@ -565,6 +565,54 @@ fn wire__crate__api__tag_reader__get_picture_from_path_impl(
         },
     )
 }
+fn wire__crate__api__tag_reader__get_picture_sizes_from_path_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_picture_sizes_from_path",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            let api_small_width = <u32>::sse_decode(&mut deserializer);
+            let api_small_height = <u32>::sse_decode(&mut deserializer);
+            let api_medium_width = <u32>::sse_decode(&mut deserializer);
+            let api_medium_height = <u32>::sse_decode(&mut deserializer);
+            let api_large_width = <u32>::sse_decode(&mut deserializer);
+            let api_large_height = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::tag_reader::get_picture_sizes_from_path(
+                            api_path,
+                            api_small_width,
+                            api_small_height,
+                            api_medium_width,
+                            api_medium_height,
+                            api_large_width,
+                            api_large_height,
+                        ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__logger__init_rust_logger_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -730,6 +778,51 @@ fn wire__crate__api__system_theme__system_theme_get_system_theme_impl(
                     Result::<_, ()>::Ok(crate::api::system_theme::SystemTheme::get_system_theme())?;
                 Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__tag_reader__update_audio_metadata_in_index_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_audio_metadata_in_index",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_index_path = <String>::sse_decode(&mut deserializer);
+            let api_audio_path = <String>::sse_decode(&mut deserializer);
+            let api_title = <String>::sse_decode(&mut deserializer);
+            let api_artist = <String>::sse_decode(&mut deserializer);
+            let api_album = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::tag_reader::update_audio_metadata_in_index(
+                            api_index_path,
+                            api_audio_path,
+                            api_title,
+                            api_artist,
+                            api_album,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -1033,6 +1126,19 @@ impl SseDecode for Option<String> {
     }
 }
 
+impl SseDecode for Option<crate::api::tag_reader::PictureSizes> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::tag_reader::PictureSizes>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<Vec<crate::api::installed_font::InstalledFont>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1054,6 +1160,20 @@ impl SseDecode for Option<Vec<u8>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for crate::api::tag_reader::PictureSizes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_small = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_medium = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_large = <Option<Vec<u8>>>::sse_decode(deserializer);
+        return crate::api::tag_reader::PictureSizes {
+            small: var_small,
+            medium: var_medium,
+            large: var_large,
+        };
     }
 }
 
@@ -1208,18 +1328,30 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__logger__init_rust_logger_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__utils__launch_in_browser_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__utils__pick_single_folder_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__utils__show_in_explorer_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__tag_reader__update_index_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__tag_reader__write_cover_to_file_impl(
+        13 => wire__crate__api__tag_reader__get_picture_sizes_from_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => {
+        14 => wire__crate__api__logger__init_rust_logger_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__utils__launch_in_browser_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__utils__pick_single_folder_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__utils__show_in_explorer_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__tag_reader__update_audio_metadata_in_index_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        20 => wire__crate__api__tag_reader__update_index_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__tag_reader__write_cover_to_file_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        22 => {
             wire__crate__api__tag_reader__write_tag_to_file_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -1235,7 +1367,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         2 => wire__crate__api__smtc_flutter__SmtcFlutter_new_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__system_theme__system_theme_get_system_theme_impl(
+        18 => wire__crate__api__system_theme__system_theme_get_system_theme_impl(
             ptr,
             rust_vec_len,
             data_len,
@@ -1300,6 +1432,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::installed_font::InstalledFont
     for crate::api::installed_font::InstalledFont
 {
     fn into_into_dart(self) -> crate::api::installed_font::InstalledFont {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::tag_reader::PictureSizes {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.small.into_into_dart().into_dart(),
+            self.medium.into_into_dart().into_dart(),
+            self.large.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::tag_reader::PictureSizes
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::tag_reader::PictureSizes>
+    for crate::api::tag_reader::PictureSizes
+{
+    fn into_into_dart(self) -> crate::api::tag_reader::PictureSizes {
         self
     }
 }
@@ -1520,6 +1674,16 @@ impl SseEncode for Option<String> {
     }
 }
 
+impl SseEncode for Option<crate::api::tag_reader::PictureSizes> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::tag_reader::PictureSizes>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<Vec<crate::api::installed_font::InstalledFont>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1537,6 +1701,15 @@ impl SseEncode for Option<Vec<u8>> {
         if let Some(value) = self {
             <Vec<u8>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::tag_reader::PictureSizes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<Vec<u8>>>::sse_encode(self.small, serializer);
+        <Option<Vec<u8>>>::sse_encode(self.medium, serializer);
+        <Option<Vec<u8>>>::sse_encode(self.large, serializer);
     }
 }
 
@@ -1642,14 +1815,14 @@ mod io {
     flutter_rust_bridge::frb_generated_boilerplate_io!();
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_coriander_player_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter(
+    pub extern "C" fn frbgen_qisheng_player_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SMTCFlutter>>::increment_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_coriander_player_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter(
+    pub extern "C" fn frbgen_qisheng_player_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SMTCFlutter>>::decrement_strong_count(ptr as _);

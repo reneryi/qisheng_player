@@ -19,7 +19,7 @@ class WaveformSlider extends StatefulWidget {
   });
 
   final double value; // 当前播放进度 (秒)
-  final double max;   // 音频总时长 (秒)
+  final double max; // 音频总时长 (秒)
   final ValueChanged<double>? onChanged;
   final ValueChanged<double>? onChangeEnd;
   final bool isPlaying; // 是否播放中，用以驱动正弦律动
@@ -29,7 +29,8 @@ class WaveformSlider extends StatefulWidget {
   State<WaveformSlider> createState() => _WaveformSliderState();
 }
 
-class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStateMixin {
+class _WaveformSliderState extends State<WaveformSlider>
+    with TickerProviderStateMixin {
   // 持续播放律动动画控制器
   late final AnimationController _waveController;
   // 拖动时果冻受力挤压动画控制器 (0.0 -> 1.0)
@@ -39,11 +40,11 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
 
   bool _isDragging = false;
   double _dragPercent = 0.0; // 当前手指拖拽所在的百分比位置 (0.0 到 1.0)
-  double _dragWeight = 0.0;  // 果冻变形权重 (手势按下时平滑到 1.0，松开时回弹到 0)
+  double _dragWeight = 0.0; // 果冻变形权重 (手势按下时平滑到 1.0，松开时回弹到 0)
 
   bool _isHovering = false;
   double _hoverPercent = 0.0; // 鼠标当前悬停的百分比位置
-  double _hoverWeight = 0.0;  // 悬停物理引力权重 (0.0 -> 0.45，提供柔和的引力吸附感)
+  double _hoverWeight = 0.0; // 悬停物理引力权重 (0.0 -> 0.45，提供柔和的引力吸附感)
 
   @override
   void initState() {
@@ -125,7 +126,7 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
     });
     // 手指按下，平滑加载果冻挤压权重 (0.0 -> 1.0)
     _dragController.animateTo(1.0, curve: Curves.easeOutCubic);
-    
+
     final targetValue = _dragPercent * widget.max;
     widget.onChanged?.call(targetValue);
   }
@@ -150,9 +151,9 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
 
     // 松手时，应用物理弹簧模型 (SpringSimulation) 产生类似果冻剧烈抖动后归于平静的回弹效果
     const spring = SpringDescription(
-      mass: 0.8,      // 质量：控制惯性
+      mass: 0.8, // 质量：控制惯性
       stiffness: 140, // 刚度：控制频率
-      damping: 10,    // 阻尼：控制衰减速度
+      damping: 10, // 阻尼：控制衰减速度
     );
     final simulation = SpringSimulation(spring, _dragWeight, 0.0, 0.0);
     _dragController.animateWith(simulation);
@@ -162,8 +163,8 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
   Widget build(BuildContext context) {
     final clampedDuration = widget.max > 0 ? widget.max : 1.0;
     // 拖拽时进度以拖拽百分比为准，平时以当前播放进度为准
-    final double currentPercent = _isDragging 
-        ? _dragPercent 
+    final double currentPercent = _isDragging
+        ? _dragPercent
         : (widget.value / clampedDuration).clamp(0.0, 1.0);
 
     return LayoutBuilder(
@@ -178,14 +179,18 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
           clipBehavior: Clip.none, // 修正为 Clip.none，允许气泡提示浮在波形外面而不被截断
           children: [
             GestureDetector(
-              onHorizontalDragStart: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
-              onHorizontalDragUpdate: (details) => _handleDragUpdate(details.localPosition.dx, totalWidth),
+              onHorizontalDragStart: (details) =>
+                  _handleDragStart(details.localPosition.dx, totalWidth),
+              onHorizontalDragUpdate: (details) =>
+                  _handleDragUpdate(details.localPosition.dx, totalWidth),
               onHorizontalDragEnd: (_) => _handleDragEnd(),
               onHorizontalDragCancel: () => _handleDragEnd(),
-              onTapDown: (details) => _handleDragStart(details.localPosition.dx, totalWidth),
+              onTapDown: (details) =>
+                  _handleDragStart(details.localPosition.dx, totalWidth),
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
-                onHover: (details) => _handleHover(details.localPosition.dx, totalWidth),
+                onHover: (details) =>
+                    _handleHover(details.localPosition.dx, totalWidth),
                 onExit: (_) => _handleHoverExit(),
                 child: AnimatedBuilder(
                   animation: _waveController,
@@ -213,7 +218,8 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
             if (showTooltip)
               Positioned(
                 // 气泡水平居中对齐当前光标物理位置，并且加 clamp 进行边界溢出保护，防止裁切
-                left: (tooltipPercent * totalWidth - 32.0).clamp(0.0, totalWidth - 64.0),
+                left: (tooltipPercent * totalWidth - 32.0)
+                    .clamp(0.0, totalWidth - 64.0),
                 bottom: widget.height + 6.0,
                 child: IgnorePointer(
                   child: ClipRRect(
@@ -224,7 +230,10 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
                         width: 64,
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.74),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainer
+                              .withValues(alpha: 0.74),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.1),
@@ -238,7 +247,8 @@ class _WaveformSliderState extends State<WaveformSlider> with TickerProviderStat
                           ],
                         ),
                         child: Text(
-                          Duration(milliseconds: (tooltipValue * 1000).round()).toStringHMMSS(),
+                          Duration(milliseconds: (tooltipValue * 1000).round())
+                              .toStringHMMSS(),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
@@ -274,20 +284,20 @@ class _WaveformSliderPainter extends CustomPainter {
     required this.colorScheme,
   });
 
-  final double percent;        // 激活的长度占比 (0.0 到 1.0)
-  final double wavePhase;      // 播放时波形的运动相位
-  final bool isDragging;       // 是否正在被拖拽
-  final double dragPercent;    // 拖拽焦点百分比 (0.0 到 1.0)
-  final double dragWeight;     // 果冻受力物理形变系数 (0.0 -> 1.0)
-  final bool isHovering;       // 鼠标当前是否处于悬停状态
-  final double hoverPercent;   // 悬停焦点百分比 (0.0 到 1.0)
-  final double hoverWeight;    // 悬停引力物理系数 (0.0 -> 0.45)
-  final bool isPlaying;        // 是否播放中
+  final double percent; // 激活的长度占比 (0.0 到 1.0)
+  final double wavePhase; // 播放时波形的运动相位
+  final bool isDragging; // 是否正在被拖拽
+  final double dragPercent; // 拖拽焦点百分比 (0.0 到 1.0)
+  final double dragWeight; // 果冻受力物理形变系数 (0.0 -> 1.0)
+  final bool isHovering; // 鼠标当前是否处于悬停状态
+  final double hoverPercent; // 悬停焦点百分比 (0.0 到 1.0)
+  final double hoverWeight; // 悬停引力物理系数 (0.0 -> 0.45)
+  final bool isPlaying; // 是否播放中
   final ColorScheme colorScheme;
 
   static const int _barCount = 52; // 精细波形柱子总数
   static const double _barWidth = 3.5; // 柱子宽度
-  static const double _gap = 2.0;      // 柱子间距
+  static const double _gap = 2.0; // 柱子间距
   static const double _minHeight = 4.0; // 柱子最低高度
 
   @override
@@ -296,7 +306,8 @@ class _WaveformSliderPainter extends CustomPainter {
     final double centerY = size.height / 2;
 
     // 计算实际总绘制宽度与起点，确保波形整体居中对齐
-    final double totalPaintWidth = _barCount * _barWidth + (_barCount - 1) * _gap;
+    const double totalPaintWidth =
+        _barCount * _barWidth + (_barCount - 1) * _gap;
     final double startX = (availableWidth - totalPaintWidth) / 2;
 
     // 已播放主色画笔 (高饱和激活主色)
@@ -324,7 +335,8 @@ class _WaveformSliderPainter extends CustomPainter {
       // 1. 生成经典高斯声波高矮轮廓 (中间高、两边低)
       final double normalizedIdx = i / (_barCount - 1);
       final double centerFactor = 1.0 - (normalizedIdx - 0.5).abs() * 2.0;
-      double barHeight = _minHeight + 20.0 * math.sin(normalizedIdx * math.pi) * (0.6 + 0.4 * centerFactor);
+      double barHeight = _minHeight +
+          20.0 * math.sin(normalizedIdx * math.pi) * (0.6 + 0.4 * centerFactor);
 
       // 2. 仿真播放微幅正弦律动 (暂停时缓缓平息)
       if (isPlaying) {

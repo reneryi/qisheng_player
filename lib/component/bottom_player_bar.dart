@@ -60,7 +60,10 @@ class BottomPlayerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const padding = EdgeInsets.symmetric(horizontal: 24, vertical: 8); // 将 padding 变量设为 const 解决 analyzer 的 prefer_const_declarations 提示
+    const padding = EdgeInsets.symmetric(
+        horizontal: 24,
+        vertical:
+            8); // 将 padding 变量设为 const 解决 analyzer 的 prefer_const_declarations 提示
     final childWidget = LayoutBuilder(
       builder: (context, constraints) {
         final layout = resolveBottomPlayerBarLayout(constraints.maxWidth);
@@ -281,13 +284,13 @@ class _TrackCover extends StatelessWidget {
 
           if (disableHero) {
             // 如果禁用 Hero，直接返回旋转动画子树，避免多 Hero 重复 Tag 冲突
-            return _SpinningArtwork(
+            return SpinningArtwork(
               spinning: spinning,
               child: framedArtwork,
             );
           }
 
-          return _SpinningArtwork(
+          return SpinningArtwork(
             spinning: spinning,
             child: Hero(
               tag: nowPlayingArtworkHeroTag,
@@ -304,8 +307,9 @@ class _TrackCover extends StatelessWidget {
   }
 }
 
-class _SpinningArtwork extends StatefulWidget {
-  const _SpinningArtwork({
+class SpinningArtwork extends StatefulWidget {
+  const SpinningArtwork({
+    super.key,
     required this.spinning,
     required this.child,
   });
@@ -314,10 +318,10 @@ class _SpinningArtwork extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_SpinningArtwork> createState() => _SpinningArtworkState();
+  State<SpinningArtwork> createState() => _SpinningArtworkState();
 }
 
-class _SpinningArtworkState extends State<_SpinningArtwork>
+class _SpinningArtworkState extends State<SpinningArtwork>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker; // 手动物理引擎轮询计时器
   double _angle = 0.0; // 累计旋转角度（以弧度为单位）
@@ -345,6 +349,15 @@ class _SpinningArtworkState extends State<_SpinningArtwork>
     _ticker.start();
   }
 
+  @override
+  void didUpdateWidget(covariant SpinningArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.spinning && !oldWidget.spinning && !_ticker.isActive) {
+      _lastElapsed = Duration.zero;
+      _ticker.start();
+    }
+  }
+
   // 物理模拟核心：逐帧计算角度与角速度
   void _onTick(Duration elapsed) {
     if (_lastElapsed == Duration.zero) {
@@ -352,7 +365,9 @@ class _SpinningArtworkState extends State<_SpinningArtwork>
       return;
     }
     // 计算两帧之间的时间差 dt（秒），加 clamp 做时间突变安全防线
-    final double dt = ((elapsed.inMicroseconds - _lastElapsed.inMicroseconds) / 1000000.0).clamp(0.0, 0.1);
+    final double dt =
+        ((elapsed.inMicroseconds - _lastElapsed.inMicroseconds) / 1000000.0)
+            .clamp(0.0, 0.1);
     _lastElapsed = elapsed;
 
     if (!mounted) return;
@@ -374,9 +389,11 @@ class _SpinningArtworkState extends State<_SpinningArtwork>
           _alignProgress = 1.0;
           _isAligning = false;
           _angle = _alignEndAngle;
+          _ticker.stop();
         } else {
           final curve = Curves.easeOutCubic.transform(_alignProgress);
-          _angle = _alignStartAngle + (_alignEndAngle - _alignStartAngle) * curve;
+          _angle =
+              _alignStartAngle + (_alignEndAngle - _alignStartAngle) * curve;
         }
         setState(() {});
       } else {
@@ -387,13 +404,15 @@ class _SpinningArtworkState extends State<_SpinningArtwork>
           setState(() {});
         } else {
           // 速度完全降为 0 后，计算最近的下一个 0 度位置 (即 2*pi 的完整倍数)
-          final double fullRotations = (_angle / (2.0 * math.pi)).ceilToDouble();
+          final double fullRotations =
+              (_angle / (2.0 * math.pi)).ceilToDouble();
           _alignStartAngle = _angle;
           _alignEndAngle = fullRotations * 2.0 * math.pi;
 
           // 若偏移小于临界值直接归零，否则启动 0.8s 的平滑回正动画
           if ((_alignEndAngle - _alignStartAngle).abs() < 0.01) {
             _angle = _alignEndAngle;
+            _ticker.stop();
           } else {
             _isAligning = true;
             _alignProgress = 0.0;
@@ -1169,6 +1188,15 @@ class _VolumeControlState extends State<_VolumeControl> {
   bool _hovering = false;
   bool _dragging = false;
   double _dragValue = 0;
+  double _lastNonZeroVolume = 0.2;
+
+  void _setVolume(PlaybackController playback, double value) {
+    final normalized = value.isFinite ? value.clamp(0.0, 1.0).toDouble() : 0.0;
+    if (normalized > 0.0001) {
+      _lastNonZeroVolume = normalized;
+    }
+    playback.setVolumeDsp(normalized);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1208,95 +1236,99 @@ class _VolumeControlState extends State<_VolumeControl> {
                     variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
                     tooltip: '音量',
                     onPressed: () {
-                      final next = current <= 0 ? 0.5 : 0.0;
-                      playback.setVolumeDsp(next);
+                      if (current > 0.0001) {
+                        _lastNonZeroVolume = current;
+                      }
+                      final next = current <= 0.0001 ? _lastNonZeroVolume : 0.0;
+                      _setVolume(playback, next);
                     },
                     icon: AnimatedSwitcher(
-                    duration: motion.microInteractionDuration,
-                    switchInCurve: motion.emphasized,
-                    switchOutCurve: motion.fast,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.82, end: 1)
-                              .animate(animation),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: Icon(icon, key: ValueKey(icon)),
-                  ),
-                ),
-                ClipRect(
-                  child: AnimatedContainer(
-                    duration: motion.controlTransitionDuration,
-                    curve: motion.normal,
-                    width: effectiveWidth,
-                    child: !showSlider
-                        ? const SizedBox.shrink()
-                        : LayoutBuilder(
-                            builder: (context, sliderConstraints) {
-                              if (!canPaintSliderAtWidth(
-                                sliderConstraints.maxWidth,
-                              )) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween<double>(
-                                  end: resolveSliderThumbRadius(
-                                    hovering: _hovering,
-                                    dragging: _dragging,
-                                    visibleRadius: 5,
-                                  ),
-                                ),
-                                duration: motion.microInteractionDuration,
-                                curve: motion.fast,
-                                builder: (context, animatedThumbRadius, _) {
-                                  return SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 2,
-                                      activeTrackColor: accents.progressActive,
-                                      inactiveTrackColor:
-                                          accents.progressInactive,
-                                      thumbColor: accents.accent,
-                                      overlayShape:
-                                          SliderComponentShape.noOverlay,
-                                      thumbShape: _GlowSliderThumbShape(
-                                        radius: animatedThumbRadius,
-                                        color: accents.accent,
-                                      ),
-                                    ),
-                                    child: Slider(
-                                      min: 0,
-                                      max: 1,
-                                      value: current,
-                                      onChangeStart: (next) {
-                                        setState(() {
-                                          _dragging = true;
-                                          _dragValue = next;
-                                        });
-                                      },
-                                      onChanged: (next) {
-                                        setState(() => _dragValue = next);
-                                        playback.setVolumeDsp(next);
-                                      },
-                                      onChangeEnd: (_) =>
-                                          setState(() => _dragging = false),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
+                      duration: motion.microInteractionDuration,
+                      switchInCurve: motion.emphasized,
+                      switchOutCurve: motion.fast,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.82, end: 1)
+                                .animate(animation),
+                            child: child,
                           ),
+                        );
+                      },
+                      child: Icon(icon, key: ValueKey(icon)),
+                    ),
                   ),
-                ),
-              ],
+                  ClipRect(
+                    child: AnimatedContainer(
+                      duration: motion.controlTransitionDuration,
+                      curve: motion.normal,
+                      width: effectiveWidth,
+                      child: !showSlider
+                          ? const SizedBox.shrink()
+                          : LayoutBuilder(
+                              builder: (context, sliderConstraints) {
+                                if (!canPaintSliderAtWidth(
+                                  sliderConstraints.maxWidth,
+                                )) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(
+                                    end: resolveSliderThumbRadius(
+                                      hovering: _hovering,
+                                      dragging: _dragging,
+                                      visibleRadius: 5,
+                                    ),
+                                  ),
+                                  duration: motion.microInteractionDuration,
+                                  curve: motion.fast,
+                                  builder: (context, animatedThumbRadius, _) {
+                                    return SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 2,
+                                        activeTrackColor:
+                                            accents.progressActive,
+                                        inactiveTrackColor:
+                                            accents.progressInactive,
+                                        thumbColor: accents.accent,
+                                        overlayShape:
+                                            SliderComponentShape.noOverlay,
+                                        thumbShape: _GlowSliderThumbShape(
+                                          radius: animatedThumbRadius,
+                                          color: accents.accent,
+                                        ),
+                                      ),
+                                      child: Slider(
+                                        min: 0,
+                                        max: 1,
+                                        value: current,
+                                        onChangeStart: (next) {
+                                          setState(() {
+                                            _dragging = true;
+                                            _dragValue = next;
+                                          });
+                                        },
+                                        onChanged: (next) {
+                                          setState(() => _dragValue = next);
+                                          _setVolume(playback, next);
+                                        },
+                                        onChangeEnd: (_) =>
+                                            setState(() => _dragging = false),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
       },
     );
   }

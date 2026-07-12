@@ -29,6 +29,7 @@ class SettingsPage extends StatelessWidget {
               ThemeModeControl(),
               VisualStyleModeControl(),
               UiEffectsLevelControl(),
+              LyricDepthBlurSwitch(),
               WindowBackdropModeControl(),
               BackgroundImageSettings(),
               SelectFontCombobox(),

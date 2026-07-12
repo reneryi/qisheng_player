@@ -1,4 +1,3 @@
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
@@ -12,7 +11,7 @@ import '../test_helpers/media_test_harness.dart';
 
 void main() {
   testWidgets(
-      'NowPlayingContentView immersive mode handles long lyrics without overflow',
+      'ImmersiveNowPlayingView immersive mode handles long lyrics without overflow',
       (
     tester,
   ) async {
@@ -39,13 +38,13 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: false,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(tester.takeException(), isNull);
     expect(find.byType(Scrollbar), findsWidgets);
@@ -54,21 +53,23 @@ void main() {
     final titleText = tester.widget<Text>(find.text('Immersive Song'));
     final artistText =
         tester.widget<Text>(find.text('Immersive Artist / Guest Artist'));
-    expect(titleText.textAlign, TextAlign.center); // 重构：非 compact 模式下歌曲标题已设为居中对齐
+    expect(titleText.textAlign,
+        TextAlign.center); // 閲嶆瀯锛氶潪 compact 妯″紡涓嬫瓕鏇叉爣棰樺凡璁句负灞呬腑瀵归綈
     expect(titleText.style?.fontWeight, FontWeight.w800);
     expect(titleText.style?.decoration, TextDecoration.none);
-    expect(artistText.textAlign, TextAlign.center); // 重构：非 compact 模式下歌手文字已设为居中对齐
+    expect(artistText.textAlign,
+        TextAlign.center); // 閲嶆瀯锛氶潪 compact 妯″紡涓嬫瓕鎵嬫枃瀛楀凡璁句负灞呬腑瀵归綈
     expect(artistText.style?.fontWeight, FontWeight.w400);
     expect(artistText.style?.decoration, TextDecoration.none);
     expect(
-      find.text('Immersive Artist / Guest Artist 路 Immersive Album'),
+      find.text('Immersive Artist / Guest Artist 璺?Immersive Album'),
       findsNothing,
     );
     expect(find.text('flac'), findsNothing);
   });
 
   testWidgets(
-      'NowPlayingContentView immersive compact mode handles long lyrics without overflow',
+      'ImmersiveNowPlayingView immersive compact mode handles long lyrics without overflow',
       (
     tester,
   ) async {
@@ -99,19 +100,19 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: true,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(tester.takeException(), isNull);
     expect(find.byType(Scrollbar), findsWidgets);
   });
 
-  testWidgets('NowPlayingContentView handles rapid lyric line changes', (
+  testWidgets('ImmersiveNowPlayingView handles rapid lyric line changes', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 960);
@@ -137,13 +138,13 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: false,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     lyric
       ..emitLine(3)
@@ -157,7 +158,7 @@ void main() {
   });
 
   testWidgets(
-      'NowPlayingContentView artwork stage empty area avoids action hits',
+      'ImmersiveNowPlayingView artwork stage empty area avoids action hits',
       (tester) async {
     tester.view.physicalSize = const Size(1440, 960);
     tester.view.devicePixelRatio = 1.0;
@@ -182,13 +183,13 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: false,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(WindowDragRegion), findsNothing);
 
@@ -202,7 +203,7 @@ void main() {
     expect(hitWidgets, isNot(contains('DragToMoveArea')));
   });
 
-  testWidgets('NowPlayingContentView empty area absorbs clicks silently', (
+  testWidgets('ImmersiveNowPlayingView empty area absorbs clicks silently', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 960);
@@ -228,13 +229,13 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: false,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     final heroRect = tester.getRect(find.byType(Hero).first);
     final hitPoint = Offset(heroRect.center.dx, heroRect.top - 24);
@@ -245,7 +246,7 @@ void main() {
     expect(hitWidgets, contains('AbsorbPointer'));
   });
 
-  testWidgets('NowPlayingContentView renders synced lyric words', (
+  testWidgets('ImmersiveNowPlayingView renders synced lyric words', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 960);
@@ -281,13 +282,13 @@ void main() {
         playbackController: playback,
         lyricController: lyric,
         desktopLyricController: FakeDesktopLyricController(),
-        child: const NowPlayingContentView(
+        child: const ImmersiveNowPlayingView(
           compact: false,
-          styleMode: NowPlayingStyleMode.immersive,
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Hel'), findsOneWidget);
     expect(find.text('lo'), findsOneWidget);

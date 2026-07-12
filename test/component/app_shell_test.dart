@@ -65,13 +65,15 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(TitleBar), findsOneWidget);
     expect(find.byType(BottomPlayerBar), findsOneWidget);
 
     await tester.tap(find.byTooltip('打开播放队列'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(tester.takeException(), isNull);
     expect(find.text('播放队列'), findsOneWidget);
@@ -129,7 +131,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('切页动画测试'), findsOneWidget);
   });

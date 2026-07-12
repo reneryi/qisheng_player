@@ -37,21 +37,8 @@ class PagePreference {
       );
 }
 
-enum NowPlayingStyleMode {
-  immersive,
-  studio;
-
-  static NowPlayingStyleMode? fromString(String? value) {
-    for (final mode in NowPlayingStyleMode.values) {
-      if (mode.name == value) return mode;
-    }
-    return null;
-  }
-}
-
 class NowPlayingPagePreference {
   NowPlayingViewMode nowPlayingViewMode;
-  NowPlayingStyleMode styleMode;
   LyricTextAlign lyricTextAlign;
   bool showTranslation;
   double lyricFontSize;
@@ -59,7 +46,6 @@ class NowPlayingPagePreference {
 
   NowPlayingPagePreference(
     this.nowPlayingViewMode,
-    this.styleMode,
     this.lyricTextAlign,
     this.showTranslation,
     this.lyricFontSize,
@@ -68,7 +54,6 @@ class NowPlayingPagePreference {
 
   Map toMap() => {
         "nowPlayingViewMode": nowPlayingViewMode.name,
-        "styleMode": styleMode.name,
         "lyricTextAlign": lyricTextAlign.name,
         "showTranslation": showTranslation,
         "lyricFontSize": lyricFontSize,
@@ -79,8 +64,6 @@ class NowPlayingPagePreference {
     return NowPlayingPagePreference(
       NowPlayingViewMode.fromString(map["nowPlayingViewMode"]) ??
           NowPlayingViewMode.withLyric,
-      NowPlayingStyleMode.fromString(map["styleMode"]) ??
-          NowPlayingStyleMode.immersive,
       LyricTextAlign.fromString(map["lyricTextAlign"]) ?? LyricTextAlign.left,
       map["showTranslation"] ?? true,
       map["lyricFontSize"] ?? 22.0,
@@ -296,8 +279,6 @@ class AppPreference {
 
   bool sidebarCollapsedLarge = false;
 
-  int startPage = 0;
-
   String? ignoredUpdateTag;
 
   var playbackPref = PlaybackPreference(
@@ -316,7 +297,6 @@ class AppPreference {
 
   var nowPlayingPagePref = NowPlayingPagePreference(
     NowPlayingViewMode.withLyric,
-    NowPlayingStyleMode.immersive,
     LyricTextAlign.left,
     true,
     22.0,
@@ -342,7 +322,6 @@ class AppPreference {
         "playlistDetailPagePref": playlistDetailPagePref.toMap(),
         "audiosDefaultSortMigrated": true,
         "sidebarCollapsedLarge": sidebarCollapsedLarge,
-        "startPage": startPage,
         "ignoredUpdateTag": ignoredUpdateTag,
         "playbackPref": playbackPref.toMap(),
         "desktopLyricPref": desktopLyricPref.toMap(),
@@ -351,8 +330,7 @@ class AppPreference {
       };
 
       final prefJson = json.encode(prefMap);
-      final output = await File(appPreferencePath).create(recursive: true);
-      await output.writeAsString(prefJson);
+      await atomicWriteString(appPreferencePath, prefJson);
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -400,9 +378,6 @@ class AppPreference {
       instance.sidebarCollapsedLarge =
           prefMap["sidebarCollapsedLarge"] ?? false;
       instance.ignoredUpdateTag = prefMap["ignoredUpdateTag"]?.toString();
-      final needNormalizeStartPage = prefMap["startPage"] != 0;
-      // 鏃х増浼氭妸鏈€鍚庣偣鍑荤殑渚ф爮椤甸潰鍐欐垚鍚姩椤碉紱娌℃湁鏄惧紡璁剧疆鏃剁粺涓€鍥炲埌闊充箰椤点€?
-      instance.startPage = 0;
       final loadedPlaybackPref =
           PlaybackPreference.fromMap(prefMap["playbackPref"]);
       // Normalize historical startup-at-100% volume bug once.
@@ -436,7 +411,6 @@ class AppPreference {
           NowPlayingPagePreference.fromMap(prefMap["nowPlayingPagePref"]);
       instance.nowPlayingPagePref
         ..nowPlayingViewMode = loadedNowPlayingPref.nowPlayingViewMode
-        ..styleMode = loadedNowPlayingPref.styleMode
         ..lyricTextAlign = loadedNowPlayingPref.lyricTextAlign
         ..showTranslation = loadedNowPlayingPref.showTranslation
         ..lyricFontSize = loadedNowPlayingPref.lyricFontSize
@@ -454,8 +428,7 @@ class AppPreference {
         needNormalizeMuteHotkey = true;
       }
 
-      if (needNormalizeStartPage ||
-          needNormalizeAudiosSort ||
+      if (needNormalizeAudiosSort ||
           needNormalizeVolume ||
           needNormalizeMuteHotkey) {
         await instance.save();

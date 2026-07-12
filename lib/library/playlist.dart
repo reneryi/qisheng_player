@@ -65,8 +65,7 @@ Future<void> savePlaylists() async {
     }
 
     final playlistsJson = json.encode(playlistMaps);
-    final output = await File(playlistsPath).create(recursive: true);
-    await output.writeAsString(playlistsJson);
+    await atomicWriteString(playlistsPath, playlistsJson);
   } catch (err, trace) {
     LOGGER.e(err, stackTrace: trace);
   }

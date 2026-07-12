@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:qisheng_player/page/page_scaffold.dart';
+import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -401,75 +402,77 @@ class _UniPageState<T> extends State<UniPage<T>> {
       32,
     );
 
-    final listBody = Material(
-      type: MaterialType.transparency,
-      child: switch (currContentView) {
-        ContentView.list => _canReorder
-            ? ReorderableListView.builder(
-                scrollController: scrollController,
-                buildDefaultDragHandles: false,
-                padding: listPadding,
-                itemCount: widget.contentList.length,
-                itemExtent: 64,
-                onReorder: _handleReorder,
-                itemBuilder: (context, i) => KeyedSubtree(
-                  key: ObjectKey(widget.contentList[i]),
-                  child: ReorderableDelayedDragStartListener(
-                    index: i,
-                    child: widget.contentBuilder(
-                      context,
-                      widget.contentList[i],
-                      i,
-                      multiSelectController,
+    final listBody = WindowsAccessibilityTooltipGuard(
+      child: Material(
+        type: MaterialType.transparency,
+        child: switch (currContentView) {
+          ContentView.list => _canReorder
+              ? ReorderableListView.builder(
+                  scrollController: scrollController,
+                  buildDefaultDragHandles: false,
+                  padding: listPadding,
+                  itemCount: widget.contentList.length,
+                  itemExtent: 64,
+                  onReorder: _handleReorder,
+                  itemBuilder: (context, i) => KeyedSubtree(
+                    key: ObjectKey(widget.contentList[i]),
+                    child: ReorderableDelayedDragStartListener(
+                      index: i,
+                      child: widget.contentBuilder(
+                        context,
+                        widget.contentList[i],
+                        i,
+                        multiSelectController,
+                      ),
                     ),
                   ),
+                )
+              : ListView.builder(
+                  controller: scrollController,
+                  padding: listPadding,
+                  itemCount: widget.contentList.length,
+                  itemExtent: 64,
+                  itemBuilder: (context, i) => widget.contentBuilder(
+                    context,
+                    widget.contentList[i],
+                    i,
+                    multiSelectController,
+                  ),
                 ),
-              )
-            : ListView.builder(
-                controller: scrollController,
-                padding: listPadding,
-                itemCount: widget.contentList.length,
-                itemExtent: 64,
-                itemBuilder: (context, i) => widget.contentBuilder(
-                  context,
-                  widget.contentList[i],
-                  i,
-                  multiSelectController,
-                ),
-              ),
-        ContentView.table => GridView.builder(
-            controller: scrollController,
-            padding: listPadding,
-            gridDelegate: gridDelegate,
-            itemCount: widget.contentList.length,
-            itemBuilder: (context, i) => widget.contentBuilder(
-              context,
-              widget.contentList[i],
-              i,
-              multiSelectController,
-            ),
-          ),
-        ContentView.grid => GridView.builder(
-            controller: scrollController,
-            padding: listPadding,
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 220,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.72,
-            ),
-            itemCount: widget.contentList.length,
-            itemBuilder: (context, i) {
-              final builder = widget.gridBuilder ?? widget.contentBuilder;
-              return builder(
+          ContentView.table => GridView.builder(
+              controller: scrollController,
+              padding: listPadding,
+              gridDelegate: gridDelegate,
+              itemCount: widget.contentList.length,
+              itemBuilder: (context, i) => widget.contentBuilder(
                 context,
                 widget.contentList[i],
                 i,
                 multiSelectController,
-              );
-            },
-          ),
-      },
+              ),
+            ),
+          ContentView.grid => GridView.builder(
+              controller: scrollController,
+              padding: listPadding,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 0.72,
+              ),
+              itemCount: widget.contentList.length,
+              itemBuilder: (context, i) {
+                final builder = widget.gridBuilder ?? widget.contentBuilder;
+                return builder(
+                  context,
+                  widget.contentList[i],
+                  i,
+                  multiSelectController,
+                );
+              },
+            ),
+        },
+      ),
     );
     final rightPaneChild = widget.rightPaneBuilder?.call(context);
 

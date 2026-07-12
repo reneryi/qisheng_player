@@ -22,11 +22,13 @@ windows = { version = "0.57.0", features = [
     "System",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_Storage_FileSystem",
     "UI_ViewManagement",
 ] }
 anyhow = "1.0.86"
 ttf-parser = "0.24.1"
 image = "0.25.2"
+encoding_rs = "0.8"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

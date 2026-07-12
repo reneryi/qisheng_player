@@ -1,7 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:io';
 
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -87,12 +86,7 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
     _subscription?.cancel();
     final ctx = context;
     if (ctx.mounted) {
-      final startPage = AppPreference.instance.startPage;
-      final startLocation =
-          startPage >= 0 && startPage < app_paths.START_PAGES.length
-              ? app_paths.START_PAGES[startPage]
-              : app_paths.AUDIOS_PAGE;
-      ctx.go(startLocation);
+      ctx.go(app_paths.AUDIOS_PAGE);
     }
   }
 

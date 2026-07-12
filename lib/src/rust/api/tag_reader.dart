@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `file_size_for_identity`, `is_cue_path`, `is_unknown_text`, `merge_missing_fields`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `sanitize_metadata_text`, `sanitize_optional_text`, `to_json_value`, `to_json_value`
+// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `atomic_write_bytes`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `bytes_from_latin1_or_windows1252`, `clean_metadata_text`, `contains_cjk`, `decode_cue_bytes`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `file_size_for_identity`, `is_cjk_char`, `is_cue_path`, `is_unknown_text`, `lock_index_writes`, `looks_like_mojibake`, `merge_missing_fields`, `metadata_text_score`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `repair_likely_mojibake`, `replace_file`, `resize_loaded_picture`, `sanitize_metadata_text`, `sanitize_optional_text`, `to_json_value`, `to_json_value`, `windows1252_reverse`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioFolder`, `AudioIdentityParts`, `Audio`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `fmt`
 
@@ -22,6 +22,23 @@ Future<Uint8List?> getPictureFromPath(
         {required String path, required int width, required int height}) =>
     RustLib.instance.api.crateApiTagReaderGetPictureFromPath(
         path: path, width: width, height: height);
+
+Future<PictureSizes?> getPictureSizesFromPath(
+        {required String path,
+        required int smallWidth,
+        required int smallHeight,
+        required int mediumWidth,
+        required int mediumHeight,
+        required int largeWidth,
+        required int largeHeight}) =>
+    RustLib.instance.api.crateApiTagReaderGetPictureSizesFromPath(
+        path: path,
+        smallWidth: smallWidth,
+        smallHeight: smallHeight,
+        mediumWidth: mediumWidth,
+        mediumHeight: mediumHeight,
+        largeWidth: largeWidth,
+        largeHeight: largeHeight);
 
 /// for Flutter
 /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
@@ -71,6 +88,21 @@ Stream<IndexActionState> buildIndexFromFoldersRecursively(
 Stream<IndexActionState> updateIndex({required String indexPath}) =>
     RustLib.instance.api.crateApiTagReaderUpdateIndex(indexPath: indexPath);
 
+/// 更新 index.json 中指定音频的可编辑元数据。
+/// 与索引扫描共享写锁，避免并发读改写造成覆盖。
+Future<bool> updateAudioMetadataInIndex(
+        {required String indexPath,
+        required String audioPath,
+        required String title,
+        required String artist,
+        required String album}) =>
+    RustLib.instance.api.crateApiTagReaderUpdateAudioMetadataInIndex(
+        indexPath: indexPath,
+        audioPath: audioPath,
+        title: title,
+        artist: artist,
+        album: album);
+
 class IndexActionState {
   /// completed / total
   final double progress;
@@ -93,4 +125,28 @@ class IndexActionState {
           runtimeType == other.runtimeType &&
           progress == other.progress &&
           message == other.message;
+}
+
+class PictureSizes {
+  final Uint8List? small;
+  final Uint8List? medium;
+  final Uint8List? large;
+
+  const PictureSizes({
+    this.small,
+    this.medium,
+    this.large,
+  });
+
+  @override
+  int get hashCode => small.hashCode ^ medium.hashCode ^ large.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PictureSizes &&
+          runtimeType == other.runtimeType &&
+          small == other.small &&
+          medium == other.medium &&
+          large == other.large;
 }

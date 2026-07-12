@@ -1,9 +1,111 @@
 // ignore_for_file: unnecessary_this
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:pinyin/pinyin.dart';
+
+int _atomicWriteSequence = 0;
+
+Future<void> atomicWriteString(String path, String content) {
+  return _atomicWriteString(path, content);
+}
+
+@visibleForTesting
+Future<void> atomicWriteStringWithBeforeCommit(
+  String path,
+  String content,
+  FutureOr<void> Function() beforeCommit,
+) {
+  return _atomicWriteString(path, content, beforeCommit: beforeCommit);
+}
+
+Future<void> _atomicWriteString(
+  String path,
+  String content, {
+  FutureOr<void> Function()? beforeCommit,
+}) async {
+  final target = File(path);
+  await target.parent.create(recursive: true);
+  final sequence = _atomicWriteSequence++;
+  final temp = File(
+    '$path.${pid}_${DateTime.now().microsecondsSinceEpoch}_$sequence.tmp',
+  );
+  try {
+    await temp.writeAsString(content, flush: true);
+    if (beforeCommit != null) await beforeCommit();
+    await temp.rename(path);
+  } finally {
+    if (await temp.exists()) {
+      await temp.delete();
+    }
+  }
+}
+
+String normalizeForMatch(String input) {
+  var normalized = input.toLowerCase().trim();
+  normalized = normalized.replaceAll(
+    RegExp(r'\s*[\(（\[【].*?[\)）\]】]\s*$', unicode: true),
+    '',
+  );
+  normalized = normalized.replaceAll(
+    RegExp(
+      r'\s*[-－]\s*(remix|live|version|demo|edit).*$',
+      caseSensitive: false,
+      unicode: true,
+    ),
+    '',
+  );
+  normalized = normalized.replaceAll(RegExp(r'[・･]'), '');
+  normalized = normalized.replaceAll(
+    RegExp(
+      r'[^a-z0-9_\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\s]',
+      unicode: true,
+    ),
+    '',
+  );
+  return normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+double normalizedSimilarity(String first, String second) {
+  final normalizedFirst = normalizeForMatch(first);
+  final normalizedSecond = normalizeForMatch(second);
+  if (normalizedFirst.isEmpty && normalizedSecond.isEmpty) return 1.0;
+  if (normalizedFirst.isEmpty || normalizedSecond.isEmpty) return 0.0;
+
+  final firstRunes = normalizedFirst.runes.toList(growable: false);
+  final secondRunes = normalizedSecond.runes.toList(growable: false);
+  final distance = _levenshteinDistance(firstRunes, secondRunes);
+  final longestLength = firstRunes.length > secondRunes.length
+      ? firstRunes.length
+      : secondRunes.length;
+  return 1.0 - distance / longestLength;
+}
+
+int _levenshteinDistance(List<int> first, List<int> second) {
+  if (first.length > second.length) {
+    return _levenshteinDistance(second, first);
+  }
+  var previous = List<int>.generate(first.length + 1, (index) => index);
+  for (var secondIndex = 0; secondIndex < second.length; secondIndex++) {
+    final current = List<int>.filled(first.length + 1, 0);
+    current[0] = secondIndex + 1;
+    for (var firstIndex = 0; firstIndex < first.length; firstIndex++) {
+      final insertion = current[firstIndex] + 1;
+      final deletion = previous[firstIndex + 1] + 1;
+      final substitution = previous[firstIndex] +
+          (first[firstIndex] == second[secondIndex] ? 0 : 1);
+      current[firstIndex + 1] = insertion < deletion
+          ? (insertion < substitution ? insertion : substitution)
+          : (deletion < substitution ? deletion : substitution);
+    }
+    previous = current;
+  }
+  return previous.last;
+}
 
 extension StringHMMSS on Duration {
   /// Returns a string with hours, minutes, seconds,

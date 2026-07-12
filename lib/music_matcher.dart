@@ -1,5 +1,4 @@
-﻿import 'dart:convert';
-import 'dart:math';
+import 'dart:convert';
 
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/krc.dart';
@@ -11,26 +10,25 @@ import 'package:music_api/music_api.dart';
 
 enum ResultSource { qq, kugou, netease }
 
-double _computeScore(Audio audio, String title, String artists, String album) {
-  int maxScore = audio.title.length + audio.artist.length + audio.album.length;
-  int score = 0;
+const double minimumOnlineLyricMatchScore = 0.6;
 
-  int minTitleLength = min(audio.title.length, title.length);
-  for (int i = 0; i < minTitleLength; ++i) {
-    if (audio.title[i] == title[i]) score += 1;
-  }
+double computeMusicMatchScore(
+  Audio audio,
+  String title,
+  String artists,
+  String album,
+) {
+  final titleSimilarity = normalizedSimilarity(audio.title, title);
+  final artistSimilarity = normalizedSimilarity(audio.artist, artists);
+  final albumSimilarity = normalizedSimilarity(audio.album, album);
+  return titleSimilarity * 0.5 + artistSimilarity * 0.3 + albumSimilarity * 0.2;
+}
 
-  int minArtistLength = min(audio.artist.length, artists.length);
-  for (int i = 0; i < minArtistLength; ++i) {
-    if (audio.artist[i] == artists[i]) score += 1;
-  }
-
-  int minAlbumLength = min(audio.album.length, album.length);
-  for (int i = 0; i < minAlbumLength; ++i) {
-    if (audio.album[i] == album[i]) score += 1;
-  }
-
-  return score / maxScore;
+String buildMusicSearchQuery(Audio audio, {int maxRunes = 50}) {
+  final query = audio.hasKnownArtist
+      ? '${audio.title} ${audio.artist}'.trim()
+      : audio.title.trim();
+  return String.fromCharCodes(query.runes.take(maxRunes));
 }
 
 class SongSearchResult {
@@ -90,7 +88,7 @@ class SongSearchResult {
       title,
       artists,
       album,
-      _computeScore(audio, title, artists, album),
+      computeMusicMatchScore(audio, title, artists, album),
       qqSongId: itemSong["id"],
       coverUrl: itemSong["album"]?["mid"] == null
           ? null
@@ -115,7 +113,7 @@ class SongSearchResult {
       title,
       artists,
       album,
-      _computeScore(audio, title, artists, album),
+      computeMusicMatchScore(audio, title, artists, album),
       neteaseSongId: song["id"].toString(),
       coverUrl: song["album"]?["picUrl"]?.toString(),
     );
@@ -131,77 +129,101 @@ class SongSearchResult {
       title,
       artists,
       album,
-      _computeScore(audio, title, artists, album),
+      computeMusicMatchScore(audio, title, artists, album),
       kugouSongHash: info["hash"],
       coverUrl: info["imgurl"]?.toString().replaceAll("{size}", "480"),
     );
   }
 }
 
-/// 统一搜索：分别从酷狗、网易云、QQ闊充箰鎼滅储锛屾瘡涓?API 独立 try-catch锛?
-/// 閬垮厤鏌愪釜 API 澶辫触瀵艰嚧鍏ㄩ儴鎼滅储缁撴灉涓虹┖銆?
-Future<List<SongSearchResult>> uniSearch(Audio audio) async {
-  final query = audio.title;
-  List<SongSearchResult> result = [];
+typedef MusicSearchProvider = Future<List<SongSearchResult>> Function(
+  String query,
+  Audio audio,
+);
 
-  // 酷狗搜索
+Future<List<SongSearchResult>> _searchKugou(
+  String query,
+  Audio audio,
+) async {
+  final Map answer = (await KuGou.searchSong(keyword: query)).data;
+  final List? items = answer['data']?['info'];
+  if (items == null) return const [];
+  return items
+      .take(5)
+      .map((item) => SongSearchResult.fromKugouSearchResult(item, audio))
+      .toList(growable: false);
+}
+
+Future<List<SongSearchResult>> _searchNetease(
+  String query,
+  Audio audio,
+) async {
+  final Map answer = (await Netease.search(keyWord: query)).data;
+  final List? items = answer['result']?['songs'];
+  if (items == null) return const [];
+  return items
+      .take(5)
+      .map((item) => SongSearchResult.fromNeteaseSearchResult(item, audio))
+      .toList(growable: false);
+}
+
+Future<List<SongSearchResult>> _searchQQ(
+  String query,
+  Audio audio,
+) async {
+  final Map answer = (await QQ.search(keyWord: query)).data;
+  final List? items = answer['req']?['data']?['body']?['item_song'];
+  if (items == null) return const [];
+  return items
+      .take(5)
+      .map((item) => SongSearchResult.fromQQSearchResult(item, audio))
+      .toList(growable: false);
+}
+
+Future<List<SongSearchResult>> _safeSearch(
+  String source,
+  String query,
+  Audio audio,
+  MusicSearchProvider provider,
+) async {
   try {
-    final Map kugouAnswer = (await KuGou.searchSong(keyword: query)).data;
-    final kugouData = kugouAnswer["data"];
-    final List? kugouResultList = kugouData?["info"];
-    if (kugouResultList != null) {
-      for (int j = 0; j < kugouResultList.length; j++) {
-        if (j >= 5) break;
-        result.add(SongSearchResult.fromKugouSearchResult(
-          kugouResultList[j],
-          audio,
-        ));
-      }
-    }
+    return await provider(query, audio);
   } catch (err, trace) {
-    LOGGER.e("酷狗搜索失败 query: $query", error: err, stackTrace: trace);
+    LOGGER.e('$source 搜索失败 query: $query', error: err, stackTrace: trace);
+    return const [];
   }
+}
 
-  // 网易云搜索
-  try {
-    final Map neteaseAnswer = (await Netease.search(keyWord: query)).data;
-    final neteaseResult = neteaseAnswer["result"];
-    final List? neteaseResultList = neteaseResult?["songs"];
-    if (neteaseResultList != null) {
-      for (int k = 0; k < neteaseResultList.length; k++) {
-        if (k >= 5) break;
-        result.add(SongSearchResult.fromNeteaseSearchResult(
-          neteaseResultList[k],
-          audio,
-        ));
-      }
-    }
-  } catch (err, trace) {
-    LOGGER.e("网易云搜索失贀query: $query", error: err, stackTrace: trace);
-  }
-
-  // QQ音乐搜索
-  try {
-    final Map qqAnswer = (await QQ.search(keyWord: query)).data;
-    final qqReq = qqAnswer["req"];
-    final qqData = qqReq?["data"];
-    final qqBody = qqData?["body"];
-    final List? qqResultList = qqBody?["item_song"];
-    if (qqResultList != null) {
-      for (int i = 0; i < qqResultList.length; i++) {
-        if (i >= 5) break;
-        result.add(SongSearchResult.fromQQSearchResult(
-          qqResultList[i],
-          audio,
-        ));
-      }
-    }
-  } catch (err, trace) {
-    LOGGER.e("QQ音乐搜索失败 query: $query", error: err, stackTrace: trace);
-  }
-
-  result.sort((a, b) => b.score.compareTo(a.score));
+Future<List<SongSearchResult>> searchMusicSources(
+  Audio audio, {
+  required MusicSearchProvider kugou,
+  required MusicSearchProvider netease,
+  required MusicSearchProvider qq,
+}) async {
+  final query = buildMusicSearchQuery(audio);
+  final sourceResults = await Future.wait([
+    _safeSearch('酷狗', query, audio, kugou),
+    _safeSearch('网易云', query, audio, netease),
+    _safeSearch('QQ音乐', query, audio, qq),
+  ]);
+  final result = sourceResults.expand((items) => items).toList();
+  result.sort((first, second) => second.score.compareTo(first.score));
   return result;
+}
+
+Future<List<SongSearchResult>> uniSearch(Audio audio) => searchMusicSources(
+      audio,
+      kugou: _searchKugou,
+      netease: _searchNetease,
+      qq: _searchQQ,
+    );
+
+SongSearchResult? selectMatchedResult(
+  List<SongSearchResult> results, {
+  double minimumScore = minimumOnlineLyricMatchScore,
+}) {
+  if (results.isEmpty || results.first.score < minimumScore) return null;
+  return results.first;
 }
 
 Future<Lrc?> _getNeteaseUnsyncLyric(String neteaseSongId) async {
@@ -275,7 +297,15 @@ Future<Lyric?> getMostMatchedLyric(Audio audio) async {
   final unisearchResult = await uniSearch(audio);
   if (unisearchResult.isEmpty) return null;
 
-  final mostMatch = unisearchResult.first;
+  final mostMatch = selectMatchedResult(unisearchResult);
+  if (mostMatch == null) {
+    final candidate = unisearchResult.first;
+    LOGGER.i(
+      '[getMostMatchedLyric] 低于阈值: ${audio.title} -> '
+      '${candidate.title} (${candidate.score})',
+    );
+    return null;
+  }
 
   return switch (mostMatch.source) {
     ResultSource.qq => getOnlineLyric(qqSongId: mostMatch.qqSongId),

@@ -2,110 +2,9 @@
 
 part of 'page.dart';
 
-class _NowPlayingMetadataBadgeData {
-  const _NowPlayingMetadataBadgeData({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-}
-
-class _DashboardCreditEntry {
-  const _DashboardCreditEntry({
-    required this.role,
-    required this.name,
-  });
-
-  final String role;
-  final String name;
-}
-
-List<_NowPlayingMetadataBadgeData> _buildMetadataBadges(Audio audio) {
-  final badges = <_NowPlayingMetadataBadgeData>[
-    _NowPlayingMetadataBadgeData(
-      icon: Symbols.music_note,
-      label: audio.fileExtension,
-    ),
-  ];
-
-  if (audio.sampleRate != null && audio.sampleRate! > 0) {
-    final sampleRate = audio.sampleRate!;
-    final khz = sampleRate / 1000.0;
-    badges.add(
-      _NowPlayingMetadataBadgeData(
-        icon: Symbols.graph_1,
-        label: sampleRate % 1000 == 0
-            ? '${khz.toStringAsFixed(0)}kHz'
-            : '${khz.toStringAsFixed(1)}kHz',
-      ),
-    );
-  }
-
-  if (audio.bitrate != null && audio.bitrate! > 0) {
-    badges.add(
-      _NowPlayingMetadataBadgeData(
-        icon: Symbols.tune,
-        label: '${audio.bitrate}kbps',
-      ),
-    );
-  }
-
-  if (audio.replayGainDb != null) {
-    badges.add(
-      _NowPlayingMetadataBadgeData(
-        icon: Symbols.equalizer,
-        label: 'RG ${audio.replayGainDb!.toStringAsFixed(1)}dB',
-      ),
-    );
-  }
-
-  if (audio.by != null && audio.by!.trim().isNotEmpty) {
-    badges.add(
-      _NowPlayingMetadataBadgeData(
-        icon: Symbols.sell,
-        label: audio.by!,
-      ),
-    );
-  }
-
-  return badges;
-}
-
-List<String> _splitCreditNames(String? raw) {
-  if (raw == null) return const [];
-  return raw
-      .split(RegExp(AppSettings.instance.artistSplitPattern))
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty && item != 'UNKNOWN' && item != '未知艺术家')
-      .toList();
-}
-
-List<_DashboardCreditEntry> _buildCreditEntries(Audio audio) {
-  final entries = <_DashboardCreditEntry>[];
-
-  for (final composer in _splitCreditNames(audio.composer)) {
-    entries.add(_DashboardCreditEntry(role: '作曲', name: composer));
-  }
-  for (final arranger in _splitCreditNames(audio.arranger)) {
-    entries.add(_DashboardCreditEntry(role: '编曲', name: arranger));
-  }
-
-  return entries;
-}
-
-String _buildArtistAlbumLine(Audio audio) {
-  final artist = audio.displayArtist;
-  final album = audio.displayAlbum;
-  if (!audio.hasKnownAlbum || album == artist || album == audio.displayTitle) {
-    return artist;
-  }
-  return '$artist · $album';
-}
-
-class _ImmersiveModeView extends StatelessWidget {
-  const _ImmersiveModeView({
+class ImmersiveNowPlayingView extends StatelessWidget {
+  const ImmersiveNowPlayingView({
+    super.key,
     required this.compact,
   });
 
@@ -171,530 +70,6 @@ class _ImmersiveModeView extends StatelessWidget {
   }
 }
 
-class _StudioDashboardView extends StatelessWidget {
-  const _StudioDashboardView({
-    required this.compact,
-  });
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding:
-          EdgeInsets.fromLTRB(compact ? 16 : 28, 12, compact ? 16 : 28, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _DashboardHeader(compact: compact),
-          const SizedBox(height: 24),
-          const _StudioMetadataStrip(),
-          SizedBox(height: compact ? 24 : 28),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = compact ||
-                    constraints.maxWidth < 1220 ||
-                    constraints.maxHeight < 720;
-                final gap = compact ? 24.0 : 28.0;
-
-                if (stacked) {
-                  return Column(
-                    children: [
-                      const Expanded(
-                        flex: 5,
-                        child: _StudioInformationPanel(compact: true),
-                      ),
-                      SizedBox(height: gap),
-                      const Expanded(
-                        flex: 6,
-                        child: _StudioQueuePanel(compact: true),
-                      ),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    const Expanded(
-                      flex: 5,
-                      child: _StudioInformationPanel(compact: false),
-                    ),
-                    SizedBox(width: gap),
-                    const Expanded(
-                      flex: 7,
-                      child: _StudioQueuePanel(compact: false),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '专业面板',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: compact ? 28 : 32,
-            fontWeight: FontWeight.w700,
-            height: 1.04,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '更清晰的元数据、幕后信息和当前播放队列。',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.6),
-            fontSize: compact ? 13 : 14,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StudioMetadataStrip extends StatelessWidget {
-  const _StudioMetadataStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Selector<PlaybackController, Audio?>(
-      selector: (_, playback) => playback.nowPlaying,
-      builder: (context, audio, _) {
-        if (audio == null) {
-          return Text(
-            '还没有正在播放的音频。',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.6),
-              fontSize: 14,
-            ),
-          );
-        }
-
-        final badges = _buildMetadataBadges(audio);
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final badge in badges)
-              _MetadataBadge(icon: badge.icon, label: badge.label),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MetadataBadge extends StatefulWidget {
-  const _MetadataBadge({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  State<_MetadataBadge> createState() => _MetadataBadgeState();
-}
-
-class _MetadataBadgeState extends State<_MetadataBadge> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedOpacity(
-        duration: context.motion.controlTransitionDuration,
-        curve: context.motion.normal,
-        opacity: _hovered ? 1 : 0.52,
-        child: AnimatedContainer(
-          duration: context.motion.controlTransitionDuration,
-          curve: context.motion.normal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: _hovered ? 0.11 : 0.055),
-                scheme.primary.withValues(alpha: _hovered ? 0.08 : 0.035),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: _hovered ? 0.16 : 0.07),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                widget.icon,
-                size: 14,
-                color: scheme.onSurface.withValues(alpha: 0.74),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.76),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w300,
-                  height: 1,
-                  letterSpacing: 0,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StudioInformationPanel extends StatelessWidget {
-  const _StudioInformationPanel({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppSurface(
-      variant: AppSurfaceVariant.glass,
-      glassDensity: AppSurfaceGlassDensity.low,
-      radius: 24,
-      padding: EdgeInsets.all(compact ? 18 : 22),
-      child: Selector<PlaybackController, Audio?>(
-        selector: (_, playback) => playback.nowPlaying,
-        builder: (context, audio, _) {
-          if (audio == null) {
-            return const _EmptyPanelState(
-              title: '暂无歌曲信息',
-              subtitle: '开始播放一首歌后，这里会展示封面和幕后人员。',
-            );
-          }
-
-          final credits = _buildCreditEntries(audio);
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _PanelHeader(
-                title: '歌曲信息',
-                subtitle: '封面、演唱信息与幕后人员',
-              ),
-              const SizedBox(height: 22),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final scrollable = compact || constraints.maxHeight < 420;
-                    final artworkMin = scrollable ? 96.0 : 132.0;
-                    final artworkMax = scrollable ? 132.0 : 164.0;
-                    final artworkSize =
-                        (constraints.biggest.shortestSide * 0.42)
-                            .clamp(
-                              compact ? artworkMin : 164.0,
-                              compact ? artworkMax : 220.0,
-                            )
-                            .toDouble();
-                    final creditsPanel = AppSurface(
-                      variant: AppSurfaceVariant.inset,
-                      radius: 22,
-                      padding: const EdgeInsets.all(14),
-                      child: credits.isEmpty
-                          ? const _EmptyPanelState(
-                              title: '暂无幕后信息',
-                              subtitle: '当前音频没有录入作曲或编曲信息。',
-                            )
-                          : scrollable
-                              ? Column(
-                                  children: [
-                                    for (int index = 0;
-                                        index < credits.length;
-                                        index++) ...[
-                                      _CreditEntryRow(entry: credits[index]),
-                                      if (index != credits.length - 1)
-                                        const SizedBox(height: 12),
-                                    ],
-                                  ],
-                                )
-                              : Scrollbar(
-                                  thumbVisibility: true,
-                                  child: SingleChildScrollView(
-                                    child: Column(
-                                      children: [
-                                        for (int index = 0;
-                                            index < credits.length;
-                                            index++) ...[
-                                          _CreditEntryRow(
-                                            entry: credits[index],
-                                          ),
-                                          if (index != credits.length - 1)
-                                            const SizedBox(height: 12),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                    );
-
-                    final mainContent = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize:
-                          scrollable ? MainAxisSize.min : MainAxisSize.max,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: artworkSize + (scrollable ? 36 : 56),
-                          child: Stack(
-                            children: [
-                              const Positioned.fill(
-                                child: _ArtworkStageHitAbsorber(),
-                              ),
-                              Center(
-                                child: _NowPlayingArtwork(
-                                  size: artworkSize,
-                                  radius: 28,
-                                  large: true,
-                                  showBackdropGlow: false,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: scrollable ? 14 : 20),
-                        _MarqueeText(
-                          text: audio.displayTitle,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: compact ? 22 : 26,
-                            fontWeight: FontWeight.w700,
-                            height: 1.08,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _buildArtistAlbumLine(audio),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6),
-                            fontSize: compact ? 13 : 14,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        AppSurface(
-                          variant: AppSurfaceVariant.inset,
-                          radius: 20,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Text(
-                            audio.qualitySummary,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.54),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w300,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: scrollable ? 16 : 22),
-                        Text(
-                          '幕后人员',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: compact ? 15 : 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (scrollable)
-                          creditsPanel
-                        else
-                          Expanded(child: creditsPanel),
-                      ],
-                    );
-
-                    if (scrollable) {
-                      return SingleChildScrollView(child: mainContent);
-                    }
-
-                    return mainContent;
-                  },
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _CreditEntryRow extends StatelessWidget {
-  const _CreditEntryRow({required this.entry});
-
-  final _DashboardCreditEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 104,
-          child: Text(
-            entry.role,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.48),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            entry.name,
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StudioQueuePanel extends StatelessWidget {
-  const _StudioQueuePanel({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final playback = context.read<PlaybackController>();
-
-    return AppSurface(
-      variant: AppSurfaceVariant.glass,
-      glassDensity: AppSurfaceGlassDensity.low,
-      radius: 24,
-      padding: EdgeInsets.all(compact ? 18 : 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ValueListenableBuilder<List<Audio>>(
-            valueListenable: playback.playlist,
-            builder: (context, playlist, _) {
-              return _PanelHeader(
-                title: '播放队列',
-                subtitle: '${playlist.length} 首歌曲，当前队列可拖拽重排',
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: CurrentPlaylistView(
-              showHeader: false,
-              dense: compact,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            height: 1.05,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.6),
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ImmersiveArtworkStage extends StatelessWidget {
   const _ImmersiveArtworkStage({required this.compact});
 
@@ -716,8 +91,9 @@ class _ImmersiveArtworkStage extends StatelessWidget {
                 alignment: compact ? Alignment.centerLeft : Alignment.center,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment:
-                      compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                  crossAxisAlignment: compact
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
                   children: [
                     _NowPlayingArtwork(
                       size: size,
@@ -761,7 +137,9 @@ class _ImmersiveMetadataStrip extends StatelessWidget {
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
         if (audio == null) return const SizedBox.shrink();
-        final rate = audio.sampleRate != null ? '${(audio.sampleRate! / 1000).toStringAsFixed(1)}kHz' : '';
+        final rate = audio.sampleRate != null
+            ? '${(audio.sampleRate! / 1000).toStringAsFixed(1)}kHz'
+            : '';
         final bit = audio.bitrate != null ? '${audio.bitrate}kbps' : '';
         final ext = audio.fileExtension.toUpperCase();
         return Text(
@@ -796,8 +174,9 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
             alignment: compact ? Alignment.centerLeft : Alignment.center,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment:
-                  compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+              crossAxisAlignment: compact
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
               children: [
                 Text(
                   audio?.displayTitle ?? '正在播放',
@@ -806,7 +185,8 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
                   textAlign: compact ? TextAlign.left : TextAlign.center,
                   style: TextStyle(
                     color: scheme.onSurface,
-                    fontSize: compact ? 22 : 30, // 非 compact 模式下歌曲标题字号调大至 30 像素，更显大气
+                    fontSize:
+                        compact ? 22 : 30, // 非 compact 模式下歌曲标题字号调大至 30 像素，更显大气
                     fontWeight: FontWeight.w800,
                     height: 1.08,
                     decoration: TextDecoration.none,
@@ -894,10 +274,10 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
-        final useLargeCover = widget.large && effectsLevel == UiEffectsLevel.visual;
+        final useLargeCover =
+            widget.large && effectsLevel == UiEffectsLevel.visual;
         final enableBackdropGlow =
-            widget.showBackdropGlow &&
-            effectsLevel == UiEffectsLevel.visual;
+            widget.showBackdropGlow && effectsLevel == UiEffectsLevel.visual;
         final future = audio == null
             ? null
             : (useLargeCover ? audio.largeCover : audio.mediumCover);
@@ -973,18 +353,25 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
                         child: AnimatedBuilder(
                           animation: _glowController,
                           builder: (context, staticGlowChild) {
-                            final scaleVal = 1.05 + _glowController.value * 0.07; // 1.05 到 1.12 的呼吸缩放
-                            final opacityVal = 0.38 + _glowController.value * 0.22; // 0.38 到 0.60 的透明度呼吸
+                            final scaleVal = 1.05 +
+                                _glowController.value *
+                                    0.07; // 1.05 到 1.12 的呼吸缩放
+                            final opacityVal = 0.38 +
+                                _glowController.value *
+                                    0.22; // 0.38 到 0.60 的透明度呼吸
                             return Transform.scale(
                               scale: scaleVal,
                               child: Opacity(
                                 opacity: opacityVal,
-                                child: staticGlowChild, // 仅在 GPU 侧对已经模糊好的缓存纹理做变换，杜绝主线程阻塞
+                                child:
+                                    staticGlowChild, // 仅在 GPU 侧对已经模糊好的缓存纹理做变换，杜绝主线程阻塞
                               ),
                             );
                           },
                           child: ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32), // 将高斯模糊提取为静态 child，确保一整首歌期间只渲染一次
+                            imageFilter: ImageFilter.blur(
+                                sigmaX: 32,
+                                sigmaY: 32), // 将高斯模糊提取为静态 child，确保一整首歌期间只渲染一次
                             child: image(provider),
                           ),
                         ),
@@ -1136,9 +523,12 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     });
   }
 
-  double get _primaryFontSize => (widget.compact ? 28 : 36) * _fontScale; // 杂志级排版：主歌词字号随缩放系数动态调整
-  double get _secondaryFontSize => (widget.compact ? 18 : 22) * _fontScale; // 杂志级排版：副歌词字号随缩放系数动态调整
-  double get _translationFontSize => (widget.compact ? 14 : 16) * _fontScale; // 翻译行字号随缩放系数动态调整
+  double get _primaryFontSize =>
+      (widget.compact ? 28 : 36) * _fontScale; // 杂志级排版：主歌词字号随缩放系数动态调整
+  double get _secondaryFontSize =>
+      (widget.compact ? 18 : 22) * _fontScale; // 杂志级排版：副歌词字号随缩放系数动态调整
+  double get _translationFontSize =>
+      (widget.compact ? 14 : 16) * _fontScale; // 翻译行字号随缩放系数动态调整
   double get _verticalPadding => widget.compact ? 140 : 200;
 
   @override
@@ -1217,9 +607,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     final base = isCurrent
         ? (widget.compact ? 88.0 : 104.0)
         : (widget.compact ? 56.0 : 68.0);
-    final height = _showTranslation(line)
-        ? base + (widget.compact ? 28.0 : 32.0)
-        : base;
+    final height =
+        _showTranslation(line) ? base + (widget.compact ? 28.0 : 32.0) : base;
     return height * _fontScale; // 必须乘以字号缩放比例，以保证歌词滚动定位在缩放时仍能绝对精准居中
   }
 
@@ -1352,7 +741,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                           stops: [0, progress, progress, 1],
                         ).createShader(bounds);
                       },
-                      child: Text(word.content, style: style, textAlign: TextAlign.left),
+                      child: Text(word.content,
+                          style: style, textAlign: TextAlign.left),
                     ),
                   ),
               ],
@@ -1396,10 +786,12 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             onPointerSignal: (pointerSignal) {
               if (pointerSignal is PointerScrollEvent) {
                 // 判断硬件键盘的 Control 键是否被按下
-                final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+                final isCtrlPressed =
+                    HardwareKeyboard.instance.isControlPressed;
                 if (isCtrlPressed) {
                   // 滚轮向上滚动增大字号，向下滚动则减小字号
-                  final change = pointerSignal.scrollDelta.dy < 0 ? 0.08 : -0.08;
+                  final change =
+                      pointerSignal.scrollDelta.dy < 0 ? 0.08 : -0.08;
                   _updateScale(_fontScale + change);
                 }
               }
@@ -1427,15 +819,17 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                         isCurrent: isCurrent,
                       );
 
-                      // 设定平滑的高斯模糊目标参数：当前行 0.0（清晰），已播放 0.8（微模糊），未播放 1.8（深模糊以突出当前句）
-                      final double targetBlur = isCurrent
-                          ? 0.0
-                          : (index < _currentLineIndex ? 0.8 : 1.8);
+                      final isPast = index < _currentLineIndex;
+                      final applyDepthBlur = !isCurrent &&
+                          AppSettings.instance.lyricDepthBlur &&
+                          AppSettings.instance.uiEffectsLevel ==
+                              UiEffectsLevel.visual;
 
                       return AnimatedOpacity(
                         duration: motion.controlTransitionDuration,
                         curve: motion.fast,
-                        opacity: _lineOpacity(index: index, isCurrent: isCurrent),
+                        opacity:
+                            _lineOpacity(index: index, isCurrent: isCurrent),
                         child: AnimatedScale(
                           duration: motion.controlTransitionDuration,
                           curve: motion.normal,
@@ -1444,65 +838,64 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                             enableFeedback: false,
                             borderRadius: BorderRadius.circular(24),
                             onTap: () {
-                              playbackService.seek(line.start.inMilliseconds / 1000.0);
+                              playbackService
+                                  .seek(line.start.inMilliseconds / 1000.0);
                             },
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween<double>(begin: targetBlur, end: targetBlur),
-                              duration: motion.panelTransitionDuration,
-                              curve: motion.normal,
-                              builder: (context, animatedBlur, child) {
-                                Widget content = child!;
-                                // 若模糊半径大于临界值，则套上 ImageFiltered 渲染层
-                                if (animatedBlur > 0.05) {
-                                  content = ImageFiltered(
-                                    imageFilter: ImageFilter.blur(
-                                      sigmaX: animatedBlur,
-                                      sigmaY: animatedBlur,
-                                    ),
-                                    child: content,
-                                  );
-                                }
-                                return content;
-                              },
-                              child: AnimatedPadding(
-                                duration: motion.controlTransitionDuration,
-                                curve: motion.normal,
-                                padding: EdgeInsets.symmetric(
-                                  vertical: isCurrent ? 16 : 10,
-                                  horizontal: 12,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start, // 杂志排版：歌词左对齐
-                                  children: [
-                                    _primaryLineWidget(
-                                      line: line,
-                                      isCurrent: isCurrent,
-                                      lineColor: lineColor,
-                                      scheme: scheme,
-                                    ),
-                                    if (_showTranslation(line)) ...[
-                                      const SizedBox(height: 8),
-                                      AnimatedDefaultTextStyle(
-                                        duration: motion.controlTransitionDuration,
-                                        curve: motion.fast,
-                                        style: TextStyle(
-                                          color: isCurrent
-                                              ? scheme.onSurface.withValues(alpha: 0.74)
-                                              : lineColor.withValues(alpha: 0.74),
-                                          fontSize: _translationFontSize,
-                                          fontWeight: FontWeight.w400,
-                                          height: 1.25,
-                                        ),
-                                        textAlign: TextAlign.left, // 翻译行左对齐
-                                        child: Text(
-                                          translation,
-                                          textAlign: TextAlign.left,
-                                        ),
+                            child: Builder(
+                              builder: (context) {
+                                final content = AnimatedPadding(
+                                  duration: motion.controlTransitionDuration,
+                                  curve: motion.normal,
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: isCurrent ? 16 : 10,
+                                    horizontal: 12,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start, // 杂志排版：歌词左对齐
+                                    children: [
+                                      _primaryLineWidget(
+                                        line: line,
+                                        isCurrent: isCurrent,
+                                        lineColor: lineColor,
+                                        scheme: scheme,
                                       ),
+                                      if (_showTranslation(line)) ...[
+                                        const SizedBox(height: 8),
+                                        AnimatedDefaultTextStyle(
+                                          duration:
+                                              motion.controlTransitionDuration,
+                                          curve: motion.fast,
+                                          style: TextStyle(
+                                            color: isCurrent
+                                                ? scheme.onSurface
+                                                    .withValues(alpha: 0.74)
+                                                : lineColor.withValues(
+                                                    alpha: 0.74),
+                                            fontSize: _translationFontSize,
+                                            fontWeight: FontWeight.w400,
+                                            height: 1.25,
+                                          ),
+                                          textAlign: TextAlign.left, // 翻译行左对齐
+                                          child: Text(
+                                            translation,
+                                            textAlign: TextAlign.left,
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                                if (!applyDepthBlur) return content;
+                                final sigma = isPast ? 0.8 : 1.8;
+                                return ImageFiltered(
+                                  imageFilter: ImageFilter.blur(
+                                    sigmaX: sigma,
+                                    sigmaY: sigma,
+                                  ),
+                                  child: content,
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -1527,7 +920,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainer.withValues(alpha: 0.68),
                       borderRadius: BorderRadius.circular(24),
@@ -1578,54 +972,5 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();
     super.dispose();
-  }
-}
-
-class _EmptyPanelState extends StatelessWidget {
-  const _EmptyPanelState({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Symbols.music_note,
-            size: 28,
-            color: scheme.onSurface.withValues(alpha: 0.48),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.58),
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -40,7 +40,8 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
   void initState() {
     super.initState();
     _lastFontSize = lyricViewController.lyricFontSize;
-    lyricViewController.addListener(_onFontSizeChanged); // 添加监听，统一捕获手势缩放或右下角按钮的字号变化
+    lyricViewController
+        .addListener(_onFontSizeChanged); // 添加监听，统一捕获手势缩放或右下角按钮的字号变化
   }
 
   // 监听字号修改，控制缩放卡片的动画显示与淡出逻辑
@@ -144,11 +145,14 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
               // 监听 Ctrl + 鼠标滚轮/触控板双指滚动的字号修改
               onPointerSignal: (pointerSignal) {
                 if (pointerSignal is PointerScrollEvent) {
-                  final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+                  final isCtrlPressed =
+                      HardwareKeyboard.instance.isControlPressed;
                   if (isCtrlPressed) {
                     // 滚轮往上滚（dy < 0）增大字号，往下滚减小字号
-                    final change = pointerSignal.scrollDelta.dy < 0 ? 1.0 : -1.0;
-                    lyricViewController.setFontSize(lyricViewController.lyricFontSize + change);
+                    final change =
+                        pointerSignal.scrollDelta.dy < 0 ? 1.0 : -1.0;
+                    lyricViewController.setFontSize(
+                        lyricViewController.lyricFontSize + change);
                   }
                 }
               },
@@ -159,99 +163,105 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                   builder: (context, __) {
                     final showControls = visibilityController.visible;
                     return FutureBuilder(
-                        future: PlayService.instance.lyricService.currLyricFuture,
-                        builder: (context, snapshot) {
-                          final lyricNullable = snapshot.data;
-                          final noLyricWidget = Center(
-                            child: Text(
-                              "暂无歌词",
-                              style: TextStyle(
-                                fontSize: 22,
-                                color: scheme.onSecondaryContainer,
-                              ),
+                      future: PlayService.instance.lyricService.currLyricFuture,
+                      builder: (context, snapshot) {
+                        final lyricNullable = snapshot.data;
+                        final noLyricWidget = Center(
+                          child: Text(
+                            "暂无歌词",
+                            style: TextStyle(
+                              fontSize: 22,
+                              color: scheme.onSecondaryContainer,
                             ),
-                          );
+                          ),
+                        );
 
-                          return Stack(
-                            children: [
-                              switch (snapshot.connectionState) {
-                                ConnectionState.none => loadingWidget,
-                                ConnectionState.waiting => loadingWidget,
-                                ConnectionState.active => loadingWidget,
-                                ConnectionState.done => lyricNullable == null
-                                    ? noLyricWidget
-                                    : _VerticalLyricScrollView(
-                                        lyric: lyricNullable),
-                              },
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: IgnorePointer(
-                                  ignoring: !showControls,
-                                  child: AnimatedSlide(
+                        return Stack(
+                          children: [
+                            switch (snapshot.connectionState) {
+                              ConnectionState.none => loadingWidget,
+                              ConnectionState.waiting => loadingWidget,
+                              ConnectionState.active => loadingWidget,
+                              ConnectionState.done => lyricNullable == null
+                                  ? noLyricWidget
+                                  : _VerticalLyricScrollView(
+                                      lyric: lyricNullable),
+                            },
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: IgnorePointer(
+                                ignoring: !showControls,
+                                child: AnimatedSlide(
+                                  duration: motion.controlTransitionDuration,
+                                  curve: motion.normal,
+                                  offset: showControls
+                                      ? Offset.zero
+                                      : const Offset(0.04, 0.08),
+                                  child: AnimatedOpacity(
                                     duration: motion.controlTransitionDuration,
-                                    curve: motion.normal,
-                                    offset: showControls
-                                        ? Offset.zero
-                                        : const Offset(0.04, 0.08),
-                                    child: AnimatedOpacity(
-                                      duration: motion.controlTransitionDuration,
-                                      curve: motion.fast,
-                                      opacity: showControls ? 1 : 0,
-                                      child: const LyricViewControls(),
-                                    ),
+                                    curve: motion.fast,
+                                    opacity: showControls ? 1 : 0,
+                                    child: const LyricViewControls(),
                                   ),
                                 ),
                               ),
-                              // 顶部的歌词大小百分比毛玻璃指示卡片
-                              Align(
-                                alignment: Alignment.topCenter,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 32.0),
-                                  child: IgnorePointer(
-                                    child: AnimatedOpacity(
-                                      opacity: _showScaleIndicator ? 1.0 : 0.0,
-                                      duration: const Duration(milliseconds: 200),
-                                      curve: Curves.easeOutCubic,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: BackdropFilter(
-                                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: scheme.surfaceContainer.withValues(alpha: 0.68),
-                                              borderRadius: BorderRadius.circular(24),
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                            // 顶部的歌词大小百分比毛玻璃指示卡片
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 32.0),
+                                child: IgnorePointer(
+                                  child: AnimatedOpacity(
+                                    opacity: _showScaleIndicator ? 1.0 : 0.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOutCubic,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                            sigmaX: 12, sigmaY: 12),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 20, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: scheme.surfaceContainer
+                                                .withValues(alpha: 0.68),
+                                            borderRadius:
+                                                BorderRadius.circular(24),
+                                            border: Border.all(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.08),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.12),
+                                                blurRadius: 16,
+                                                spreadRadius: -4,
                                               ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 0.12),
-                                                  blurRadius: 16,
-                                                  spreadRadius: -4,
+                                            ],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.zoom_in,
+                                                size: 16,
+                                                color: scheme.onSurface
+                                                    .withValues(alpha: 0.8),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                '歌词大小: ${(lyricViewController.lyricFontSize / 22.0 * 100).round()}%',
+                                                style: TextStyle(
+                                                  color: scheme.onSurface,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.2,
                                                 ),
-                                              ],
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.zoom_in,
-                                                  size: 16,
-                                                  color: scheme.onSurface.withValues(alpha: 0.8),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  '歌词大小: ${(lyricViewController.lyricFontSize / 22.0 * 100).round()}%',
-                                                  style: TextStyle(
-                                                    color: scheme.onSurface,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    letterSpacing: 0.2,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
@@ -259,18 +269,19 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                                   ),
                                 ),
                               ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -342,12 +353,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       (i) {
         final isCurrent = i == mainLine;
         final isPast = i < mainLine;
-        final distance = (i - mainLine).abs();
-        final opacity = isCurrent
-            ? 1.0
-            : isPast
-                ? (0.42 - distance * 0.045).clamp(0.22, 0.42).toDouble()
-                : (0.34 - distance * 0.04).clamp(0.16, 0.34).toDouble();
+        final opacity = isCurrent ? 1.0 : (isPast ? 0.32 : 0.22);
         return LyricViewTile(
           key: i == mainLine ? currentLyricTileKey : null,
           line: widget.lyric.lines[i],

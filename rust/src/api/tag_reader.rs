@@ -3,8 +3,12 @@ use std::{
     fs::{self},
     io::{self, Cursor, Write},
     path::{Path, PathBuf},
-    time::{Duration, UNIX_EPOCH},
+    sync::{Mutex, MutexGuard, OnceLock},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
 
 use image::imageops;
 use lofty::prelude::{Accessor, AudioFile, ItemKey, TaggedFileExt};
@@ -16,6 +20,11 @@ use windows::{
         StorageFile,
         Streams::{DataReader, IInputStream},
     },
+};
+#[cfg(windows)]
+use windows::{
+    core::PCWSTR,
+    Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH},
 };
 
 use crate::frb_generated::StreamSink;
@@ -44,6 +53,52 @@ static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
     "dsf" => false, "dff" => false,
     "ape" => true,
 };
+
+static INDEX_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn lock_index_writes() -> MutexGuard<'static, ()> {
+    INDEX_WRITE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temp_path = path.with_extension(format!("tmp.{}.{}", std::process::id(), suffix));
+    let result = (|| {
+        let mut file = fs::File::create(&temp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        replace_file(&temp_path, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+#[cfg(windows)]
+fn replace_file(source: &Path, target: &Path) -> io::Result<()> {
+    let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    unsafe {
+        MoveFileExW(
+            PCWSTR(source_wide.as_ptr()),
+            PCWSTR(target_wide.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+        .map_err(|_| io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_file(source: &Path, target: &Path) -> io::Result<()> {
+    fs::rename(source, target)
+}
 
 const CURRENT_INDEX_VERSION: u64 = 113;
 
@@ -486,10 +541,17 @@ impl Audio {
         Some((minute * 60 + second) * 75 + frame)
     }
 
+    fn decode_cue_bytes(bytes: Vec<u8>) -> String {
+        match String::from_utf8(bytes) {
+            Ok(value) => value,
+            Err(err) => encoding_rs::GBK.decode(err.as_bytes()).0.into_owned(),
+        }
+    }
+
     fn read_from_cue_path(cue_path: impl AsRef<Path>) -> Vec<Self> {
         let cue_path = cue_path.as_ref();
-        let cue_text = match fs::read_to_string(cue_path) {
-            Ok(value) => value,
+        let cue_text = match fs::read(cue_path) {
+            Ok(bytes) => Self::decode_cue_bytes(bytes),
             Err(err) => {
                 log_to_dart(format!("{:?}: {}", cue_path, err));
                 return vec![];
@@ -1306,6 +1368,63 @@ pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Ve
     pic_option
 }
 
+pub struct PictureSizes {
+    pub small: Option<Vec<u8>>,
+    pub medium: Option<Vec<u8>>,
+    pub large: Option<Vec<u8>>,
+}
+
+fn resize_loaded_picture(
+    loaded_pic: &image::DynamicImage,
+    width: u32,
+    height: u32,
+) -> Option<Vec<u8>> {
+    let pic_ratio = loaded_pic.width() as f32 / loaded_pic.height() as f32;
+    let (result_width, result_height) = if pic_ratio > 1.0 {
+        (width, (width as f32 / pic_ratio).round() as u32)
+    } else {
+        ((height as f32 * pic_ratio).round() as u32, height)
+    };
+    let resized_img = imageops::resize(
+        loaded_pic,
+        result_width.max(1),
+        result_height.max(1),
+        imageops::FilterType::Triangle,
+    );
+    let mut output = Cursor::new(Vec::new());
+    resized_img
+        .write_to(&mut output, image::ImageFormat::Png)
+        .ok()?;
+    Some(output.into_inner())
+}
+
+pub fn get_picture_sizes_from_path(
+    path: String,
+    small_width: u32,
+    small_height: u32,
+    medium_width: u32,
+    medium_height: u32,
+    large_width: u32,
+    large_height: u32,
+) -> Option<PictureSizes> {
+    let original = get_original_picture_from_path(path)?;
+    let loaded = match image::load_from_memory(&original) {
+        Ok(image) => image,
+        Err(_) => {
+            return Some(PictureSizes {
+                small: Some(original.clone()),
+                medium: Some(original.clone()),
+                large: Some(original),
+            });
+        }
+    };
+    Some(PictureSizes {
+        small: resize_loaded_picture(&loaded, small_width, small_height),
+        medium: resize_loaded_picture(&loaded, medium_width, medium_height),
+        large: resize_loaded_picture(&loaded, large_width, large_height),
+    })
+}
+
 fn _get_lyric_from_lofty(path: &String) -> Option<String> {
     if let Ok(tagged_file) = lofty::read_from_path(path) {
         let tag = tagged_file
@@ -1497,6 +1616,7 @@ pub fn build_index_from_folders_recursively(
     index_path: String,
     sink: StreamSink<IndexActionState>,
 ) -> Result<(), io::Error> {
+    let _write_guard = lock_index_writes();
     let mut audio_folders: Vec<AudioFolder> = vec![];
     let mut scaned: u64 = 0;
     let mut total: u64 = folders.len() as u64;
@@ -1526,7 +1646,7 @@ pub fn build_index_from_folders_recursively(
 
     let mut index_path = PathBuf::from(index_path);
     index_path.push("index.json");
-    fs::File::create(index_path)?.write_all(json_value.to_string().as_bytes())?;
+    atomic_write_bytes(&index_path, json_value.to_string().as_bytes())?;
 
     Ok(())
 }
@@ -1538,14 +1658,14 @@ fn _update_index_below_1_1_0(
 ) -> Result<(), io::Error> {
     let mut audio_folders_json: Vec<serde_json::Value> = vec![];
     // 检查并转换 index 为数组，避免 JSON 损坏导致 panic 崩溃
-    let folders = index.as_array().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "index.json 不是数组格式")
-    })?;
+    let folders = index
+        .as_array()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "index.json 不是数组格式"))?;
     for item in folders {
         // 检查并提取文件夹路径，避免路径字段缺失导致 panic 崩溃
-        let path = item["path"].as_str().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "文件夹项缺少 path 属性")
-        })?;
+        let path = item["path"]
+            .as_str()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "文件夹项缺少 path 属性"))?;
         let _ = sink.add(IndexActionState {
             progress: audio_folders_json.len() as f64 / folders.len() as f64,
             message: String::from("正在扫描 ") + path,
@@ -1559,7 +1679,8 @@ fn _update_index_below_1_1_0(
             });
         }
     }
-    fs::File::create(index_path)?.write_all(
+    atomic_write_bytes(
+        index_path,
         serde_json::json!({
             "version": CURRENT_INDEX_VERSION,
             "folders": audio_folders_json,
@@ -1585,6 +1706,7 @@ fn _update_index_below_1_1_0(
 /// 2. 遍历该文件夹索引，如果文件被修改（再次读取到的 modified > 记录的 modified），重新读取标签；没有则跳过它
 /// 3. 遍历该文件夹，添加新增（读取到的 created > 记录的 latest）的音乐文件
 pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> anyhow::Result<()> {
+    let _write_guard = lock_index_writes();
     let mut index_path = PathBuf::from(index_path);
     index_path.push("index.json");
     let index = fs::read(&index_path)?;
@@ -1597,9 +1719,9 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
 
     let force_refresh_all = version.unwrap_or(0) < CURRENT_INDEX_VERSION;
     // 检查 folders 是否为数组，避免因 index.json 损坏或格式错误导致崩溃
-    let folders = index["folders"].as_array_mut().ok_or_else(|| {
-        anyhow::anyhow!("index.json 的 'folders' 属性缺失或不是数组格式")
-    })?;
+    let folders = index["folders"]
+        .as_array_mut()
+        .ok_or_else(|| anyhow::anyhow!("index.json 的 'folders' 属性缺失或不是数组格式"))?;
 
     // 删除访问不到的文件夹记录
     folders.retain(|item| {
@@ -1656,8 +1778,48 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
     dedup_index_folders_json_by_path(folders);
     index["version"] = serde_json::json!(CURRENT_INDEX_VERSION);
 
-    fs::File::create(index_path)?.write_all(index.to_string().as_bytes())?;
+    atomic_write_bytes(&index_path, index.to_string().as_bytes())?;
     Ok(())
+}
+
+/// 更新 index.json 中指定音频的可编辑元数据。
+/// 与索引扫描共享写锁，避免并发读改写造成覆盖。
+pub fn update_audio_metadata_in_index(
+    index_path: String,
+    audio_path: String,
+    title: String,
+    artist: String,
+    album: String,
+) -> anyhow::Result<bool> {
+    let _write_guard = lock_index_writes();
+    let index_path = PathBuf::from(index_path).join("index.json");
+    let bytes = fs::read(&index_path)?;
+    let mut index: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let folders = index["folders"]
+        .as_array_mut()
+        .ok_or_else(|| anyhow::anyhow!("index.json 的 'folders' 属性缺失或不是数组格式"))?;
+
+    let mut found = false;
+    'folders: for folder in folders {
+        let Some(audios) = folder["audios"].as_array_mut() else {
+            continue;
+        };
+        for audio in audios {
+            if audio["path"].as_str() != Some(audio_path.as_str()) {
+                continue;
+            }
+            audio["title"] = serde_json::json!(title);
+            audio["artist"] = serde_json::json!(artist);
+            audio["album"] = serde_json::json!(album);
+            found = true;
+            break 'folders;
+        }
+    }
+
+    if found {
+        atomic_write_bytes(&index_path, index.to_string().as_bytes())?;
+    }
+    Ok(found)
 }
 
 #[cfg(test)]
@@ -1735,5 +1897,64 @@ mod tests {
             sanitize_metadata_text("UNKNOWN", "未知艺术家"),
             "未知艺术家"
         );
+    }
+
+    #[test]
+    fn decode_cue_bytes_supports_gbk_chinese_text() {
+        let source = "TITLE \"中文专辑\"\nPERFORMER \"测试歌手\"";
+        let encoded = encoding_rs::GBK.encode(source).0.into_owned();
+        let decoded = Audio::decode_cue_bytes(encoded);
+
+        assert_eq!(
+            Audio::parse_cue_value(decoded.lines().next().unwrap(), "TITLE"),
+            Some("中文专辑".to_string())
+        );
+        assert!(decoded.contains("测试歌手"));
+    }
+
+    #[test]
+    fn update_audio_metadata_in_index_updates_only_the_target_audio() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "qisheng_index_test_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let index_path = dir.join("index.json");
+        fs::write(
+            &index_path,
+            serde_json::json!({
+                "version": CURRENT_INDEX_VERSION,
+                "folders": [{
+                    "path": "music",
+                    "audios": [
+                        {"path": "target.flac", "title": "old", "artist": "old", "album": "old"},
+                        {"path": "other.flac", "title": "other", "artist": "other", "album": "other"}
+                    ]
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let updated = update_audio_metadata_in_index(
+            dir.to_string_lossy().into_owned(),
+            "target.flac".to_string(),
+            "new title".to_string(),
+            "new artist".to_string(),
+            "new album".to_string(),
+        )
+        .unwrap();
+        let index: serde_json::Value =
+            serde_json::from_slice(&fs::read(&index_path).unwrap()).unwrap();
+
+        assert!(updated);
+        assert_eq!(index["folders"][0]["audios"][0]["title"], "new title");
+        assert_eq!(index["folders"][0]["audios"][1]["title"], "other");
+        fs::remove_dir_all(dir).unwrap();
     }
 }

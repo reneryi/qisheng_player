@@ -223,7 +223,9 @@ class _AudioTileState extends State<AudioTile> {
             final Color targetBgColor = (effectiveFocus || selected)
                 ? scheme.primary.withValues(alpha: isDark ? 0.12 : 0.08)
                 : _isHovered
-                    ? (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.03))
+                    ? (isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.03))
                     : Colors.transparent;
 
             return MouseRegion(
@@ -241,7 +243,8 @@ class _AudioTileState extends State<AudioTile> {
                       borderRadius: rowRadius,
                     ),
                     child: TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0.0, end: _isHovered ? 4.0 : 0.0),
+                      tween: Tween<double>(
+                          begin: 0.0, end: _isHovered ? 4.0 : 0.0),
                       duration: motion.controlTransitionDuration,
                       curve: motion.emphasized,
                       builder: (context, slideOffset, child) {
@@ -265,20 +268,24 @@ class _AudioTileState extends State<AudioTile> {
                           }
 
                           if (widget.multiSelectController == null ||
-                              !widget.multiSelectController!.enableMultiSelectView) {
+                              !widget.multiSelectController!
+                                  .enableMultiSelectView) {
                             PlayService.instance.playbackService
                                 .play(widget.audioIndex, widget.playlist);
                           } else {
-                            widget.multiSelectController!.toggleSelectionWithIndex(
+                            widget.multiSelectController!
+                                .toggleSelectionWithIndex(
                               index: widget.audioIndex,
                               item: audio,
                               items: widget.playlist,
-                              shiftPressed: MultiSelectController.isShiftPressed(),
+                              shiftPressed:
+                                  MultiSelectController.isShiftPressed(),
                             );
                           }
                         },
                         onSecondaryTapDown: (details) {
-                          if (widget.multiSelectController?.enableMultiSelectView ==
+                          if (widget.multiSelectController
+                                  ?.enableMultiSelectView ==
                               true) {
                             return;
                           }
@@ -330,8 +337,8 @@ class _AudioTileState extends State<AudioTile> {
                                 children: [
                                   Text(
                                     audio.title,
-                                    style:
-                                        TextStyle(color: textColor, fontSize: 16),
+                                    style: TextStyle(
+                                        color: textColor, fontSize: 16),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -363,30 +370,36 @@ class _AudioTileState extends State<AudioTile> {
                                     ),
                                   ),
                                   const SizedBox(width: 8.0),
-                                  IconButton(
-                                    tooltip: '更多',
-                                    onPressed: () => controller.open(),
-                                    icon: const Icon(Symbols.more_vert),
-                                    color: textColor.withValues(alpha: 0.76),
-                                    visualDensity: VisualDensity.compact,
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(36, 36),
-                                      padding: EdgeInsets.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ).copyWith(
-                                      backgroundColor: const WidgetStatePropertyAll(
-                                        Colors.transparent,
-                                      ),
-                                      overlayColor: WidgetStatePropertyAll(
-                                        textColor.withValues(alpha: 0.08),
+                                  Semantics(
+                                    label: '更多',
+                                    button: true,
+                                    child: IconButton(
+                                      tooltip: '更多',
+                                      onPressed: () => controller.open(),
+                                      icon: const Icon(Symbols.more_vert),
+                                      color: textColor.withValues(alpha: 0.76),
+                                      visualDensity: VisualDensity.compact,
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size(36, 36),
+                                        padding: EdgeInsets.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ).copyWith(
+                                        backgroundColor:
+                                            const WidgetStatePropertyAll(
+                                          Colors.transparent,
+                                        ),
+                                        overlayColor: WidgetStatePropertyAll(
+                                          textColor.withValues(alpha: 0.08),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            if (widget.multiSelectController?.enableMultiSelectView ==
+                            if (widget.multiSelectController
+                                    ?.enableMultiSelectView ==
                                 true)
                               Padding(
                                 padding: const EdgeInsets.only(left: 8.0),
@@ -394,12 +407,13 @@ class _AudioTileState extends State<AudioTile> {
                                   value: widget.multiSelectController!.selected
                                       .contains(audio),
                                   onChanged: (_) {
-                                    widget.multiSelectController!.toggleSelectionWithIndex(
+                                    widget.multiSelectController!
+                                        .toggleSelectionWithIndex(
                                       index: widget.audioIndex,
                                       item: audio,
                                       items: widget.playlist,
-                                      shiftPressed:
-                                          MultiSelectController.isShiftPressed(),
+                                      shiftPressed: MultiSelectController
+                                          .isShiftPressed(),
                                     );
                                   },
                                 ),
@@ -477,8 +491,15 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
         }
       }
 
-      // 同步更新 index.json，使修改在重启或重建索引后依然保留。
-      await _updateIndexJson(widget.audio, title, artist, album);
+      // 统一由 Rust 端串行更新 index.json，避免与启动扫描交错覆盖。
+      final supportPath = (await getAppDataDir()).path;
+      await tag_writer.updateAudioMetadataInIndex(
+        indexPath: supportPath,
+        audioPath: widget.audio.path,
+        title: title,
+        artist: artist,
+        album: album,
+      );
 
       AudioLibrary.instance.rebuildCollectionsFromCurrentFolders();
 
@@ -498,46 +519,6 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
     if (mounted) {
       showTextOnSnackBar("已保存音频标签");
       Navigator.pop(context);
-    }
-  }
-
-  /// 更新 index.json 中对应音频的元数据。
-  Future<void> _updateIndexJson(
-    Audio audio,
-    String title,
-    String artist,
-    String album,
-  ) async {
-    try {
-      final supportPath = (await getAppDataDir()).path;
-      final indexFile = File("$supportPath\\index.json");
-      if (!indexFile.existsSync()) return;
-
-      final indexStr = await indexFile.readAsString();
-      final Map indexJson = json.decode(indexStr);
-      final List folders = indexJson["folders"] ?? [];
-
-      // 在 index.json 中查找并更新匹配的音频条目。
-      bool found = false;
-      for (final folder in folders) {
-        final List audios = folder["audios"] ?? [];
-        for (int i = 0; i < audios.length; i++) {
-          if (audios[i]["path"] == audio.path) {
-            audios[i]["title"] = title;
-            audios[i]["artist"] = artist;
-            audios[i]["album"] = album;
-            found = true;
-            break;
-          }
-        }
-        if (found) break;
-      }
-
-      if (found) {
-        await indexFile.writeAsString(json.encode(indexJson));
-      }
-    } catch (err, trace) {
-      LOGGER.e("更新 index.json 失败", error: err, stackTrace: trace);
     }
   }
 

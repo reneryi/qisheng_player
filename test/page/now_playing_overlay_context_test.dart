@@ -1,4 +1,3 @@
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
@@ -11,7 +10,7 @@ import 'package:provider/provider.dart';
 import '../test_helpers/media_test_harness.dart';
 
 void main() {
-  testWidgets('NowPlayingContentView stays stable without Scaffold ancestor',
+  testWidgets('ImmersiveNowPlayingView stays stable without Scaffold ancestor',
       (tester) async {
     final audio = TestAudio(
       title: 'Overlay Song',
@@ -39,14 +38,14 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildTestTheme(),
-          home: const NowPlayingContentView(
+          home: const ImmersiveNowPlayingView(
             compact: false,
-            styleMode: NowPlayingStyleMode.immersive,
           ),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(tester.takeException(), isNull);
     expect(find.byType(Scrollbar), findsWidgets);

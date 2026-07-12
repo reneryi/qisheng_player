@@ -46,9 +46,10 @@ class AudioMetadataOverrideStore {
   Future<void> save() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final file = await File("$supportPath\\audio_override.json")
-          .create(recursive: true);
-      await file.writeAsString(json.encode(_overrides));
+      await atomicWriteString(
+        "$supportPath\\audio_override.json",
+        json.encode(_overrides),
+      );
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -71,8 +72,10 @@ class AudioMetadataOverrideStore {
   }
 
   void applyToLibrary(AudioLibrary library) {
-    for (final audio in library.audioCollection) {
-      applyToAudio(audio);
+    for (final folder in library.folders) {
+      for (final audio in folder.audios) {
+        applyToAudio(audio);
+      }
     }
   }
 

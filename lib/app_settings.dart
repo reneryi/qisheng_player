@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:qisheng_player/app_brand.dart';
@@ -12,14 +13,19 @@ import 'package:window_manager/window_manager.dart';
 enum WindowBackdropMode {
   /// 自动系统决策模式
   auto,
+
   /// Windows 11 原生云母材质
   mica,
+
   /// Windows 11 22H2 标签页云母 Alt 材质
   micaAlt,
+
   /// Windows 11 原生亚克力材质
   acrylic,
+
   /// 极光流体漂移背景材质（Flutter 软件渲染）
   fluid,
+
   /// 关闭所有窗口特效
   none;
 
@@ -101,10 +107,12 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，更新为 1.2.10
-  static const String version = "1.2.10";
+  // 当前播放器的全局静态版本号，更新为 1.3.0
+  static const String version = "1.3.0";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
+
+  Timer? _saveDebounce;
 
   /// 主题模式：亮 / 鏆?/ 璺熼殢绯荤粺
   ThemeMode themeMode = getWindowsThemeMode();
@@ -134,6 +142,7 @@ class AppSettings {
   double backgroundImageOpacity = 0.18;
   WindowBackdropMode windowBackdropMode = WindowBackdropMode.auto;
   UiEffectsLevel uiEffectsLevel = UiEffectsLevel.balanced;
+  bool lyricDepthBlur = false;
   UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.glass;
   final ValueNotifier<int> backgroundVersion = ValueNotifier(0);
 
@@ -311,6 +320,7 @@ class AppSettings {
         _instance.uiEffectsLevel =
             UiEffectsLevel.fromName(uiEffectsLevel) ?? UiEffectsLevel.balanced;
       }
+      _instance.lyricDepthBlur = settingsMap["LyricDepthBlur"] == true;
       _instance.uiVisualStyleMode = parseUiVisualStyleMode(
         settingsMap["UiVisualStyleMode"],
       );
@@ -320,6 +330,8 @@ class AppSettings {
   }
 
   Future<void> saveSettings() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
     try {
       final isMaximized = await windowManager.isMaximized();
       final isFullScreen = await windowManager.isFullScreen();
@@ -339,6 +351,7 @@ class AppSettings {
         "BackgroundImageOpacity": backgroundImageOpacity,
         "WindowBackdropMode": windowBackdropMode.name,
         "UiEffectsLevel": uiEffectsLevel.name,
+        "LyricDepthBlur": lyricDepthBlur,
         "UiVisualStyleMode": uiVisualStyleMode.name,
       };
 
@@ -354,10 +367,17 @@ class AppSettings {
       final settingsStr = json.encode(settingsMap);
       final supportPath = (await getAppDataDir()).path;
       final settingsPath = "$supportPath\\settings.json";
-      final output = await File(settingsPath).create(recursive: true);
-      output.writeAsStringSync(settingsStr);
+      await atomicWriteString(settingsPath, settingsStr);
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
+  }
+
+  void scheduleSaveSettings() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(saveSettings()),
+    );
   }
 }

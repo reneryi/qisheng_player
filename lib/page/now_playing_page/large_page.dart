@@ -5,7 +5,7 @@ class _NowPlayingPage_Large extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _ImmersiveModeView(
+    return const ImmersiveNowPlayingView(
       compact: false,
     );
   }

@@ -2,6 +2,28 @@
 
 本文件记录重要实现、验证结果与后续注意事项。
 
+## 2026-07-12 - qisheng_player v1.3.0 稳定性与性能优化
+
+### 背景
+
+- 按 `docs/optimization_tasklist.md` 对播放页结构、持久化写入、封面处理、在线资源匹配和 Windows 调试错误进行系统收敛。
+- IDE 调试控制台持续出现的 `AXTree` 错误来自 Flutter `3.41.x` Windows 引擎与无障碍客户端读取虚拟列表 Tooltip 的交互，需要在应用层规避高频 Tooltip Overlay 更新。
+
+### 实现
+
+- 移除 Studio、迷你播放条等失效链路，简化正在播放页面的状态与组件结构。
+- 设置、播放列表、统计和元数据覆盖改为原子写入；播放次数采用合并写入，Rust 索引增加串行保护。
+- 三档封面尺寸共享 Rust 读取与解码，补齐 FFI 内存释放、GBK CUE 解码和元数据索引同步。
+- 在线匹配加入 Unicode 字符距离、并行数据源、歌手约束、歌词置信度和封面失败持久缓存。
+- Windows 语义树启用时关闭虚拟列表 Tooltip Overlay，同时显式保留列表操作的无障碍语义标签。
+
+### 验证
+
+- Flutter 静态分析与全量 `138` 项测试通过。
+- Rust 格式、检查与测试通过，Windows Debug/Release 构建通过。
+- Windows 无障碍树连续读取 `20` 次，`AXTree` 错误为 `0`。
+- 发布产物由 `tools/release/package_release_windows.ps1 -Version 1.3.0` 生成并校验。
+
 ## 2026-06-25 - qisheng_player v1.2.9 整合与 Bug 修复
 
 ### 背景

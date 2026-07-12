@@ -1,5 +1,6 @@
 ﻿import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/page/settings_page/cpfeedback_key.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -58,7 +59,10 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
 
     try {
       await cpfeedback.issues.create(
-        RepositorySlug("Ferry-200", "coriander_player"),
+        RepositorySlug(
+          AppSettings.releaseRepoOwner,
+          AppSettings.releaseRepoName,
+        ),
         issue,
       );
 

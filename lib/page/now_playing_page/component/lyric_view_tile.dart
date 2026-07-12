@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' show ImageFilter; // 引入 ImageFilter 用于高斯模糊滤镜
+import 'dart:ui' show ImageFilter;
 
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
@@ -33,10 +34,10 @@ class LyricViewTile extends StatelessWidget {
     final motion = context.motion;
     final isMainLine = isCurrentLine || opacity == 1.0;
 
-    // 设定平滑的高斯模糊目标参数：当前行 0.0 (清晰)，已播放行 0.8 (微模糊)，未播放行 1.8 (深模糊)
-    final double targetBlur = isCurrentLine
-        ? 0.0
-        : (isPastLine ? 0.8 : 1.8);
+    final settings = AppSettings.instance;
+    final applyDepthBlur = !isCurrentLine &&
+        settings.lyricDepthBlur &&
+        settings.uiEffectsLevel == UiEffectsLevel.visual;
 
     return Align(
       alignment: switch (lyricViewController.lyricTextAlign) {
@@ -65,35 +66,26 @@ class LyricViewTile extends StatelessWidget {
               enableFeedback: false,
               onTap: onTap,
               borderRadius: BorderRadius.circular(14.0),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: targetBlur, end: targetBlur),
-                duration: motion.panelTransitionDuration,
-                curve: motion.normal,
-                builder: (context, animatedBlur, child) {
-                  Widget content = child!;
-                  // 当模糊系数大于阈值时添加 ImageFiltered 滤镜
-                  if (animatedBlur > 0.05) {
-                    content = ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: animatedBlur,
-                        sigmaY: animatedBlur,
-                      ),
-                      child: content,
-                    );
-                  }
-                  return content;
+              child: Builder(
+                builder: (context) {
+                  final content = line is SyncLyricLine
+                      ? _SyncLineContent(
+                          syncLine: line as SyncLyricLine,
+                          isMainLine: isMainLine,
+                          isPastLine: isPastLine,
+                        )
+                      : _LrcLineContent(
+                          lrcLine: line as LrcLine,
+                          isMainLine: isMainLine,
+                          isPastLine: isPastLine,
+                        );
+                  if (!applyDepthBlur) return content;
+                  final sigma = isPastLine ? 0.8 : 1.8;
+                  return ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                    child: content,
+                  );
                 },
-                child: line is SyncLyricLine
-                    ? _SyncLineContent(
-                        syncLine: line as SyncLyricLine,
-                        isMainLine: isMainLine,
-                        isPastLine: isPastLine,
-                      )
-                    : _LrcLineContent(
-                        lrcLine: line as LrcLine,
-                        isMainLine: isMainLine,
-                        isPastLine: isPastLine,
-                      ),
               ),
             ),
           ),

@@ -8,6 +8,24 @@ import 'package:qisheng_player/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+typedef CoverSizesLoader = Future<PictureSizes?> Function({
+  required String path,
+  required int smallWidth,
+  required int smallHeight,
+  required int mediumWidth,
+  required int mediumHeight,
+  required int largeWidth,
+  required int largeHeight,
+});
+
+class _AudioCoverProviders {
+  const _AudioCoverProviders(this.small, this.medium, this.large);
+
+  final ImageProvider? small;
+  final ImageProvider? medium;
+  final ImageProvider? large;
+}
+
 /// from index.json
 class AudioLibrary {
   List<AudioFolder> folders;
@@ -55,7 +73,7 @@ class AudioLibrary {
       final supportPath = (await getAppDataDir()).path;
       final indexPath = "$supportPath\\index.json";
 
-      final indexStr = File(indexPath).readAsStringSync();
+      final indexStr = await File(indexPath).readAsString();
       if (indexStr.trim().isEmpty) return;
       final Map indexJson = json.decode(indexStr);
       final List foldersJson = indexJson["folders"];
@@ -72,7 +90,6 @@ class AudioLibrary {
 
       _instance = AudioLibrary._(folders);
 
-      instance._rebuildCollections();
       await AudioMetadataOverrideStore.instance.read();
       AudioMetadataOverrideStore.instance.applyToLibrary(instance);
       instance._rebuildCollections();
@@ -246,10 +263,9 @@ class Audio {
   /// 标签来源（Lofty、Windows、null）
   String? by;
 
-  Future<ImageProvider?>? _coverFuture;
-  Future<ImageProvider?>? _mediumCoverFuture;
-  Future<ImageProvider?>? _largeCoverFuture;
+  Future<_AudioCoverProviders>? _coverProvidersFuture;
   Future<Uint8List?>? _coverBytesFuture;
+  final CoverSizesLoader _coverSizesLoader;
 
   /// 以“、”和“/”分割艺术家，会把名称中带有这些符号的艺术家分割。
   /// 暂时想不到别的方法。
@@ -271,8 +287,11 @@ class Audio {
     this.path,
     this.modified,
     this.created,
-    this.by,
-  ) : splitedArtists = artist.split(
+    this.by, {
+    CoverSizesLoader? coverSizesLoaderForTesting,
+  })  : _coverSizesLoader =
+            coverSizesLoaderForTesting ?? getPictureSizesFromPath,
+        splitedArtists = artist.split(
           RegExp(AppSettings.instance.artistSplitPattern),
         ) {
     _normalizeCorruptedMetadata();
@@ -387,22 +406,30 @@ class Audio {
   }
 
   /// 读取音乐文件的图片，自动适应缩放
-  Future<ImageProvider?> _getResizedPic({
-    required int width,
-    required int height,
-  }) async {
+  Future<_AudioCoverProviders> _loadCoverProviders() async {
     final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
-    return getPictureFromPath(
+    final sizes = await _coverSizesLoader(
       path: mediaPath,
-      width: (width * ratio).round(),
-      height: (height * ratio).round(),
-    ).then((pic) {
-      if (pic == null) {
-        return OnlineCoverStore.instance.getCover(this);
-      }
+      smallWidth: (48 * ratio).round(),
+      smallHeight: (48 * ratio).round(),
+      mediumWidth: (200 * ratio).round(),
+      mediumHeight: (200 * ratio).round(),
+      largeWidth: (400 * ratio).round(),
+      largeHeight: (400 * ratio).round(),
+    );
+    if (sizes == null) {
+      final online = await OnlineCoverStore.instance.getCover(this);
+      return _AudioCoverProviders(online, online, online);
+    }
+    return _AudioCoverProviders(
+      sizes.small == null ? null : MemoryImage(sizes.small!),
+      sizes.medium == null ? null : MemoryImage(sizes.medium!),
+      sizes.large == null ? null : MemoryImage(sizes.large!),
+    );
+  }
 
-      return MemoryImage(pic);
-    });
+  Future<_AudioCoverProviders> get _coverProviders {
+    return _coverProvidersFuture ??= _loadCoverProviders();
   }
 
   /// 缓存ImageProvider而不是Uint8List（bytes）
@@ -410,12 +437,7 @@ class Audio {
   /// 缓存ImageProvider不用重新解码。快速滚动时最多250mb
   /// 48*48
   Future<ImageProvider?> get cover {
-    final existingFuture = _coverFuture;
-    if (existingFuture != null) return existingFuture;
-
-    final future = _getResizedPic(width: 48, height: 48);
-    _coverFuture = future;
-    return future;
+    return _coverProviders.then((covers) => covers.small);
   }
 
   /// 读取音乐文件中的原始封面字节，供调色板提取使用。
@@ -432,32 +454,20 @@ class Audio {
   }
 
   void clearCoverCache() {
-    _coverFuture = null;
-    _mediumCoverFuture = null;
-    _largeCoverFuture = null;
+    _coverProvidersFuture = null;
     _coverBytesFuture = null;
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片
   /// 200 * 200
   Future<ImageProvider?> get mediumCover {
-    final existingFuture = _mediumCoverFuture;
-    if (existingFuture != null) return existingFuture;
-
-    final future = _getResizedPic(width: 200, height: 200);
-    _mediumCoverFuture = future;
-    return future;
+    return _coverProviders.then((covers) => covers.medium);
   }
 
   /// now playing 不需要频繁调用，所以不缓存图片
   /// size: 400 * devicePixelRatio（屏幕缩放大小）
   Future<ImageProvider?> get largeCover {
-    final existingFuture = _largeCoverFuture;
-    if (existingFuture != null) return existingFuture;
-
-    final future = _getResizedPic(width: 400, height: 400);
-    _largeCoverFuture = future;
-    return future;
+    return _coverProviders.then((covers) => covers.large);
   }
 
   @override
@@ -603,8 +613,7 @@ class Artist {
 
   /// 只能用在artist detail page
   /// 200*200
-  Future<ImageProvider?> get picture =>
-      works.first._getResizedPic(width: 200, height: 200);
+  Future<ImageProvider?> get picture => works.first.mediumCover;
 
   Artist({required this.name});
 }
@@ -620,8 +629,7 @@ class Album {
 
   /// 只能用在album detail page
   /// 200*200
-  Future<ImageProvider?> get cover =>
-      works.first._getResizedPic(width: 200, height: 200);
+  Future<ImageProvider?> get cover => works.first.mediumCover;
 
   Album({required this.name});
 }

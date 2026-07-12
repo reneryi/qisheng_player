@@ -37,12 +37,3 @@ const String SETTINGS_ISSUE_PAGE = "/settings/issue";
 const String WELCOMING_PAGE = "/welcoming";
 
 const String UPDATING_DIALOG = "/updating";
-
-/// 可以作为 start page 的 pages
-const List<String> START_PAGES = [
-  AUDIOS_PAGE,
-  ARTISTS_PAGE,
-  ALBUMS_PAGE,
-  FOLDERS_PAGE,
-  PLAYLISTS_PAGE
-];

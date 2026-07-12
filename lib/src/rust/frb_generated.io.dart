@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  PictureSizes dco_decode_box_autoadd_picture_sizes(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -94,10 +97,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  PictureSizes? dco_decode_opt_box_autoadd_picture_sizes(dynamic raw);
+
+  @protected
   List<InstalledFont>? dco_decode_opt_list_installed_font(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PictureSizes dco_decode_picture_sizes(dynamic raw);
 
   @protected
   (int, int, int, int) dco_decode_record_u_8_u_8_u_8_u_8(dynamic raw);
@@ -160,6 +169,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  PictureSizes sse_decode_box_autoadd_picture_sizes(
+      SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -191,11 +204,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  PictureSizes? sse_decode_opt_box_autoadd_picture_sizes(
+      SseDeserializer deserializer);
+
+  @protected
   List<InstalledFont>? sse_decode_opt_list_installed_font(
       SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PictureSizes sse_decode_picture_sizes(SseDeserializer deserializer);
 
   @protected
   (int, int, int, int) sse_decode_record_u_8_u_8_u_8_u_8(
@@ -260,6 +280,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_picture_sizes(
+      PictureSizes self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -294,12 +318,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_picture_sizes(
+      PictureSizes? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_installed_font(
       List<InstalledFont>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_picture_sizes(PictureSizes self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_u_8_u_8_u_8_u_8(
@@ -353,7 +384,7 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutterPtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_coriander_player_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter');
+          'frbgen_qisheng_player_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter');
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter =
       _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutterPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
@@ -369,7 +400,7 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutterPtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_coriander_player_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter');
+          'frbgen_qisheng_player_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter');
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutter =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSMTCFlutterPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();

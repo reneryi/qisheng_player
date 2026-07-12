@@ -9,7 +9,6 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
-import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/utils.dart';
@@ -19,7 +18,6 @@ import 'package:qisheng_player/library/playlist.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/navigation_state.dart';
-import 'package:qisheng_player/page/now_playing_page/component/current_playlist_view.dart';
 import 'package:qisheng_player/page/now_playing_page/component/vertical_lyric_view.dart';
 import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
@@ -36,7 +34,6 @@ import 'package:provider/provider.dart';
 part 'small_page.dart';
 part 'large_page.dart';
 part 'component_views.dart';
-part 'content_view.dart';
 part 'top_actions.dart';
 
 enum NowPlayingViewMode {
@@ -289,7 +286,8 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
                     opacity: _visible ? 1 : 0,
                     child: const BottomPlayerBar(
                       transparent: true,
-                      disableHero: true, // 在播放详情页内的控制栏禁用 Hero 动画，防止与中央大封面产生重复 Hero 标签冲突
+                      disableHero:
+                          true, // 在播放详情页内的控制栏禁用 Hero 动画，防止与中央大封面产生重复 Hero 标签冲突
                     ), // 传入 transparent: true，隐藏底栏毛玻璃背景
                   ),
                 ),
@@ -314,7 +312,8 @@ class _NowPlayingAppBar extends StatelessWidget {
       beginOffset: const Offset(0, -0.035),
       beginScale: 0.985,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
         child: SizedBox(
           height: chrome.titleBarHeight,
           child: LayoutBuilder(
@@ -328,6 +327,8 @@ class _NowPlayingAppBar extends StatelessWidget {
                       child: SizedBox.expand(),
                     ),
                   ),
+                  SizedBox(width: 8),
+                  NowPlayingDesktopLyricAction(),
                   SizedBox(width: 8),
                   NowPlayingMoreMenuAction(),
                   SizedBox(width: 8),
@@ -378,235 +379,6 @@ class _NowPlayingBackBtn extends StatelessWidget {
           return scheme.onSurface.withValues(alpha: 0.62); // 默认显示为半透明
         }),
       ),
-    );
-  }
-}
-
-class _NowPlayingMoreAction extends StatelessWidget {
-  const _NowPlayingMoreAction();
-
-  @override
-  Widget build(BuildContext context) {
-    final playbackService = context.watch<PlaybackController>();
-    final nowPlaying = playbackService.nowPlaying;
-    final scheme = Theme.of(context).colorScheme;
-
-    if (nowPlaying == null) {
-      return IconButton(
-        enableFeedback: false,
-        tooltip: '更多操作',
-        onPressed: null,
-        icon: const Icon(Symbols.more_vert),
-        color: scheme.onSecondaryContainer,
-      );
-    }
-
-    return MenuAnchor(
-      menuChildren: [
-        SubmenuButton(
-          menuChildren: [
-            MenuItemButton(
-              onPressed: () async {
-                final controller = TextEditingController();
-                final name = await showDialog<String>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('新建歌单'),
-                    content: TextField(
-                      controller: controller,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: '歌单名称',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (value) => Navigator.pop(context, value),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('取消'),
-                      ),
-                      FilledButton(
-                        onPressed: () =>
-                            Navigator.pop(context, controller.text),
-                        child: const Text('创建'),
-                      ),
-                    ],
-                  ),
-                );
-                final trimmed = name?.trim();
-                if (trimmed == null || trimmed.isEmpty) return;
-                if (PLAYLISTS.any((item) => item.name == trimmed)) {
-                  showTextOnSnackBar('歌单“$trimmed”已存在');
-                  return;
-                }
-                final playlist = Playlist(trimmed, {});
-                playlist.addAudio(nowPlaying);
-                PLAYLISTS.add(playlist);
-                scheduleSavePlaylists();
-                showTextOnSnackBar('已创建歌单“$trimmed”并添加当前歌曲');
-              },
-              leadingIcon: const Icon(Symbols.add),
-              child: const Text('新建歌单并添加'),
-            ),
-            if (PLAYLISTS.isEmpty)
-              const MenuItemButton(
-                onPressed: null,
-                child: Text('暂无歌单'),
-              )
-            else
-              ...List.generate(
-                PLAYLISTS.length,
-                (i) => MenuItemButton(
-                  onPressed: () {
-                    final added = PLAYLISTS[i].addAudio(nowPlaying);
-                    if (!added) {
-                      showTextOnSnackBar('歌曲“${nowPlaying.title}”已在歌单中');
-                      return;
-                    }
-                    showTextOnSnackBar(
-                      '已添加“${nowPlaying.title}”到歌单“${PLAYLISTS[i].name}”',
-                    );
-                  },
-                  leadingIcon: const Icon(Symbols.queue_music),
-                  child: Text(PLAYLISTS[i].name),
-                ),
-              ),
-          ],
-          leadingIcon: const Icon(Symbols.queue_music),
-          child: const Text('添加到歌单'),
-        ),
-        SubmenuButton(
-          menuChildren: List.generate(
-            nowPlaying.splitedArtists.length,
-            (i) => MenuItemButton(
-              onPressed: () {
-                final Artist artist = AudioLibrary
-                    .instance.artistCollection[nowPlaying.splitedArtists[i]]!;
-                context.pushReplacement(
-                  app_paths.ARTIST_DETAIL_PAGE,
-                  extra: artist,
-                );
-              },
-              leadingIcon: const Icon(Symbols.people),
-              child: Text(nowPlaying.splitedArtists[i]),
-            ),
-          ),
-          child: const Text('艺术家'),
-        ),
-        MenuItemButton(
-          onPressed: () {
-            final Album album =
-                AudioLibrary.instance.albumCollection[nowPlaying.album]!;
-            context.pushReplacement(app_paths.ALBUM_DETAIL_PAGE, extra: album);
-          },
-          leadingIcon: const Icon(Symbols.album),
-          child: Text(nowPlaying.album),
-        ),
-        MenuItemButton(
-          onPressed: () {
-            context.pushReplacement(app_paths.AUDIO_DETAIL_PAGE,
-                extra: nowPlaying);
-          },
-          leadingIcon: const Icon(Symbols.info),
-          child: const Text('歌曲详情'),
-        ),
-        MenuItemButton(
-          onPressed: () async {
-            if (nowPlaying.isCueTrack) {
-              showTextOnSnackBar('CUE 分轨不支持直接删除，请删除源文件　');
-              return;
-            }
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('删除歌曲'),
-                content: Text('确定要删除“${nowPlaying.title}”吗？该操作不可撤销。'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('删除'),
-                  ),
-                ],
-              ),
-            );
-            if (confirm != true) return;
-
-            try {
-              final file = File(nowPlaying.mediaPath);
-              if (file.existsSync()) {
-                await file.delete();
-              }
-              AudioLibrary.instance.removeAudioByPath(nowPlaying.path);
-              OnlineCoverStore.instance.removeByPath(nowPlaying.path);
-              removeAudioFromAllPlaylistsByPath(nowPlaying.path);
-              playbackService.removeAudioFromPlaylistByPath(nowPlaying.path);
-              showTextOnSnackBar('已删除“${nowPlaying.title}”');
-            } catch (err) {
-              showTextOnSnackBar('删除失败：$err');
-            }
-          },
-          leadingIcon: const Icon(Symbols.delete),
-          child: const Text('删除歌曲'),
-        ),
-      ],
-      builder: (context, controller, _) => IconButton(
-        enableFeedback: false,
-        tooltip: '更多操作',
-        onPressed: () {
-          if (controller.isOpen) {
-            controller.close();
-          } else {
-            controller.open();
-          }
-        },
-        icon: const Icon(Symbols.more_vert),
-        color: scheme.onSecondaryContainer,
-      ),
-    );
-  }
-}
-
-class _DesktopLyricSwitch extends StatelessWidget {
-  const _DesktopLyricSwitch();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Consumer<DesktopLyricController>(
-      builder: (context, desktopLyricService, _) {
-        return FutureBuilder(
-          future: desktopLyricService.desktopLyric,
-          builder: (context, snapshot) => IconButton(
-            enableFeedback: false,
-            tooltip: '桌面歌词${snapshot.data == null ? "已关闭" : "已开启"}',
-            onPressed: !desktopLyricService.isStarting &&
-                    snapshot.connectionState == ConnectionState.done
-                ? snapshot.data == null
-                    ? desktopLyricService.startDesktopLyric
-                    : desktopLyricService.isLocked
-                        ? desktopLyricService.sendUnlockMessage
-                        : desktopLyricService.killDesktopLyric
-                : null,
-            icon: !desktopLyricService.isStarting &&
-                    snapshot.connectionState == ConnectionState.done
-                ? Icon(
-                    desktopLyricService.isLocked ? Symbols.lock : Symbols.toast,
-                    fill: snapshot.data == null ? 0 : 1,
-                  )
-                : const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(),
-                  ),
-            color: scheme.onSecondaryContainer,
-          ),
-        );
-      },
     );
   }
 }

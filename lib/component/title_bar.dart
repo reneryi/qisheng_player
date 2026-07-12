@@ -8,6 +8,7 @@ import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
+import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/search_page/search_page.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -423,33 +424,33 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
   @override
   void onWindowMaximize() {
     _updateWindowStates();
-    AppSettings.instance.saveSettings();
+    AppSettings.instance.scheduleSaveSettings();
   }
 
   @override
   void onWindowUnmaximize() {
     _updateWindowStates();
-    AppSettings.instance.saveSettings();
+    AppSettings.instance.scheduleSaveSettings();
   }
 
   @override
   void onWindowRestore() {
     _updateWindowStates();
-    AppSettings.instance.saveSettings();
+    AppSettings.instance.scheduleSaveSettings();
   }
 
   @override
   void onWindowEnterFullScreen() {
     super.onWindowEnterFullScreen();
     _updateWindowStates();
-    AppSettings.instance.saveSettings();
+    AppSettings.instance.scheduleSaveSettings();
   }
 
   @override
   void onWindowLeaveFullScreen() {
     super.onWindowLeaveFullScreen();
     _updateWindowStates();
-    AppSettings.instance.saveSettings();
+    AppSettings.instance.scheduleSaveSettings();
   }
 
   @override
@@ -475,7 +476,10 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         ),
         _WindowButton(
           tooltip: '退出',
-          onPressed: () => windowManager.close(),
+          onPressed: () async {
+            await PlayCountStore.instance.save();
+            await windowManager.close();
+          },
           icon: Symbols.close,
           color: scheme.error,
         ),
@@ -520,7 +524,8 @@ class _WindowButton extends StatelessWidget {
             return defaultColor.withValues(alpha: 0.34);
           }
           if (states.contains(WidgetState.pressed)) {
-            return color ?? scheme.primary; // 按下时非退出按钮显示强调色，退出按钮显示原色（如 error 红色）
+            return color ??
+                scheme.primary; // 按下时非退出按钮显示强调色，退出按钮显示原色（如 error 红色）
           }
           if (states.contains(WidgetState.hovered)) {
             return defaultColor; // 悬停状态下图标呈现完全不透明高亮

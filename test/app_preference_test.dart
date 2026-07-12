@@ -36,23 +36,10 @@ void main() {
     expect(restored.toMap()['showLyricPreview'], isTrue);
   });
 
-  test('NowPlayingStyleMode.fromString restores persisted mode', () {
-    expect(
-      NowPlayingStyleMode.fromString('immersive'),
-      NowPlayingStyleMode.immersive,
-    );
-    expect(
-      NowPlayingStyleMode.fromString('studio'),
-      NowPlayingStyleMode.studio,
-    );
-    expect(NowPlayingStyleMode.fromString('missing'), isNull);
-    expect(NowPlayingStyleMode.fromString(null), isNull);
-  });
-
-  test('NowPlayingPagePreference.fromMap preserves studio style mode', () {
+  test('NowPlayingPagePreference silently ignores legacy style mode', () {
     final preference = NowPlayingPagePreference.fromMap({
       'nowPlayingViewMode': NowPlayingViewMode.withPlaylist.name,
-      'styleMode': NowPlayingStyleMode.studio.name,
+      'styleMode': 'studio',
       'lyricTextAlign': LyricTextAlign.center.name,
       'showTranslation': false,
       'lyricFontSize': 24.0,
@@ -60,10 +47,10 @@ void main() {
     });
 
     expect(preference.nowPlayingViewMode, NowPlayingViewMode.withPlaylist);
-    expect(preference.styleMode, NowPlayingStyleMode.studio);
     expect(preference.lyricTextAlign, LyricTextAlign.center);
     expect(preference.showTranslation, isFalse);
     expect(preference.lyricFontSize, 24.0);
     expect(preference.translationFontSize, 16.0);
+    expect(preference.toMap(), isNot(contains('styleMode')));
   });
 }

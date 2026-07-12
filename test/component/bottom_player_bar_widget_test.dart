@@ -127,6 +127,74 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('BottomPlayerBar restores the volume that was muted',
+      (tester) async {
+    final audio = TestAudio(
+      title: 'Volume Song',
+      artist: 'Volume Artist',
+      album: 'Volume Album',
+      path: r'E:\Music\volume.flac',
+    );
+    final playback = FakePlaybackController(audio: audio, queue: [audio]);
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: FakeLyricController(Lrc(const [], LrcSource.local)),
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const Center(
+          child: SizedBox(width: 1360, child: BottomPlayerBar()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('音量'));
+    await tester.pump();
+    expect(playback.volumeDsp, 0.0);
+
+    await tester.tap(find.byTooltip('音量'));
+    await tester.pump();
+    expect(playback.volumeDsp, 0.5);
+  });
+
+  testWidgets('BottomPlayerBar stops and restarts the artwork ticker',
+      (tester) async {
+    var spinning = false;
+    late StateSetter updateState;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            updateState = setState;
+            return Center(
+              child: SpinningArtwork(
+                spinning: spinning,
+                child: const SizedBox.square(dimension: 80),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    updateState(() => spinning = true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+
+    updateState(() => spinning = false);
+    for (var frame = 0; frame < 40; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
   testWidgets('BottomPlayerBar stays stable without Scaffold ancestor',
       (tester) async {
     final audio = TestAudio(

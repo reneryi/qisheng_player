@@ -49,6 +49,16 @@ const BASS_OPTIONAL_PLUGINS = [
 ];
 
 class BassPlayer {
+  static const int _maxInitializationRetries = 2;
+
+  void _ensureInitializationRetryAvailable(String operation, int retries) {
+    if (retries >= _maxInitializationRetries) {
+      throw FormatException(
+        '$operation failed after $_maxInitializationRetries retries.',
+      );
+    }
+  }
+
   late final ffi.DynamicLibrary _bassLib;
   late final ffi.DynamicLibrary _bassWasapiLib;
   late final BASS.Bass _bass;
@@ -121,8 +131,16 @@ class BassPlayer {
     if (_fstream == null) return 0;
 
     final volDsp = ffi.malloc.allocate<ffi.Float>(ffi.sizeOf<ffi.Float>());
-    _bass.BASS_ChannelGetAttribute(_fstream!, BASS.BASS_ATTRIB_VOLDSP, volDsp);
-    return volDsp.value;
+    try {
+      _bass.BASS_ChannelGetAttribute(
+        _fstream!,
+        BASS.BASS_ATTRIB_VOLDSP,
+        volDsp,
+      );
+      return volDsp.value;
+    } finally {
+      ffi.malloc.free(volDsp);
+    }
   }
 
   int _openStreamHandle(String path, {required int flags}) {
@@ -239,13 +257,13 @@ class BassPlayer {
     }
   }
 
-  void _startDevice() {
+  void _startDevice({int retries = 0}) {
     if (_bass.BASS_Start() == BASS.FALSE) {
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_INIT:
+          _ensureInitializationRetryAvailable('BASS_Start', retries);
           _bassInit();
-          _startDevice();
-          break;
+          return _startDevice(retries: retries + 1);
         case BASS.BASS_ERROR_BUSY:
           throw const FormatException(
               "The app's audio has been interrupted and cannot be resumed yet. (iOS only)");
@@ -368,8 +386,9 @@ class BassPlayer {
   bool useExclusiveMode(bool exclusive) {
     final prevState = wasapiExclusive;
     final prevPlayerState = playerState;
+    final currentPath = _fPath;
+    final lastPos = position;
     try {
-      final lastPos = position;
       if (prevState) {
         _bassWasapi.BASS_WASAPI_Free();
         _bassInit();
@@ -389,12 +408,34 @@ class BassPlayer {
       showTextOnSnackBar(err.toString());
     }
     wasapiExclusive = prevState;
+    if (currentPath != null) {
+      try {
+        if (!prevState) {
+          _bassWasapi.BASS_WASAPI_Free();
+        }
+        setSource(currentPath);
+        setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
+        seek(lastPos);
+        if (prevPlayerState == PlayerState.playing ||
+            prevPlayerState == PlayerState.pausedDevice) {
+          start();
+        } else if (prevPlayerState == PlayerState.paused) {
+          start();
+          pause();
+        }
+      } catch (rollbackErr, rollbackTrace) {
+        LOGGER.e(
+          '[use exclusive mode rollback] $rollbackErr',
+          stackTrace: rollbackTrace,
+        );
+      }
+    }
     return false;
   }
 
   /// if setSource has been called once,
   /// it will pause current channel and free current stream.
-  void setSource(String path) {
+  void setSource(String path, {int retries = 0}) {
     if (_fstream != null) {
       _positionUpdater?.cancel();
       freeFStream();
@@ -418,9 +459,9 @@ class BassPlayer {
       _fPath = null;
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_INIT:
+          _ensureInitializationRetryAvailable('BASS_StreamCreateFile', retries);
           _bassInit();
-          setSource(path);
-          break;
+          return setSource(path, retries: retries + 1);
         case BASS.BASS_ERROR_NOTAVAIL:
           throw const FormatException(
               "The BASS_STREAM_AUTOFREE flag cannot be combined with the BASS_STREAM_DECODE flag.");
@@ -474,7 +515,7 @@ class BassPlayer {
     }
   }
 
-  void _bassWasapiInit() {
+  void _bassWasapiInit({int retries = 0}) {
     if (_bassWasapi.BASS_WASAPI_Init(
           -1,
           0,
@@ -492,9 +533,9 @@ class BassPlayer {
         case BASS.BASS_ERROR_DEVICE:
           throw const FormatException("device is invalid.");
         case BASS.BASS_ERROR_ALREADY:
+          _ensureInitializationRetryAvailable('BASS_WASAPI_Init', retries);
           _bassWasapi.BASS_WASAPI_Free();
-          _bassWasapiInit();
-          break;
+          return _bassWasapiInit(retries: retries + 1);
         case BASS.BASS_ERROR_NOTAVAIL:
           throw const FormatException(
               "Exclusive mode and/or event-driven buffering is unavailable on the device, or WASAPIPROC_PUSH is unavailable on input devices and when using event-driven buffering.");
@@ -510,9 +551,9 @@ class BassPlayer {
           throw const FormatException(
               "The device is already in use, eg. another process may have initialized it in exclusive mode.");
         case BASS.BASS_ERROR_INIT:
+          _ensureInitializationRetryAvailable('BASS_WASAPI_Init', retries);
           _bassInit();
-          _bassWasapiInit();
-          break;
+          return _bassWasapiInit(retries: retries + 1);
         case BASS.BASS_ERROR_WASAPI_BUFFER:
           throw const FormatException(
               "buffer is too large or small (exclusive mode only).");
@@ -528,16 +569,16 @@ class BassPlayer {
     }
   }
 
-  void _start_wasapiExclusive() {
+  void _start_wasapiExclusive({int retries = 0}) {
     _positionUpdater?.cancel();
     _bassWasapiInit();
 
     if (_bassWasapi.BASS_WASAPI_Start() == BASS.FALSE) {
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_INIT:
+          _ensureInitializationRetryAvailable('BASS_WASAPI_Start', retries);
           _bassWasapiInit();
-          _start_wasapiExclusive();
-          break;
+          return _start_wasapiExclusive(retries: retries + 1);
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException("Some other mystery problem!");
       }
@@ -550,7 +591,7 @@ class BassPlayer {
   /// start/resume channel
   ///
   /// do nothing if [setSource] hasn't been called
-  void start() {
+  void start({int retries = 0}) {
     if (_fstream == null) return;
 
     if (wasapiExclusive) {
@@ -565,9 +606,9 @@ class BassPlayer {
           throw const FormatException(
               "handle is a decoding channel, so cannot be played.");
         case BASS.BASS_ERROR_START:
+          _ensureInitializationRetryAvailable('BASS_ChannelStart', retries);
           _startDevice();
-          start();
-          break;
+          return start(retries: retries + 1);
       }
     }
 

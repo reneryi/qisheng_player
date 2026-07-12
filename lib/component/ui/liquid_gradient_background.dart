@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:qisheng_player/app_settings.dart';
@@ -177,6 +177,29 @@ class _LiquidPalette {
     required this.accent,
     required this.muted,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _LiquidPalette &&
+          other.top == top &&
+          other.middle == middle &&
+          other.bottom == bottom &&
+          other.primary == primary &&
+          other.secondary == secondary &&
+          other.accent == accent &&
+          other.muted == muted;
+
+  @override
+  int get hashCode => Object.hash(
+        top,
+        middle,
+        bottom,
+        primary,
+        secondary,
+        accent,
+        muted,
+      );
 
   final Color top;
   final Color middle;

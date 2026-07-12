@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/page/settings_page/theme_picker_dialog.dart';
@@ -256,6 +255,32 @@ class _UiEffectsLevelControlState extends State<UiEffectsLevelControl> {
   }
 }
 
+class LyricDepthBlurSwitch extends StatefulWidget {
+  const LyricDepthBlurSwitch({super.key});
+
+  @override
+  State<LyricDepthBlurSwitch> createState() => _LyricDepthBlurSwitchState();
+}
+
+class _LyricDepthBlurSwitchState extends State<LyricDepthBlurSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "歌词景深模糊",
+      hint: "仅在视觉效果档位中模糊非当前歌词行。",
+      action: Switch(
+        value: settings.lyricDepthBlur,
+        onChanged: (value) async {
+          setState(() => settings.lyricDepthBlur = value);
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
 class WindowBackdropModeControl extends StatefulWidget {
   const WindowBackdropModeControl({super.key});
 
@@ -469,50 +494,6 @@ class SelectFontCombobox extends StatelessWidget {
         },
         label: const Text("选择字体"),
         icon: const Icon(Symbols.text_fields),
-      ),
-    );
-  }
-}
-
-class NowPlayingStyleModeControl extends StatefulWidget {
-  const NowPlayingStyleModeControl({super.key});
-
-  @override
-  State<NowPlayingStyleModeControl> createState() =>
-      _NowPlayingStyleModeControlState();
-}
-
-class _NowPlayingStyleModeControlState
-    extends State<NowPlayingStyleModeControl> {
-  final pref = AppPreference.instance.nowPlayingPagePref;
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsTile(
-      description: '正在播放页面模式',
-      hint: '默认使用沉浸模式，也可以切换到专业双栏布局。',
-      action: SegmentedButton<NowPlayingStyleMode>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment<NowPlayingStyleMode>(
-            value: NowPlayingStyleMode.immersive,
-            icon: Icon(Icons.blur_on),
-            label: Text('沉浸'),
-          ),
-          ButtonSegment<NowPlayingStyleMode>(
-            value: NowPlayingStyleMode.studio,
-            icon: Icon(Icons.tune),
-            label: Text('专业'),
-          ),
-        ],
-        selected: {pref.styleMode},
-        onSelectionChanged: (selection) async {
-          if (selection.first == pref.styleMode) return;
-          setState(() {
-            pref.styleMode = selection.first;
-          });
-          await AppPreference.instance.save();
-        },
       ),
     );
   }

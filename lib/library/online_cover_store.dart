@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,33 +9,89 @@ import 'package:qisheng_player/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+const Duration onlineCoverFailureTtl = Duration(days: 7);
+
+Map<String, int> retainRecentCoverFailures(
+  Map<String, int> failures,
+  int nowMilliseconds, {
+  Duration ttl = onlineCoverFailureTtl,
+}) {
+  final ttlMilliseconds = ttl.inMilliseconds;
+  return Map<String, int>.from(failures)
+    ..removeWhere((_, timestamp) {
+      final age = nowMilliseconds - timestamp;
+      return age > ttlMilliseconds;
+    });
+}
+
 class OnlineCoverStore {
-  OnlineCoverStore._();
+  OnlineCoverStore._()
+      : _search = uniSearch,
+        _nowMilliseconds = (() => DateTime.now().millisecondsSinceEpoch),
+        _persistFailuresForTesting = null;
   static final OnlineCoverStore instance = OnlineCoverStore._();
 
+  @visibleForTesting
+  OnlineCoverStore.forTesting({
+    required Future<List<SongSearchResult>> Function(Audio) search,
+    Map<String, int> failedPaths = const {},
+    int Function()? nowMilliseconds,
+    Future<void> Function(Map<String, int>)? persistFailures,
+  })  : _search = search,
+        _nowMilliseconds =
+            nowMilliseconds ?? (() => DateTime.now().millisecondsSinceEpoch),
+        _persistFailuresForTesting = persistFailures,
+        _loaded = true {
+    _failedAudioPaths.addAll(failedPaths);
+  }
+
   final Map<String, String> _cachedPathMap = {};
-  final Set<String> _failedAudioPaths = {};
+  final Map<String, int> _failedAudioPaths = {};
+  final Map<String, Future<ImageProvider?>> _inflightSearches = {};
+  final Future<List<SongSearchResult>> Function(Audio) _search;
+  final int Function() _nowMilliseconds;
+  final Future<void> Function(Map<String, int>)? _persistFailuresForTesting;
   bool _loaded = false;
 
   Future<void> read() async {
     if (_loaded) return;
     _loaded = true;
 
+    final supportPath = (await getAppDataDir()).path;
     try {
-      final supportPath = (await getAppDataDir()).path;
       final cachePath = "$supportPath\\cover_cache.json";
       final cacheFile = File(cachePath);
-      if (!cacheFile.existsSync()) return;
+      if (cacheFile.existsSync()) {
+        final raw = await cacheFile.readAsString();
+        if (raw.trim().isNotEmpty) {
+          final map = json.decode(raw) as Map<String, dynamic>;
+          _cachedPathMap.clear();
+          for (final entry in map.entries) {
+            final value = entry.value?.toString();
+            if (value == null || value.isEmpty) continue;
+            _cachedPathMap[entry.key] = value;
+          }
+        }
+      }
+    } catch (err, trace) {
+      LOGGER.e(err, stackTrace: trace);
+    }
 
-      final raw = await cacheFile.readAsString();
+    try {
+      final failedFile = File("$supportPath\\cover_cache_failed.json");
+      if (!failedFile.existsSync()) return;
+      final raw = await failedFile.readAsString();
       if (raw.trim().isEmpty) return;
       final map = json.decode(raw) as Map<String, dynamic>;
-      _cachedPathMap.clear();
-      for (final entry in map.entries) {
-        final value = entry.value?.toString();
-        if (value == null || value.isEmpty) continue;
-        _cachedPathMap[entry.key] = value;
-      }
+      final loaded = <String, int>{
+        for (final entry in map.entries)
+          if (entry.value is num) entry.key: (entry.value as num).toInt(),
+      };
+      final recent = retainRecentCoverFailures(loaded, _nowMilliseconds());
+      _failedAudioPaths
+        ..clear()
+        ..addAll(recent);
+      if (recent.length != loaded.length) await _saveFailures();
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -44,11 +101,42 @@ class OnlineCoverStore {
     try {
       final supportPath = (await getAppDataDir()).path;
       final cachePath = "$supportPath\\cover_cache.json";
-      final output = await File(cachePath).create(recursive: true);
-      await output.writeAsString(json.encode(_cachedPathMap));
+      await atomicWriteString(cachePath, json.encode(_cachedPathMap));
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
+  }
+
+  Future<void> _saveFailures() async {
+    final snapshot = Map<String, int>.unmodifiable(_failedAudioPaths);
+    final persistForTesting = _persistFailuresForTesting;
+    if (persistForTesting != null) {
+      await persistForTesting(snapshot);
+      return;
+    }
+    try {
+      final supportPath = (await getAppDataDir()).path;
+      await atomicWriteString(
+        "$supportPath\\cover_cache_failed.json",
+        json.encode(snapshot),
+      );
+    } catch (err, trace) {
+      LOGGER.e(err, stackTrace: trace);
+    }
+  }
+
+  bool _hasRecentFailure(String path) {
+    final timestamp = _failedAudioPaths[path];
+    if (timestamp == null) return false;
+    final age = _nowMilliseconds() - timestamp;
+    if (age <= onlineCoverFailureTtl.inMilliseconds) return true;
+    _failedAudioPaths.remove(path);
+    return false;
+  }
+
+  Future<void> _markFailed(String path) async {
+    _failedAudioPaths[path] = _nowMilliseconds();
+    await _saveFailures();
   }
 
   Future<Directory> _coverCacheDir() async {
@@ -71,11 +159,26 @@ class OnlineCoverStore {
     if (cached != null && File(cached).existsSync()) {
       return FileImage(File(cached));
     }
-    if (_failedAudioPaths.contains(audio.path)) {
+    if (_hasRecentFailure(audio.path)) {
       return null;
     }
 
-    final searchResults = await uniSearch(audio);
+    final inflight = _inflightSearches[audio.path];
+    if (inflight != null) return inflight;
+
+    final future = _searchAndCacheCover(audio);
+    _inflightSearches[audio.path] = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_inflightSearches[audio.path], future)) {
+        _inflightSearches.remove(audio.path);
+      }
+    }
+  }
+
+  Future<ImageProvider?> _searchAndCacheCover(Audio audio) async {
+    final searchResults = await _search(audio);
     final hit = searchResults.firstWhere(
       (item) => item.coverUrl != null && item.coverUrl!.isNotEmpty,
       orElse: () => SongSearchResult(
@@ -87,7 +190,7 @@ class OnlineCoverStore {
       ),
     );
     if (hit.coverUrl == null || hit.coverUrl!.isEmpty) {
-      _failedAudioPaths.add(audio.path);
+      await _markFailed(audio.path);
       return null;
     }
     return setCoverFromUrl(audio: audio, url: hit.coverUrl!);
@@ -114,7 +217,9 @@ class OnlineCoverStore {
       final cachePath = "${dir.path}\\${_cacheNameForPath(audio.path)}.jpg";
       await File(cachePath).writeAsBytes(bytes, flush: true);
       _cachedPathMap[audio.path] = cachePath;
-      _failedAudioPaths.remove(audio.path);
+      if (_failedAudioPaths.remove(audio.path) != null) {
+        await _saveFailures();
+      }
       await save();
       return FileImage(File(cachePath));
     } catch (err, trace) {
@@ -132,6 +237,8 @@ class OnlineCoverStore {
       }
       save();
     }
-    _failedAudioPaths.remove(path);
+    if (_failedAudioPaths.remove(path) != null) {
+      unawaited(_saveFailures());
+    }
   }
 }

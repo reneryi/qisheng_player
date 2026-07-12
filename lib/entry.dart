@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/component/fluid_gradient_background.dart';
@@ -88,13 +87,15 @@ Widget _buildAppRouteTransition(
         end: Offset.zero,
       ).animate(contentReveal),
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1).animate(contentReveal), // 极简空间感：页面从 0.96 微缩放展开，空间感更强
+        scale: Tween<double>(begin: 0.96, end: 1)
+            .animate(contentReveal), // 极简空间感：页面从 0.96 微缩放展开，空间感更强
         child: FadeTransition(
           opacity: Tween<double>(begin: 0.8, end: 1).animate(contentReveal),
           child: ListenableBuilder(
             listenable: AppNavigationState.instance,
             builder: (context, _) {
-              final isNowPlayingAbove = AppNavigationState.instance.nowPlayingPageActive;
+              final isNowPlayingAbove =
+                  AppNavigationState.instance.nowPlayingPageActive;
               return AnimatedBuilder(
                 animation: secondaryCurvedAnim,
                 child: transitionedChild,
@@ -133,7 +134,8 @@ Widget _buildAppRouteTransition(
                         // 确保旧页面在完全被覆盖前已彻底透明，避免因突然被路由剔除渲染而产生生硬闪现。
                         opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
                         child: Transform.translate(
-                          offset: Offset(0, 18.0 * outgoingProgress), // 下沉距离调整为更舒缓温和的 18.0 像素
+                          offset: Offset(0,
+                              18.0 * outgoingProgress), // 下沉距离调整为更舒缓温和的 18.0 像素
                           child: Transform.scale(
                             scale: 1.0 - 0.012 * outgoingProgress,
                             child: child,
@@ -226,7 +228,8 @@ class DetailTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 400), // 给 Hero 飞行留出舒缓平顺的 400ms 时间
+          transitionDuration:
+              const Duration(milliseconds: 400), // 给 Hero 飞行留出舒缓平顺的 400ms 时间
           reverseTransitionDuration: const Duration(milliseconds: 320),
         );
 
@@ -254,8 +257,10 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 520), // 延长至 520ms 以便给共享元素 Hero 动画提供充分舒展的飞行时间
-          reverseTransitionDuration: const Duration(milliseconds: 380), // 延长至 380ms
+          transitionDuration: const Duration(
+              milliseconds: 520), // 延长至 520ms 以便给共享元素 Hero 动画提供充分舒展的飞行时间
+          reverseTransitionDuration:
+              const Duration(milliseconds: 380), // 延长至 380ms
         );
 
   static Widget _transitionsBuilder(
@@ -282,8 +287,10 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 520), // 统一设置为 520ms 供共享 Hero 元素充分展开，并通过测试
-          reverseTransitionDuration: const Duration(milliseconds: 380), // 统一设置为 380ms 并通过测试
+          transitionDuration: const Duration(
+              milliseconds: 520), // 统一设置为 520ms 供共享 Hero 元素充分展开，并通过测试
+          reverseTransitionDuration:
+              const Duration(milliseconds: 380), // 统一设置为 380ms 并通过测试
           opaque: false, // 极为关键：允许底层被缩小的页面透过来呈现景深层叠效果
         );
 
@@ -582,9 +589,6 @@ class Entry extends StatelessWidget {
   ];
 
   String _startLocation() {
-    final startPage = AppPreference.instance.startPage;
-    return startPage >= 0 && startPage < app_paths.START_PAGES.length
-        ? app_paths.START_PAGES[startPage]
-        : app_paths.AUDIOS_PAGE;
+    return app_paths.AUDIOS_PAGE;
   }
 }
