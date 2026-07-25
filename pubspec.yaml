@@ -1,8 +1,8 @@
 name: qisheng_player
 description: 栖声 - Windows 本地音乐播放器，基于 Flutter + Rust 构建。
 publish_to: 'none'
-# 应用的版本号，本次升级到 1.3.0
-version: 1.3.0
+# 应用的版本号，本次升级到 1.3.1
+version: 1.3.1
 
 environment:
   sdk: '>=3.1.4 <4.0.0'

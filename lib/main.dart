@@ -24,7 +24,7 @@ import 'package:window_manager/window_manager.dart';
 Future<void> initWindow() async {
   await windowManager.ensureInitialized();
   WindowOptions windowOptions = WindowOptions(
-    minimumSize: const Size(507, 507),
+    minimumSize: AppSettings.minimumWindowSize,
     size: AppSettings.instance.windowSize,
     center: true,
     backgroundColor: Colors.transparent,
@@ -32,6 +32,9 @@ Future<void> initWindow() async {
     titleBarStyle: TitleBarStyle.hidden,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
+    if (AppSettings.instance.isWindowMaximized) {
+      await windowManager.maximize();
+    }
     await windowManager.show();
     await windowManager.focus();
   });

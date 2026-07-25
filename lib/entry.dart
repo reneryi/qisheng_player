@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:qisheng_player/hotkeys_helper.dart';
@@ -366,11 +365,9 @@ class Entry extends StatelessWidget {
                 colorScheme: materialTheme.colorScheme,
                 fontFamily: theme.fontFamily,
               );
-              final routedChild = Platform.isWindows
-                  ? child ?? const SizedBox.shrink()
-                  : WindowResizeFrame(
-                      child: child ?? const SizedBox.shrink(),
-                    );
+              final routedChild = WindowResizeFrame(
+                child: child ?? const SizedBox.shrink(),
+              );
               return shadcn.Theme(
                 data: shadcnTheme,
                 child: StartupUpdatePrompt(
