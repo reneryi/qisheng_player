@@ -81,7 +81,8 @@ class WindowControls {
     WindowBackdropMode mode,
   ) async {
     // 极光流体模式在原生窗口层不需要透明材质支持，因此在原生端使用 none 进行渲染
-    final effectiveMode = mode == WindowBackdropMode.fluid ? WindowBackdropMode.none : mode;
+    final effectiveMode =
+        mode == WindowBackdropMode.fluid ? WindowBackdropMode.none : mode;
     try {
       final appliedMode = await _channel.invokeMapMethod<Object?, Object?>(
         "set_window_backdrop_mode",
@@ -102,7 +103,7 @@ class WindowControls {
           requestedMode: WindowBackdropMode.fluid,
           appliedMode: WindowBackdropMode.fluid,
           nativeBackdropSupported: true, // 软件渲染的流体材质是必定支持的
-          nativeApplySucceeded: true,    // 标记为成功应用状态
+          nativeApplySucceeded: true, // 标记为成功应用状态
         );
       }
 
@@ -275,6 +276,11 @@ class WindowControls {
 }
 
 class _PlaybackWindowListener with WindowListener {
+  @override
+  void onWindowResize() {
+    AppSettings.instance.scheduleSaveSettings();
+  }
+
   @override
   void onWindowFocus() {
     WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window focus');

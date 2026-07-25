@@ -107,10 +107,12 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，更新为 1.3.0
-  static const String version = "1.3.0";
+  // 当前播放器的全局静态版本号，更新为 1.3.1
+  static const String version = "1.3.1";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
+  static const Size defaultWindowSize = Size(1461, 898);
+  static const Size minimumWindowSize = Size(507, 507);
 
   Timer? _saveDebounce;
 
@@ -133,7 +135,7 @@ class AppSettings {
 
   /// 歌词来源：true，本地优先；false，在线优先
   bool localLyricFirst = true;
-  Size windowSize = const Size(1280, 756);
+  Size windowSize = defaultWindowSize;
   bool isWindowMaximized = false;
 
   String? fontFamily;
@@ -189,6 +191,26 @@ class AppSettings {
     return UiVisualStyleMode.glass;
   }
 
+  static Size parseWindowSize(Object? value) {
+    if (value is! String) return defaultWindowSize;
+
+    final parts = value.split(',');
+    if (parts.length != 2) return defaultWindowSize;
+
+    final width = double.tryParse(parts[0].trim());
+    final height = double.tryParse(parts[1].trim());
+    if (width == null ||
+        height == null ||
+        !width.isFinite ||
+        !height.isFinite ||
+        width < minimumWindowSize.width ||
+        height < minimumWindowSize.height) {
+      return defaultWindowSize;
+    }
+
+    return Size(width, height);
+  }
+
   void notifyBackgroundChanged() {
     backgroundVersion.value++;
   }
@@ -221,12 +243,7 @@ class AppSettings {
       _instance.localLyricFirst = llf == 1 ? true : false;
     }
 
-    final sizeStr = settingsMap["WindowSize"];
-    if (sizeStr != null) {
-      final sizeStrs = (sizeStr as String).split(",");
-      _instance.windowSize = Size(double.tryParse(sizeStrs[0]) ?? 1280,
-          double.tryParse(sizeStrs[1]) ?? 756);
-    }
+    _instance.windowSize = parseWindowSize(settingsMap["WindowSize"]);
 
     final isMaximized = settingsMap["IsWindowMaximized"];
     if (isMaximized != null) {
@@ -282,12 +299,7 @@ class AppSettings {
         _instance.localLyricFirst = llf;
       }
 
-      final sizeStr = settingsMap["WindowSize"];
-      if (sizeStr != null) {
-        final sizeStrs = (sizeStr as String).split(",");
-        _instance.windowSize = Size(double.tryParse(sizeStrs[0]) ?? 1280,
-            double.tryParse(sizeStrs[1]) ?? 756);
-      }
+      _instance.windowSize = parseWindowSize(settingsMap["WindowSize"]);
 
       final isMaximized = settingsMap["IsWindowMaximized"];
       if (isMaximized != null) {
@@ -360,6 +372,7 @@ class AppSettings {
       Size sizeToSave = windowSize;
       if (!isMaximized && !isFullScreen) {
         sizeToSave = await windowManager.getSize();
+        windowSize = sizeToSave;
       }
       settingsMap["WindowSize"] =
           "${sizeToSave.width.toStringAsFixed(1)},${sizeToSave.height.toStringAsFixed(1)}";
