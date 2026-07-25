@@ -887,7 +887,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                                   ),
                                 );
                                 if (!applyDepthBlur) return content;
-                                final sigma = isPast ? 0.8 : 1.8;
+                                // 统一上下文非焦点歌词的高斯模糊度 (sigma 1.8)，消除已唱歌词与未唱歌词的景深割裂感
+                                const sigma = 1.8;
                                 return ImageFiltered(
                                   imageFilter: ImageFilter.blur(
                                     sigmaX: sigma,

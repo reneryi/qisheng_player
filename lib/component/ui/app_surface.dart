@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
@@ -138,15 +139,22 @@ class AppSurface extends StatelessWidget {
     double radius,
     Color glassTint,
   ) {
+    final isSharpCard =
+        AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard;
+    final isDark = scheme.brightness == Brightness.dark;
     final depthScale = surfaces.shadowDepthScale;
+    
+    // 极简锐利模式：使用原始 base，消除 glass 模式下默认的玻璃色混合
     final baseColor = switch (variant) {
       AppSurfaceVariant.inset => surfaces.surfaceInset,
       AppSurfaceVariant.raised => surfaces.surfaceRaised,
       AppSurfaceVariant.floating => surfaces.surfaceFloating,
-      AppSurfaceVariant.glass => Color.alphaBlend(
-          glassTint.withValues(alpha: 0.12),
-          surfaces.surfaceRaised.withValues(alpha: surfaces.glassAlpha),
-        ),
+      AppSurfaceVariant.glass => isSharpCard
+          ? surfaces.surfaceRaised // 修复：卡片必须对应 surfaceContainer/surfaceRaised 才能与周围面板 CpSurfaceTone.panel 完全一致
+          : Color.alphaBlend(
+              glassTint.withValues(alpha: scheme.brightness == Brightness.dark ? 0.28 : 0.12),
+              surfaces.surfaceRaised.withValues(alpha: surfaces.glassAlpha),
+            ),
     };
 
     final outerShadow = switch (variant) {
@@ -181,45 +189,51 @@ class AppSurface extends StatelessWidget {
     };
 
     return BoxDecoration(
-      color: baseColor.withValues(alpha: surfaces.panelAlpha),
+      // 极简锐利模式：使用 100% 绝对实色，不叠加 panelAlpha 衰减，避免变黑
+      color: isSharpCard ? baseColor : baseColor.withValues(alpha: surfaces.panelAlpha),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: switch (variant) {
-          AppSurfaceVariant.inset => surfaces.strokeSubtle,
-          AppSurfaceVariant.glass => Colors.white.withValues(alpha: 0.08),
-          _ => surfaces.strokeStrong.withValues(alpha: 0.72),
-        },
+        color: isSharpCard
+            ? surfaces.strokeSubtle.withValues(alpha: isDark ? 0.35 : 0.6)
+            : switch (variant) {
+                AppSurfaceVariant.inset => surfaces.strokeSubtle,
+                AppSurfaceVariant.glass => Colors.white.withValues(alpha: 0.08),
+                _ => surfaces.strokeStrong.withValues(alpha: 0.72),
+              },
       ),
       boxShadow: outerShadow,
-      gradient: switch (variant) {
-        AppSurfaceVariant.inset => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              baseColor.withValues(alpha: 0.96),
-              baseColor.withValues(alpha: 0.82),
-            ],
-          ),
-        AppSurfaceVariant.glass => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.alphaBlend(
-                scheme.primary.withValues(alpha: 0.08),
-                baseColor.withValues(alpha: 0.94),
-              ),
-              baseColor.withValues(alpha: 0.84),
-            ],
-          ),
-        _ => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              baseColor.withValues(alpha: 0.96),
-              baseColor,
-            ],
-          ),
-      },
+      // 极简锐利模式：彻底抛弃所有渐变，使用完全平铺纯色画板
+      gradient: isSharpCard
+          ? null
+          : switch (variant) {
+              AppSurfaceVariant.inset => LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    baseColor.withValues(alpha: 0.96),
+                    baseColor.withValues(alpha: 0.82),
+                  ],
+                ),
+              AppSurfaceVariant.glass => LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.alphaBlend(
+                      scheme.primary.withValues(alpha: 0.08),
+                      baseColor.withValues(alpha: 0.94),
+                    ),
+                    baseColor.withValues(alpha: 0.84),
+                  ],
+                ),
+              _ => LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    baseColor.withValues(alpha: 0.96),
+                    baseColor,
+                  ],
+                ),
+            },
     );
   }
 }
@@ -254,22 +268,24 @@ class _GlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaces = context.surfaces;
     final isDark = scheme.brightness == Brightness.dark;
+    final isSharpCard = AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard;
+
+    // 彻底摒弃硬编码死深色，统一下发消费 AppSurfaceTokens，确保极简锐利模式统一为精致石墨黑 (#18191C)，动态模式完全融合封面色
     final base = switch (variant) {
-      AppSurfaceVariant.inset =>
-        isDark ? const Color(0xFF071524) : Colors.white,
-      AppSurfaceVariant.raised =>
-        isDark ? const Color(0xFF0B1A2B) : const Color(0xFFFFFCF7),
-      AppSurfaceVariant.floating =>
-        isDark ? const Color(0xFF10283D) : Colors.white,
-      AppSurfaceVariant.glass =>
-        isDark ? const Color(0xFF081827) : Colors.white,
+      AppSurfaceVariant.inset => surfaces.surfaceInset,
+      AppSurfaceVariant.raised => surfaces.surfaceRaised,
+      AppSurfaceVariant.floating => surfaces.surfaceFloating,
+      AppSurfaceVariant.glass => isSharpCard 
+          ? surfaces.surfaceRaised 
+          : surfaces.surfaceBase,
     };
     final tintAlpha = switch (variant) {
       AppSurfaceVariant.inset => 0.1,
       AppSurfaceVariant.raised => 0.13,
       AppSurfaceVariant.floating => isDark ? 0.22 : 0.16,
-      AppSurfaceVariant.glass => isDark ? 0.24 : 0.18,
+      AppSurfaceVariant.glass => isDark ? 0.36 : 0.18,
     };
     final fillAlpha = switch (variant) {
       AppSurfaceVariant.inset => isDark ? 0.28 : 0.3,
@@ -277,31 +293,42 @@ class _GlassSurface extends StatelessWidget {
       AppSurfaceVariant.floating => isDark ? 0.36 : 0.44,
       AppSurfaceVariant.glass => isDark ? 0.28 : 0.34,
     };
-    final background = Color.alphaBlend(
-      tintColor.withValues(alpha: tintAlpha),
-      base.withValues(alpha: fillAlpha),
-    );
+
+    // 极简锐利模式：卡片背景与周围主面板 100% 同色平铺无缝融合 (#181A1F)
+    final cardBase = base;
+
+    final background = isSharpCard
+        ? cardBase
+        : Color.alphaBlend(
+            tintColor.withValues(alpha: tintAlpha),
+            base.withValues(alpha: fillAlpha),
+          );
 
     final decoration = BoxDecoration(
+      color: isSharpCard ? cardBase : null,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: Colors.white.withValues(alpha: isDark ? 0.18 : 0.52),
+        color: isSharpCard
+            ? surfaces.strokeSubtle.withValues(alpha: isDark ? 0.35 : 0.6)
+            : Colors.white.withValues(alpha: isDark ? 0.18 : 0.52),
         width: 1,
       ),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color.alphaBlend(
-            Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
-            background,
-          ),
-          Color.alphaBlend(
-            tintColor.withValues(alpha: isDark ? 0.1 : 0.06),
-            background.withValues(alpha: isDark ? 0.78 : 0.68),
-          ),
-        ],
-      ),
+      gradient: isSharpCard
+          ? null
+          : LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
+                  background,
+                ),
+                Color.alphaBlend(
+                  tintColor.withValues(alpha: isDark ? 0.1 : 0.06),
+                  background.withValues(alpha: isDark ? 0.78 : 0.68),
+                ),
+              ],
+            ),
     );
 
     final inner = Container(decoration: decoration, child: child);

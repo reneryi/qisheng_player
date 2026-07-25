@@ -55,7 +55,9 @@ enum UiEffectsLevel {
 
 enum UiVisualStyleMode {
   glass,
-  contrast;
+  contrast,
+  /// 极简锐利卡片风格（类似 Steam 库卡片/大圆角粗体高对比风格）
+  sharpCard;
 
   static UiVisualStyleMode? fromName(String? value) {
     for (final item in values) {

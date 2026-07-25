@@ -13,6 +13,7 @@ import 'package:qisheng_player/library/playlist.dart';
 import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/music_matcher.dart';
 import 'package:qisheng_player/page/uni_page.dart';
+import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/rust/api/tag_reader.dart' as tag_writer;
@@ -338,16 +339,30 @@ class _AudioTileState extends State<AudioTile> {
                                   Text(
                                     audio.title,
                                     style: TextStyle(
-                                        color: textColor, fontSize: 16),
+                                      color: textColor,
+                                      fontSize: 16,
+                                      fontWeight: AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                      letterSpacing: AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
+                                          ? -0.3
+                                          : 0,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(width: 4.0),
+                                  const SizedBox(height: 2.0),
                                   Text(
                                     widget.showPlayCount
-                                        ? "${audio.artist} - ${audio.album} | ${audio.qualitySummary} | 播放 ${PlayCountStore.instance.get(audio)} 次"
-                                        : "${audio.artist} - ${audio.album} | ${audio.qualitySummary}",
-                                    style: TextStyle(color: textColor),
+                                        ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                        : "${audio.artist} - ${audio.album}",
+                                    style: TextStyle(
+                                      color: textColor.withValues(alpha: 0.72),
+                                      fontSize: 13,
+                                      fontWeight: AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
+                                          ? FontWeight.w500
+                                          : FontWeight.w400,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -355,11 +370,23 @@ class _AudioTileState extends State<AudioTile> {
                               ),
                             ),
                             const SizedBox(width: 8.0),
-                            SizedBox(
-                              width: 176,
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 220),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  // 极简锐利模式下展示右侧彩色 Pill 胶囊徽章（自适应空间）
+                                  if (AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard &&
+                                      audio.qualitySummary.isNotEmpty) ...[
+                                    Flexible(
+                                      child: SharpCardPillChip(
+                                        label: audio.qualitySummary,
+                                        color: scheme.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8.0),
+                                  ],
                                   Text(
                                     Duration(seconds: audio.duration)
                                         .toStringHMMSS(),
@@ -367,6 +394,9 @@ class _AudioTileState extends State<AudioTile> {
                                       color: effectiveFocus
                                           ? scheme.primary
                                           : scheme.onSurface,
+                                      fontWeight: AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
+                                          ? FontWeight.w800
+                                          : FontWeight.w500,
                                     ),
                                   ),
                                   const SizedBox(width: 8.0),

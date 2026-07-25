@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:flutter/material.dart';
 
 enum CpButtonVariant { primary, secondary, outline, ghost, destructive, immersive } // 按钮变体，新增 immersive 表示沉浸式样式
@@ -246,19 +247,27 @@ class CpSurface extends StatelessWidget {
       CpSurfaceTone.floating => scheme.surfaceContainerHighest,
     };
     
+    final isSharpCard = AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard;
+
     // 自适应不透明度计算：绑定 AppSurfaceTokens 的 panelAlpha 和 glassAlpha
     // 能够根据当前设置的背景材质（云母/亚克力等）做出完美的透明度反应，防止挡住系统桌面背景
-    final resolvedOpacity = switch (tone) {
-      CpSurfaceTone.panel => surfaces.panelAlpha * (isDark ? 0.72 : 0.75),
-      CpSurfaceTone.floating => surfaces.panelAlpha * (isDark ? 0.76 : 0.82),
-      CpSurfaceTone.card => surfaces.glassAlpha * (isDark ? 0.88 : 0.92),
-      CpSurfaceTone.subtle => surfaces.glassAlpha * (isDark ? 0.64 : 0.68),
-    };
+    // 极简锐利模式下，强制面板为 100% 实心，不产生任何透明度透出窗口背景
+    final resolvedOpacity = isSharpCard
+        ? 1.0
+        : switch (tone) {
+            CpSurfaceTone.panel => surfaces.panelAlpha * (isDark ? 0.72 : 0.75),
+            CpSurfaceTone.floating => surfaces.panelAlpha * (isDark ? 0.76 : 0.82),
+            CpSurfaceTone.card => surfaces.glassAlpha * (isDark ? 0.88 : 0.92),
+            CpSurfaceTone.subtle => surfaces.glassAlpha * (isDark ? 0.64 : 0.68),
+          };
     
-    final color = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
-      baseColor.withValues(alpha: resolvedOpacity),
-    );
+    // 极简锐利模式下，强制面板颜色为原始底色，拒绝任何封面色强调色 (scheme.primary) 的混入导致底板变青/变灰
+    final color = isSharpCard
+        ? baseColor
+        : Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
+            baseColor.withValues(alpha: resolvedOpacity),
+          );
     
     final shadow = tone == CpSurfaceTone.floating
         ? [

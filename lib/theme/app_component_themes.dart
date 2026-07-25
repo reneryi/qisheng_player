@@ -1,3 +1,4 @@
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -365,9 +366,11 @@ class AppComponentThemes {
   ) {
     return MenuThemeData(
       style: MenuStyle(
-        // 重构：菜单容器使用 88% 的半透明底色以形成玻璃通透感，使界面富有呼吸感
+        // 极简锐利卡片模式下使用 100% 实体石墨卡片色，玻璃模式下使用 88% 毛玻璃半透色
         backgroundColor: WidgetStatePropertyAll(
-          surfaces.surfaceFloating.withValues(alpha: 0.88),
+          AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
+              ? surfaces.surfaceFloating
+              : surfaces.surfaceFloating.withValues(alpha: 0.88),
         ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(

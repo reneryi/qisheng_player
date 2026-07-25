@@ -137,7 +137,7 @@ class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "UI 视觉风格",
-      hint: "在玻璃拟态与高对比极简风格之间切换，按钮和面板层级会同步调整。",
+      hint: "在玻璃拟态、高对比度与极简锐利卡片风格之间切换，界面排版与视觉层级会同步调整。",
       action: SegmentedButton<UiVisualStyleMode>(
         showSelectedIcon: false,
         segments: const [
@@ -150,6 +150,11 @@ class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
             value: UiVisualStyleMode.contrast,
             icon: Icon(Symbols.tune),
             label: Text("高对比"),
+          ),
+          ButtonSegment<UiVisualStyleMode>(
+            value: UiVisualStyleMode.sharpCard,
+            icon: Icon(Symbols.dashboard),
+            label: Text("极简锐利"),
           ),
         ],
         selected: {settings.uiVisualStyleMode},

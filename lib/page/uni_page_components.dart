@@ -497,3 +497,232 @@ class MultiSelectExit<T> extends StatelessWidget {
     );
   }
 }
+
+/// 极简锐利卡片风格下的主页 Header 大 Banner 组件（类似 Steam 个人主页/游戏库头部）
+class SharpCardDashboardHeader extends StatelessWidget {
+  final int totalAudiosCount;
+  final String title;
+
+  const SharpCardDashboardHeader({
+    super.key,
+    required this.totalAudiosCount,
+    this.title = "QiSheng Music",
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF18191C) : const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(24.0),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 16.0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 顶部栏：Logo 图标、应用/媒体库名称、状态点
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      scheme.primary,
+                      scheme.tertiary,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child: Icon(
+                  Symbols.graphic_eq,
+                  color: scheme.onPrimary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12.0),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981), // 绿色在线/活跃指示点
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "音乐库就绪",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurface.withValues(alpha: 0.6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Icon(
+                Symbols.graphic_eq,
+                color: scheme.onSurface.withValues(alpha: 0.3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20.0),
+          // 中间特粗体大字号数值展示（模仿 Steam 游戏时长与库存）
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "$totalAudiosCount",
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "音频曲目",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 32.0),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "FLAC / HR",
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.primary,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "无损音质引擎",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 极简锐利卡片风格下的彩色 Pill 胶囊徽章（用于列表项右侧高亮显示格式/时长）
+class SharpCardPillChip extends StatelessWidget {
+  final String label;
+  final String? subLabel;
+  final Color? color;
+  final IconData? icon;
+
+  const SharpCardPillChip({
+    super.key,
+    required this.label,
+    this.subLabel,
+    this.color,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final pillColor = color ?? scheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: pillColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: pillColor.withValues(alpha: 0.3),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: pillColor),
+            const SizedBox(width: 4),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: pillColor,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          if (subLabel != null) ...[
+            const SizedBox(width: 4),
+            Text(
+              subLabel!,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: scheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

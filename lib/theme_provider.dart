@@ -77,22 +77,15 @@ List<Color> buildDynamicBackgroundGradient(Color dominantColor, Brightness brigh
 
 Color buildGlassTint(Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
-  final normalized = hsl
-      .withSaturation(hsl.saturation.clamp(0.2, 0.48).toDouble())
+  // 移除硬编码的青蓝锚点插值，100% 忠实表达专辑封面与主题提取色的原生色彩
+  return hsl
+      .withSaturation(hsl.saturation.clamp(0.2, 0.55).toDouble())
       .withLightness(
         brightness == Brightness.dark
-            ? hsl.lightness.clamp(0.68, 0.82).toDouble()
+            ? hsl.lightness.clamp(0.60, 0.78).toDouble()
             : hsl.lightness.clamp(0.32, 0.48).toDouble(),
       )
       .toColor();
-  final glassAnchor = brightness == Brightness.dark
-      ? const Color(0xFF55F0FF)
-      : const Color(0xFF087C8E);
-  return Color.lerp(
-    normalized,
-    glassAnchor,
-    brightness == Brightness.dark ? 0.22 : 0.1,
-  )!;
 }
 
 class ThemeProvider extends ChangeNotifier {
@@ -115,6 +108,17 @@ class ThemeProvider extends ChangeNotifier {
     brightness: Brightness.dark,
   );
 
+  /// 极简锐利卡片模式专属的固色基准，完全切断手选主题拾色器与动态封面的染色干预
+  static final ColorScheme _sharpCardLightBaseScheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF2563EB),
+    brightness: Brightness.light,
+  );
+
+  static final ColorScheme _sharpCardDarkBaseScheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF38BDF8),
+    brightness: Brightness.dark,
+  );
+
   static const int _maxPaletteCacheEntries = 128;
 
   final Map<String, AlbumPalette> _paletteCache = {};
@@ -134,11 +138,21 @@ class ThemeProvider extends ChangeNotifier {
   ThemeMode themeMode = AppSettings.instance.themeMode;
   String? fontFamily = AppSettings.instance.fontFamily;
 
-  ColorScheme get lightScheme =>
-      _mergeAccent(_lightBaseScheme, _lightAccentColor, visualStyleMode);
+  ColorScheme get lightScheme => _mergeAccent(
+        visualStyleMode == UiVisualStyleMode.sharpCard
+            ? _sharpCardLightBaseScheme
+            : _lightBaseScheme,
+        _lightAccentColor,
+        visualStyleMode,
+      );
 
-  ColorScheme get darkScheme =>
-      _mergeAccent(_darkBaseScheme, _darkAccentColor, visualStyleMode);
+  ColorScheme get darkScheme => _mergeAccent(
+        visualStyleMode == UiVisualStyleMode.sharpCard
+            ? _sharpCardDarkBaseScheme
+            : _darkBaseScheme,
+        _darkAccentColor,
+        visualStyleMode,
+      );
 
   Brightness get effectiveBrightness {
     return switch (themeMode) {
@@ -152,13 +166,24 @@ class ThemeProvider extends ChangeNotifier {
   ColorScheme get currScheme =>
       effectiveBrightness == Brightness.dark ? darkScheme : lightScheme;
 
-  Color get dominantColor => resolveThemeDominantColor(
-        fallbackColor: currScheme.primary,
-        dynamicDominantColor: _dynamicDominantColor,
-      );
+  Color get dominantColor {
+    // 极简锐利模式下全面屏蔽动态取色干预，保持固定底色与硬朗调色盘
+    if (visualStyleMode == UiVisualStyleMode.sharpCard) {
+      return currScheme.primary;
+    }
+    return resolveThemeDominantColor(
+      fallbackColor: currScheme.primary,
+      dynamicDominantColor: _dynamicDominantColor,
+    );
+  }
 
-  AlbumPalette get albumPalette =>
-      _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
+  AlbumPalette get albumPalette {
+    // 极简锐利模式下全面屏蔽动态取色，背景 Liquid 效果不再透出封面杂色
+    if (visualStyleMode == UiVisualStyleMode.sharpCard) {
+      return AlbumPalette.fallback(dominantColor);
+    }
+    return _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
+  }
 
   List<Color> get backgroundGradient => buildDynamicBackgroundGradient(
         dominantColor,
@@ -175,6 +200,13 @@ class ThemeProvider extends ChangeNotifier {
     Color? accentColor,
     UiVisualStyleMode styleMode,
   ) {
+    // 极简锐利卡片模式：强制忽略任何动态提取的封面色与自定义主题色，确保极致干净的浅灰/石墨黑基调
+    if (styleMode == UiVisualStyleMode.sharpCard) {
+      return AppTheme.applyChromeSurfaces(
+        baseScheme,
+        visualStyleMode: styleMode,
+      );
+    }
     if (accentColor == null) {
       return AppTheme.applyChromeSurfaces(
         baseScheme,

@@ -80,7 +80,8 @@ class LyricViewTile extends StatelessWidget {
                           isPastLine: isPastLine,
                         );
                   if (!applyDepthBlur) return content;
-                  final sigma = isPastLine ? 0.8 : 1.8;
+                  // 统一对所有非焦点歌词行施加平滑高斯模糊 (sigma 1.8)，解决过去与未来歌词模糊度不一致的割裂感
+                  const sigma = 1.8;
                   return ImageFiltered(
                     imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
                     child: content,

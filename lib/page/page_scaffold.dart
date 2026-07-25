@@ -1,4 +1,5 @@
-﻿import 'package:qisheng_player/component/responsive_builder.dart';
+import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -216,12 +217,26 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isSharp = AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isSharp) ...[
+              Text(
+                "> ",
+                style: TextStyle(
+                  fontSize: 28,
+                  height: 1.05,
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             Flexible(
               child: Text(
                 title,
@@ -231,7 +246,8 @@ class _TitleBlock extends StatelessWidget {
                   fontSize: 31,
                   height: 1.05,
                   color: scheme.onSurface,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: isSharp ? FontWeight.w900 : FontWeight.w800,
+                  letterSpacing: isSharp ? -0.5 : 0,
                 ),
               ),
             ),
