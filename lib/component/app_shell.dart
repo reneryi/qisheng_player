@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 
 import 'package:qisheng_player/component/main_layout_frame.dart';
@@ -10,8 +11,12 @@ import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/component/ui/liquid_surface_background.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/theme_provider.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -91,10 +96,13 @@ class _ShellPagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
     // 窄屏模式下，重新启用带有毛玻璃的 CpSurface 面板，使主内容区域形成半透悬浮质感
     // 重构：将透明顶栏和底栏以垂直列排版装入面板中
     return CpSurface(
       tone: CpSurfaceTone.panel,
+      dynamicGradientColors: theme.surfaceGradient,
+      backgroundBuilder: _panelBackgroundBuilder(theme),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         children: [
@@ -127,39 +135,56 @@ class _ShellWideContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = context.chrome;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        sideNav,
-        // 还原左右分栏间的 shellGap 空隙，产生呼吸感，突出悬浮效果
-        SizedBox(width: chrome.shellGap),
-        Expanded(
-          // 还原主内容区域的 CpSurface 磨砂玻璃气泡框，悬浮于底色之上
-          // 重构：将透明顶栏和底栏以垂直列的形式，整体包在右侧的 CpSurface 画板大卡片里
-          child: CpSurface(
-            tone: CpSurfaceTone.panel,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            child: Column(
-              children: [
-                const TitleBar(transparent: true), // 嵌入透明顶栏
-                const SizedBox(height: 12),
-                Expanded(
-                  child: _ShellPageTransition(
-                     pageIdentity: pageIdentity,
-                     child: page,
+    final theme = context.watch<ThemeProvider>();
+    return ValueListenableBuilder<WindowLayoutMode>(
+      valueListenable: WindowControls.layoutMode,
+      builder: (context, _, __) => Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          sideNav,
+          // 还原左右分栏间的 shellGap 空隙，产生呼吸感，突出悬浮效果
+          SizedBox(width: WindowControls.shellGap),
+          Expanded(
+            // 还原主内容区域的 CpSurface 磨砂玻璃气泡框，悬浮于底色之上
+            // 重构：将透明顶栏和底栏以垂直列的形式，整体包在右侧的 CpSurface 画板大卡片里
+            child: CpSurface(
+              tone: CpSurfaceTone.panel,
+              dynamicGradientColors: theme.surfaceGradient,
+              backgroundBuilder: _panelBackgroundBuilder(theme),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: Column(
+                children: [
+                  const TitleBar(transparent: true), // 嵌入透明顶栏
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: _ShellPageTransition(
+                      pageIdentity: pageIdentity,
+                      child: page,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                const BottomPlayerBar(transparent: true), // 嵌入透明底栏
-              ],
+                  const SizedBox(height: 12),
+                  const BottomPlayerBar(transparent: true), // 嵌入透明底栏
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
+}
+
+Widget Function(BuildContext context)? _panelBackgroundBuilder(
+  ThemeProvider theme,
+) {
+  if (theme.windowBackdropMode != WindowBackdropMode.fluid) return null;
+
+  return (context) => LiquidSurfaceBackground(
+        paletteColors: theme.albumPalette.colors,
+        effectsLevel: theme.uiEffectsLevel,
+        borderRadius: BorderRadius.circular(context.surfaces.radiusXxl),
+        child: const SizedBox.expand(),
+      );
 }
 
 class _ShellPageTransition extends StatelessWidget {

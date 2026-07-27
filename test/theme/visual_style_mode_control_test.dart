@@ -1,52 +1,38 @@
-﻿import 'package:qisheng_player/app_settings.dart';
-import 'package:qisheng_player/page/settings_page/theme_settings.dart';
+import 'package:qisheng_player/page/settings_page/page.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-ThemeData _buildTheme(UiVisualStyleMode mode) {
-  final base = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF53A4FF),
-    brightness: Brightness.dark,
-  );
-  return AppTheme.build(
-    colorScheme: AppTheme.applyChromeSurfaces(base, visualStyleMode: mode),
-    effectsLevel: UiEffectsLevel.balanced,
-    visualStyleMode: mode,
-  );
-}
+import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('VisualStyleModeControl updates provider and settings', (
+  testWidgets('settings page no longer exposes visual style choices', (
     tester,
   ) async {
-    final provider = ThemeProvider.instance;
-    provider.visualStyleMode = UiVisualStyleMode.glass;
-    AppSettings.instance.uiVisualStyleMode = UiVisualStyleMode.glass;
-
     await tester.pumpWidget(
       MaterialApp(
-        theme: _buildTheme(UiVisualStyleMode.glass),
-        home: const Scaffold(
-          body: Center(
-            child: VisualStyleModeControl(),
+        theme: AppTheme.build(
+          colorScheme: AppTheme.applyChromeSurfaces(
+            ColorScheme.fromSeed(
+              seedColor: const Color(0xFF53A4FF),
+              brightness: Brightness.dark,
+            ),
           ),
+          effectsLevel: UiEffectsLevel.balanced,
+        ),
+        home: ChangeNotifierProvider<ThemeProvider>.value(
+          value: ThemeProvider.instance,
+          child: const Scaffold(body: SettingsPage()),
         ),
       ),
     );
-    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('高对比'));
-    await tester.pumpAndSettle();
-
-    expect(provider.visualStyleMode, UiVisualStyleMode.contrast);
-    expect(AppSettings.instance.uiVisualStyleMode, UiVisualStyleMode.contrast);
-
-    await tester.tap(find.text('玻璃'));
-    await tester.pumpAndSettle();
-
-    expect(provider.visualStyleMode, UiVisualStyleMode.glass);
-    expect(AppSettings.instance.uiVisualStyleMode, UiVisualStyleMode.glass);
+    expect(find.text('UI 视觉风格'), findsNothing);
+    expect(find.text('高对比'), findsNothing);
+    expect(find.text('极简锐利'), findsNothing);
+    expect(find.text('云母 Alt'), findsNothing);
+    expect(find.text('亚克力'), findsNothing);
+    expect(find.text('添加字体'), findsOneWidget);
   });
 }

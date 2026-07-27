@@ -85,19 +85,22 @@ class _SetLyricSourceBtn extends StatelessWidget {
           child: const Text("本地"),
         ),
       ],
-      builder: (context, controller, _) => IconButton(
-        enableFeedback: false,
-        onPressed: PlayService.instance.playbackService.nowPlaying == null
-            ? null
-            : () {
-                if (controller.isOpen) {
-                  controller.close();
-                } else {
-                  controller.open();
-                }
-              },
-        icon: const Icon(Symbols.lyrics),
-        color: scheme.onSecondaryContainer,
+      builder: (context, controller, _) => Tooltip(
+        message: "选择歌词来源",
+        child: IconButton(
+          enableFeedback: false,
+          onPressed: PlayService.instance.playbackService.nowPlaying == null
+              ? null
+              : () {
+                  if (controller.isOpen) {
+                    controller.close();
+                  } else {
+                    controller.open();
+                  }
+                },
+          icon: const Icon(Symbols.lyrics),
+          color: scheme.onSecondaryContainer,
+        ),
       ),
     );
   }

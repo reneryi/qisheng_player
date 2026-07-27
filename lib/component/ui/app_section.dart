@@ -47,6 +47,8 @@ class AppSection extends StatelessWidget {
         ),
         AppSurface(
           padding: const EdgeInsets.all(16),
+          variant: AppSurfaceVariant.glass,
+          glassDensity: AppSurfaceGlassDensity.high,
           backdropBehavior: AppSurfaceBackdropBehavior.preferStableGlass,
           child: Column(
             children: List.generate(children.length * 2 - 1, (index) {

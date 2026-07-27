@@ -8,10 +8,12 @@ import 'package:qisheng_player/src/rust/api/installed_font.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/window_controls.dart';
+import 'package:crypto/crypto.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 class _FontPreviewRegistry {
@@ -145,16 +147,6 @@ class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
             value: UiVisualStyleMode.glass,
             icon: Icon(Symbols.blur_on),
             label: Text("玻璃"),
-          ),
-          ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.contrast,
-            icon: Icon(Symbols.tune),
-            label: Text("高对比"),
-          ),
-          ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.sharpCard,
-            icon: Icon(Symbols.dashboard),
-            label: Text("极简锐利"),
           ),
         ],
         selected: {settings.uiVisualStyleMode},
@@ -302,8 +294,6 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
     return switch (WindowBackdropMode.fromName(mode)) {
       WindowBackdropMode.auto => "自动",
       WindowBackdropMode.mica => "云母",
-      WindowBackdropMode.micaAlt => "云母 Alt",
-      WindowBackdropMode.acrylic => "亚克力",
       WindowBackdropMode.fluid => "极光流体",
       WindowBackdropMode.none => "关闭",
       null => mode,
@@ -355,14 +345,6 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
             label: Text("云母"),
           ),
           ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.micaAlt,
-            label: Text("云母 Alt"),
-          ),
-          ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.acrylic,
-            label: Text("亚克力"),
-          ),
-          ButtonSegment<WindowBackdropMode>(
             value: WindowBackdropMode.fluid,
             label: Text("极光流体"),
           ),
@@ -383,6 +365,7 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
             settings.windowBackdropMode = requested;
             _latestResult = result;
           });
+          await settings.saveSettings();
           if (result.appliedMode != requested && context.mounted) {
             showTextOnSnackBar(
               "背景材质已从 ${_modeLabel(requested.name)} 回退为 ${_modeLabel(result.appliedMode.name)}",
@@ -454,51 +437,112 @@ class _UseSystemThemeModeSwitchState extends State<UseSystemThemeModeSwitch> {
 class SelectFontCombobox extends StatelessWidget {
   const SelectFontCombobox({super.key});
 
+  Future<void> _applyFont(BuildContext context, InstalledFont font) async {
+    final fontLoader = FontLoader(font.fullName);
+    fontLoader.addFont(
+      File(font.path).readAsBytes().then(ByteData.sublistView),
+    );
+    await fontLoader.load();
+    _FontPreviewRegistry.markLoaded(font.fullName);
+    ThemeProvider.instance.changeFontFamily(font.fullName);
+
+    final settings = AppSettings.instance;
+    settings.fontFamily = font.fullName;
+    settings.fontPath = font.path;
+    await settings.saveSettings();
+  }
+
+  Future<void> _selectInstalledFont(BuildContext context) async {
+    final installedFont = await getInstalledFonts();
+    if (installedFont == null || installedFont.isEmpty) {
+      showTextOnSnackBar("无法读取系统字体");
+      return;
+    }
+
+    if (!context.mounted) return;
+    final selectedFont = await showDialog<InstalledFont>(
+      context: context,
+      builder: (context) => _FontSelector(installedFont: installedFont),
+    );
+    if (selectedFont == null || !context.mounted) return;
+    await _applyFont(context, selectedFont);
+  }
+
+  Future<void> _importFont(BuildContext context) async {
+    final picker = OpenFilePicker()
+      ..title = "添加字体"
+      ..filterSpecification = {
+        "字体文件": "*.ttf;*.otf;*.ttc",
+      };
+    final source = picker.getFile();
+    if (source == null) return;
+
+    final inspected = await inspectFontFile(path: source.path);
+    if (inspected == null) {
+      throw const FormatException("无法识别该字体文件");
+    }
+
+    final bytes = await source.readAsBytes();
+    final fontsDir = Directory(
+      path.join((await getAppDataDir()).path, 'fonts'),
+    );
+    await fontsDir.create(recursive: true);
+    final extension = path.extension(source.path).toLowerCase();
+    final managedPath = path.join(
+      fontsDir.path,
+      '${sha256.convert(bytes)}$extension',
+    );
+    final managedFile = File(managedPath);
+    if (!await managedFile.exists()) {
+      await managedFile.writeAsBytes(bytes, flush: true);
+    }
+
+    final managedFont = await inspectFontFile(path: managedPath);
+    if (managedFont == null) {
+      if (await managedFile.exists()) {
+        await managedFile.delete();
+      }
+      throw const FormatException("字体文件复制后校验失败");
+    }
+    if (!context.mounted) return;
+    await _applyFont(context, managedFont);
+    showTextOnSnackBar("已添加字体：${managedFont.fullName}");
+  }
+
   @override
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "自定义字体",
       hint: "应用到页面标题、正文和播放控件文本。",
-      action: FilledButton.icon(
-        onPressed: () async {
-          final installedFont = await getInstalledFonts();
-          if (installedFont == null || installedFont.isEmpty) {
-            showTextOnSnackBar("无法读取系统字体");
-            return;
-          }
-
-          if (!context.mounted) return;
-          final selectedFont = await showDialog<InstalledFont>(
-            context: context,
-            builder: (context) => _FontSelector(installedFont: installedFont),
-          );
-          if (selectedFont == null) return;
-
-          try {
-            final fontLoader = FontLoader(selectedFont.fullName);
-            fontLoader.addFont(
-              File(selectedFont.path).readAsBytes().then((value) {
-                return ByteData.sublistView(value);
-              }),
-            );
-            await fontLoader.load();
-            _FontPreviewRegistry.markLoaded(selectedFont.fullName);
-            ThemeProvider.instance.changeFontFamily(selectedFont.fullName);
-
-            final settings = AppSettings.instance;
-            settings.fontFamily = selectedFont.fullName;
-            settings.fontPath = selectedFont.path;
-            await settings.saveSettings();
-          } catch (err) {
-            ThemeProvider.instance.changeFontFamily(null);
-            LOGGER.e("[select font] $err");
-            if (context.mounted) {
-              showTextOnSnackBar(err.toString());
-            }
-          }
-        },
-        label: const Text("选择字体"),
-        icon: const Icon(Symbols.text_fields),
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await _selectInstalledFont(context);
+              } catch (err, trace) {
+                LOGGER.e("[select font] $err", stackTrace: trace);
+                showTextOnSnackBar(err.toString());
+              }
+            },
+            label: const Text("选择字体"),
+            icon: const Icon(Symbols.text_fields),
+          ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                await _importFont(context);
+              } catch (err, trace) {
+                LOGGER.e("[import font] $err", stackTrace: trace);
+                showTextOnSnackBar(err.toString());
+              }
+            },
+            label: const Text("添加字体"),
+            icon: const Icon(Symbols.add),
+          ),
+        ],
       ),
     );
   }

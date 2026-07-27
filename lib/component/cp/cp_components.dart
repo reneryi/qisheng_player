@@ -1,10 +1,16 @@
 import 'dart:ui';
 
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
-import 'package:qisheng_player/app_settings.dart';
 import 'package:flutter/material.dart';
 
-enum CpButtonVariant { primary, secondary, outline, ghost, destructive, immersive } // 按钮变体，新增 immersive 表示沉浸式样式
+enum CpButtonVariant {
+  primary,
+  secondary,
+  outline,
+  ghost,
+  destructive,
+  immersive
+} // 按钮变体，新增 immersive 表示沉浸式样式
 
 enum CpSurfaceTone { panel, card, subtle, floating }
 
@@ -215,6 +221,8 @@ class CpSurface extends StatelessWidget {
     this.margin,
     this.border = true,
     this.clip = true,
+    this.dynamicGradientColors,
+    this.backgroundBuilder,
   });
 
   final Widget child;
@@ -224,6 +232,8 @@ class CpSurface extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final bool border;
   final bool clip;
+  final List<Color>? dynamicGradientColors;
+  final Widget Function(BuildContext context)? backgroundBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +248,7 @@ class CpSurface extends StatelessWidget {
           CpSurfaceTone.floating => surfaces.radiusXxl,
         };
     final isDark = scheme.brightness == Brightness.dark;
-    
+
     // 基础面板及容器颜色设定
     final baseColor = switch (tone) {
       CpSurfaceTone.panel => scheme.surfaceContainer,
@@ -246,29 +256,36 @@ class CpSurface extends StatelessWidget {
       CpSurfaceTone.subtle => scheme.surfaceContainerLow,
       CpSurfaceTone.floating => scheme.surfaceContainerHighest,
     };
-    
-    final isSharpCard = AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard;
 
     // 自适应不透明度计算：绑定 AppSurfaceTokens 的 panelAlpha 和 glassAlpha
     // 能够根据当前设置的背景材质（云母/亚克力等）做出完美的透明度反应，防止挡住系统桌面背景
     // 极简锐利模式下，强制面板为 100% 实心，不产生任何透明度透出窗口背景
-    final resolvedOpacity = isSharpCard
-        ? 1.0
-        : switch (tone) {
-            CpSurfaceTone.panel => surfaces.panelAlpha * (isDark ? 0.72 : 0.75),
-            CpSurfaceTone.floating => surfaces.panelAlpha * (isDark ? 0.76 : 0.82),
-            CpSurfaceTone.card => surfaces.glassAlpha * (isDark ? 0.88 : 0.92),
-            CpSurfaceTone.subtle => surfaces.glassAlpha * (isDark ? 0.64 : 0.68),
-          };
-    
+    final resolvedOpacity = switch (tone) {
+      CpSurfaceTone.panel => surfaces.panelAlpha * (isDark ? 0.72 : 0.75),
+      CpSurfaceTone.floating => surfaces.panelAlpha * (isDark ? 0.76 : 0.82),
+      CpSurfaceTone.card => surfaces.glassAlpha * (isDark ? 0.88 : 0.92),
+      CpSurfaceTone.subtle => surfaces.glassAlpha * (isDark ? 0.64 : 0.68),
+    };
+
     // 极简锐利模式下，强制面板颜色为原始底色，拒绝任何封面色强调色 (scheme.primary) 的混入导致底板变青/变灰
-    final color = isSharpCard
-        ? baseColor
-        : Color.alphaBlend(
+    final color = dynamicGradientColors == null
+        ? Color.alphaBlend(
             scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
             baseColor.withValues(alpha: resolvedOpacity),
-          );
-    
+          )
+        : baseColor.withValues(alpha: resolvedOpacity);
+    final surfaceGradientColors =
+        dynamicGradientColors == null || dynamicGradientColors!.isEmpty
+            ? null
+            : dynamicGradientColors!
+                .map(
+                  (gradientColor) => Color.alphaBlend(
+                    gradientColor.withValues(alpha: isDark ? 0.34 : 0.16),
+                    color,
+                  ),
+                )
+                .toList(growable: false);
+
     final shadow = tone == CpSurfaceTone.floating
         ? [
             BoxShadow(
@@ -283,7 +300,7 @@ class CpSurface extends StatelessWidget {
             ),
           ]
         : const <BoxShadow>[];
-        
+
     final applyBlur = surfaces.backdropStrategy != AppBackdropStrategy.solid;
 
     // 微光渐变描边优化：混合主导强调色和白色，使边框在暗黑与亮色下均有温润的情感氛围微光
@@ -293,27 +310,55 @@ class CpSurface extends StatelessWidget {
       0.72, // 72% 白色与 28% 主题色混合
     )!;
 
+    final hasCustomBackground = backgroundBuilder != null;
+    final surfaceContent = hasCustomBackground
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(child: backgroundBuilder!(context)),
+              Padding(
+                padding: padding ?? EdgeInsets.zero,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: child,
+                ),
+              ),
+            ],
+          )
+        : Material(
+            type: MaterialType.transparency,
+            child: child,
+          );
+
     final content = AnimatedContainer(
       duration: motion.panelTransitionDuration,
       curve: motion.normal,
       margin: margin,
-      padding: padding,
+      padding: hasCustomBackground ? EdgeInsets.zero : padding,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(resolvedRadius),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
-              color,
-            ),
-            Color.alphaBlend(
-              scheme.primary.withValues(alpha: isDark ? 0.08 : 0.04),
-              color.withValues(alpha: isDark ? 0.78 : 0.68),
-            ),
-          ],
-        ),
+        color: hasCustomBackground ? color : null,
+        gradient: hasCustomBackground
+            ? null
+            : LinearGradient(
+                begin: surfaceGradientColors == null
+                    ? Alignment.topLeft
+                    : Alignment.centerLeft,
+                end: surfaceGradientColors == null
+                    ? Alignment.bottomRight
+                    : Alignment.centerRight,
+                colors: surfaceGradientColors ??
+                    [
+                      Color.alphaBlend(
+                        Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
+                        color,
+                      ),
+                      Color.alphaBlend(
+                        scheme.primary.withValues(alpha: isDark ? 0.08 : 0.04),
+                        color.withValues(alpha: isDark ? 0.78 : 0.68),
+                      ),
+                    ],
+              ),
         border: border
             ? Border.all(
                 color: glowBorderColor,
@@ -322,10 +367,7 @@ class CpSurface extends StatelessWidget {
             : null,
         boxShadow: shadow,
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: child,
-      ),
+      child: surfaceContent,
     );
 
     if (!clip) return content;
@@ -466,6 +508,7 @@ class CpIconButton extends StatelessWidget {
     final button = IconButton(
       onPressed: onPressed,
       enableFeedback: false,
+      iconSize: small ? 18 : 22,
       icon: icon,
       style: _iconButtonStyle(context),
       visualDensity: small ? VisualDensity.compact : VisualDensity.standard,
@@ -510,6 +553,8 @@ class CpIconButton extends StatelessWidget {
         ),
       // 沉浸式按钮样式：默认完全透明无描边，悬停与按下时仅改变图标颜色/亮度，无任何背景色和物理边框
       CpButtonVariant.immersive => IconButton.styleFrom(
+          fixedSize: Size.square(small ? 40 : 48),
+          padding: EdgeInsets.zero,
           backgroundColor: Colors.transparent,
           foregroundColor: scheme.onSurface.withValues(alpha: 0.62),
           side: BorderSide.none,

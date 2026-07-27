@@ -216,40 +216,21 @@ class _LiquidPalette {
     const fallbackTop = Color(0xFF201B35);
     const fallbackMiddle = Color(0xFF132C45);
     const fallbackBottom = Color(0xFF3A311B);
-    const mistyLavender = Color(0xFFD8C9FF);
-    const softGold = Color(0xFFF3D38C);
-    const mistyBlue = Color(0xFFA7DAF3);
-    const roseMist = Color(0xFFE9B8AA);
 
     Color bgAt(int index, Color fallback) {
       if (index >= backgroundColors.length) return fallback;
       return backgroundColors[index];
     }
 
-    Color blendAnchor(Color anchor, Color color, double influence) {
-      return Color.lerp(anchor, color, influence)!;
+    Color paletteAt(int index, Color fallback) {
+      if (index >= paletteColors.length) return fallback;
+      return paletteColors[index];
     }
 
-    final primary = blendAnchor(
-      mistyLavender,
-      paletteColors.isNotEmpty ? paletteColors[0] : bgAt(0, fallbackTop),
-      0.42,
-    );
-    final secondary = blendAnchor(
-      softGold,
-      paletteColors.length > 1 ? paletteColors[1] : primary,
-      0.36,
-    );
-    final accent = blendAnchor(
-      mistyBlue,
-      paletteColors.length > 2 ? paletteColors[2] : secondary,
-      0.34,
-    );
-    final muted = blendAnchor(
-      roseMist,
-      paletteColors.length > 3 ? paletteColors[3] : secondary,
-      0.32,
-    );
+    final primary = paletteAt(0, bgAt(0, fallbackTop));
+    final secondary = paletteAt(1, primary);
+    final accent = paletteAt(2, secondary);
+    final muted = paletteAt(3, secondary);
 
     return _LiquidPalette(
       top: bgAt(0, fallbackTop),
@@ -343,17 +324,17 @@ class _LiquidGradientPainter extends CustomPainter {
     final mixedTop = Color.lerp(
       palette.top,
       palette.primary,
-      profile.mixStrength,
+      profile.mixStrength * 0.32,
     )!;
     final mixedMiddle = Color.lerp(
       palette.middle,
       palette.secondary,
-      profile.mixStrength * 0.52,
+      profile.mixStrength * 0.24,
     )!;
     final mixedBottom = Color.lerp(
       palette.bottom,
       palette.muted,
-      profile.mixStrength * 0.3,
+      profile.mixStrength * 0.16,
     )!;
 
     final paint = Paint()
@@ -435,13 +416,19 @@ class _LiquidGradientPainter extends CustomPainter {
   }
 
   void _paintScrim(Canvas canvas, Size size) {
+    final luminance = [palette.top, palette.middle, palette.bottom]
+            .map((color) => color.computeLuminance())
+            .reduce((left, right) => left + right) /
+        3;
+    final opacity =
+        (profile.scrimOpacity * (0.68 + luminance * 0.48)).clamp(0.0, 0.42);
     final paint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.black.withValues(alpha: profile.scrimOpacity * 0.18),
-          Colors.black.withValues(alpha: profile.scrimOpacity),
+          Colors.black.withValues(alpha: opacity * 0.18),
+          Colors.black.withValues(alpha: opacity),
         ],
       ).createShader(Offset.zero & size);
 

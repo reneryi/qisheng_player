@@ -16,33 +16,61 @@ Color resolveThemeDominantColor({
   return dynamicDominantColor ?? fallbackColor;
 }
 
+bool isNeutralColor(Color color) {
+  final hsl = HSLColor.fromColor(color);
+  final channels = [
+    (color.r * 255).round(),
+    (color.g * 255).round(),
+    (color.b * 255).round(),
+  ];
+  final channelRange = channels.reduce((a, b) => a > b ? a : b) -
+      channels.reduce((a, b) => a < b ? a : b);
+  return hsl.saturation < 0.08 || channelRange < 18;
+}
+
 /// 依据主导颜色和明暗模式动态生成 3 色流体渐变背景
-List<Color> buildDynamicBackgroundGradient(Color dominantColor, Brightness brightness) {
+List<Color> buildDynamicBackgroundGradient(
+    Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
+  if (isNeutralColor(dominantColor)) {
+    final baseLight = brightness == Brightness.dark
+        ? (hsl.lightness * 0.34).clamp(0.04, 0.18)
+        : (0.78 + hsl.lightness * 0.16).clamp(0.78, 0.96);
+    return [
+      hsl
+          .withSaturation(0)
+          .withLightness((baseLight * 1.12).clamp(0.0, 1.0))
+          .toColor(),
+      hsl.withSaturation(0).withLightness(baseLight).toColor(),
+      hsl
+          .withSaturation(0)
+          .withLightness((baseLight * 0.88).clamp(0.0, 1.0))
+          .toColor(),
+    ];
+  }
 
   if (brightness == Brightness.dark) {
     // 暗色模式：生成低饱和度、低亮度的同色系暗色流光背景
-    final baseSat = hsl.saturation.clamp(0.12, 0.32); // 控制饱和度，避免过于鲜艳影响文字可读性
-    final baseLight = hsl.lightness.clamp(0.06, 0.12); // 保持沉稳的深色暗底
+    final baseSat = hsl.saturation.clamp(0.04, 0.32); // 控制饱和度，避免过于鲜艳影响文字可读性
+    final baseLight = hsl.lightness.clamp(0.08,
+        0.16); // Keep the dark backdrop visible without flattening it to black.
 
     // top 颜色：色相微调 -12 度，稍微亮一丁点
     final top = hsl
         .withHue((hsl.hue - 12) % 360)
         .withSaturation(baseSat)
-        .withLightness((baseLight * 1.15).clamp(0.0, 1.0))
+        .withLightness((baseLight * 1.18).clamp(0.0, 1.0))
         .toColor();
 
     // middle 颜色：保持原色相
-    final middle = hsl
-        .withSaturation(baseSat)
-        .withLightness(baseLight)
-        .toColor();
+    final middle =
+        hsl.withSaturation(baseSat).withLightness(baseLight).toColor();
 
     // bottom 颜色：色相微调 +12 度，稍暗，形成过渡
     final bottom = hsl
         .withHue((hsl.hue + 12) % 360)
         .withSaturation((baseSat * 0.85).clamp(0.0, 1.0))
-        .withLightness((baseLight * 0.85).clamp(0.0, 1.0))
+        .withLightness((baseLight * 0.88).clamp(0.0, 1.0))
         .toColor();
 
     return [top, middle, bottom];
@@ -77,15 +105,47 @@ List<Color> buildDynamicBackgroundGradient(Color dominantColor, Brightness brigh
 
 Color buildGlassTint(Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
+  if (isNeutralColor(dominantColor)) {
+    final lightness = brightness == Brightness.dark
+        ? hsl.lightness.clamp(0.42, 0.68)
+        : hsl.lightness.clamp(0.38, 0.62);
+    return hsl.withSaturation(0).withLightness(lightness).toColor();
+  }
   // 移除硬编码的青蓝锚点插值，100% 忠实表达专辑封面与主题提取色的原生色彩
   return hsl
-      .withSaturation(hsl.saturation.clamp(0.2, 0.55).toDouble())
+      .withSaturation(hsl.saturation.clamp(0.0, 0.55).toDouble())
       .withLightness(
         brightness == Brightness.dark
             ? hsl.lightness.clamp(0.60, 0.78).toDouble()
             : hsl.lightness.clamp(0.32, 0.48).toDouble(),
       )
       .toColor();
+}
+
+/// Generates the primary-color variants used by the AppShell's main surface.
+/// The surface chooses the alpha when blending these colors over its material.
+List<Color> buildDynamicSurfaceGradient(
+  Color primaryColor,
+  Brightness brightness,
+) {
+  final hsl = HSLColor.fromColor(primaryColor);
+  final saturation = isNeutralColor(primaryColor)
+      ? 0.0
+      : hsl.saturation.clamp(0.04, 0.72).toDouble();
+  final baseLightness = brightness == Brightness.dark
+      ? hsl.lightness.clamp(0.34, 0.72).toDouble()
+      : hsl.lightness.clamp(0.28, 0.68).toDouble();
+  final startLightness = brightness == Brightness.dark
+      ? (baseLightness * 1.24).clamp(0.0, 1.0)
+      : (baseLightness * 1.08).clamp(0.0, 1.0);
+  final endLightness = brightness == Brightness.dark
+      ? (baseLightness * 0.88).clamp(0.0, 1.0)
+      : (baseLightness * 0.92).clamp(0.0, 1.0);
+
+  return [
+    hsl.withSaturation(saturation).withLightness(startLightness).toColor(),
+    hsl.withSaturation(saturation).withLightness(endLightness).toColor(),
+  ];
 }
 
 class ThemeProvider extends ChangeNotifier {
@@ -108,18 +168,8 @@ class ThemeProvider extends ChangeNotifier {
     brightness: Brightness.dark,
   );
 
-  /// 极简锐利卡片模式专属的固色基准，完全切断手选主题拾色器与动态封面的染色干预
-  static final ColorScheme _sharpCardLightBaseScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF2563EB),
-    brightness: Brightness.light,
-  );
-
-  static final ColorScheme _sharpCardDarkBaseScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF38BDF8),
-    brightness: Brightness.dark,
-  );
-
   static const int _maxPaletteCacheEntries = 128;
+  static const String _paletteRoleVersion = 'roles-v2';
 
   final Map<String, AlbumPalette> _paletteCache = {};
   int _dynamicThemeRequestId = 0;
@@ -138,21 +188,11 @@ class ThemeProvider extends ChangeNotifier {
   ThemeMode themeMode = AppSettings.instance.themeMode;
   String? fontFamily = AppSettings.instance.fontFamily;
 
-  ColorScheme get lightScheme => _mergeAccent(
-        visualStyleMode == UiVisualStyleMode.sharpCard
-            ? _sharpCardLightBaseScheme
-            : _lightBaseScheme,
-        _lightAccentColor,
-        visualStyleMode,
-      );
+  ColorScheme get lightScheme =>
+      _mergeAccent(_lightBaseScheme, _lightAccentColor, visualStyleMode);
 
-  ColorScheme get darkScheme => _mergeAccent(
-        visualStyleMode == UiVisualStyleMode.sharpCard
-            ? _sharpCardDarkBaseScheme
-            : _darkBaseScheme,
-        _darkAccentColor,
-        visualStyleMode,
-      );
+  ColorScheme get darkScheme =>
+      _mergeAccent(_darkBaseScheme, _darkAccentColor, visualStyleMode);
 
   Brightness get effectiveBrightness {
     return switch (themeMode) {
@@ -167,31 +207,27 @@ class ThemeProvider extends ChangeNotifier {
       effectiveBrightness == Brightness.dark ? darkScheme : lightScheme;
 
   Color get dominantColor {
-    // 极简锐利模式下全面屏蔽动态取色干预，保持固定底色与硬朗调色盘
-    if (visualStyleMode == UiVisualStyleMode.sharpCard) {
-      return currScheme.primary;
-    }
     return resolveThemeDominantColor(
       fallbackColor: currScheme.primary,
       dynamicDominantColor: _dynamicDominantColor,
     );
   }
 
-  AlbumPalette get albumPalette {
-    // 极简锐利模式下全面屏蔽动态取色，背景 Liquid 效果不再透出封面杂色
-    if (visualStyleMode == UiVisualStyleMode.sharpCard) {
-      return AlbumPalette.fallback(dominantColor);
-    }
-    return _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
-  }
+  AlbumPalette get albumPalette =>
+      _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
 
   List<Color> get backgroundGradient => buildDynamicBackgroundGradient(
-        dominantColor,
+        albumPalette.secondary,
         effectiveBrightness,
       );
 
   Color get glassTint => buildGlassTint(
-        dominantColor,
+        albumPalette.secondary,
+        effectiveBrightness,
+      );
+
+  List<Color> get surfaceGradient => buildDynamicSurfaceGradient(
+        albumPalette.primary,
         effectiveBrightness,
       );
 
@@ -200,13 +236,6 @@ class ThemeProvider extends ChangeNotifier {
     Color? accentColor,
     UiVisualStyleMode styleMode,
   ) {
-    // 极简锐利卡片模式：强制忽略任何动态提取的封面色与自定义主题色，确保极致干净的浅灰/石墨黑基调
-    if (styleMode == UiVisualStyleMode.sharpCard) {
-      return AppTheme.applyChromeSurfaces(
-        baseScheme,
-        visualStyleMode: styleMode,
-      );
-    }
     if (accentColor == null) {
       return AppTheme.applyChromeSurfaces(
         baseScheme,
@@ -289,6 +318,14 @@ class ThemeProvider extends ChangeNotifier {
   Future<WindowBackdropModeResult> applyWindowBackdropMode(
     WindowBackdropMode mode,
   ) async {
+    if (mode == WindowBackdropMode.fluid &&
+        !AppSettings.instance.dynamicTheme) {
+      AppSettings.instance.dynamicTheme = true;
+      final audio = PlayService.instance.playbackService.nowPlaying;
+      if (audio != null) {
+        applyThemeFromAudio(audio);
+      }
+    }
     final result = await WindowControls.setWindowBackdropMode(mode);
     windowBackdropMode = mode;
     windowBackdropResult = result;
@@ -332,14 +369,13 @@ class ThemeProvider extends ChangeNotifier {
     );
     if (rgbColors.isEmpty) return null;
 
-    final colors = rgbColors
-        .map(_colorFromRgbInt)
-        .map(_normalizeColor)
-        .toList(growable: false);
-
-    return AlbumPalette.fromColors(
-      colors,
+    final selected = AlbumPalette.fromColors(
+      rgbColors.map(_colorFromRgbInt).toList(growable: false),
       fallback: _fallbackDominantColor(),
+    );
+    return AlbumPalette.fromColors(
+      selected.colors.map(_normalizeColor).toList(growable: false),
+      fallback: _normalizeColor(_fallbackDominantColor()),
     );
   }
 
@@ -359,7 +395,8 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   String _paletteCacheKey(Audio audio) {
-    return '${audio.path}\u0001${audio.modified}\u0001${audio.mediaPath}';
+    return '$_paletteRoleVersion\u0001${audio.path}\u0001${audio.modified}'
+        '\u0001${audio.mediaPath}';
   }
 
   Color _colorFromRgbInt(int rgb) {
@@ -378,7 +415,7 @@ class ThemeProvider extends ChangeNotifier {
   Color _normalizeColor(Color color) {
     final hsl = HSLColor.fromColor(color);
     return hsl
-        .withSaturation(hsl.saturation.clamp(0.22, 0.82).toDouble())
+        .withSaturation(hsl.saturation.clamp(0.0, 0.82).toDouble())
         .withLightness(hsl.lightness.clamp(0.32, 0.62).toDouble())
         .toColor();
   }

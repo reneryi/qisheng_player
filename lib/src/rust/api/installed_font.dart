@@ -6,10 +6,13 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_installed_fonts`, `_read_fonts_in_folder`
+// These functions are ignored because they are not marked as `pub`: `_get_installed_fonts`, `_read_fonts_in_folder`, `inspect_font_path`
 
 Future<List<InstalledFont>?> getInstalledFonts() =>
     RustLib.instance.api.crateApiInstalledFontGetInstalledFonts();
+
+Future<InstalledFont?> inspectFontFile({required String path}) =>
+    RustLib.instance.api.crateApiInstalledFontInspectFontFile(path: path);
 
 class InstalledFont {
   final String path;

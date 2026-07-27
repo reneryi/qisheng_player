@@ -406,8 +406,6 @@ struct TitleSearchData {
 struct BackdropSupportInfo {
   bool native_supported = false;
   bool mica_supported = false;
-  bool mica_alt_supported = false;
-  bool acrylic_supported = false;
   std::string auto_mode = "none";
   std::string fallback_reason = "unsupported_platform";
 };
@@ -452,8 +450,7 @@ std::string ToLowerAscii(std::string value) {
 
 std::string NormalizeBackdropMode(const std::string& value) {
   const std::string normalized = ToLowerAscii(value);
-  if (normalized == "auto" || normalized == "mica" ||
-      normalized == "micaalt" || normalized == "acrylic" || normalized == "none") {
+  if (normalized == "auto" || normalized == "mica" || normalized == "none") {
     return normalized;
   }
   return "auto";
@@ -462,12 +459,6 @@ std::string NormalizeBackdropMode(const std::string& value) {
 int BackdropTypeFromMode(const std::string& mode) {
   if (mode == "mica") {
     return DWMSBT_MAINWINDOW;
-  }
-  if (mode == "micaalt") {
-    return DWMSBT_TABBEDWINDOW;
-  }
-  if (mode == "acrylic") {
-    return DWMSBT_TRANSIENTWINDOW;
   }
   if (mode == "none") {
     return DWMSBT_NONE;
@@ -504,8 +495,6 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
     return {
         true,
         true,
-        true,
-        true,
         "mica",
         "",
     };
@@ -514,15 +503,11 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
     return {
         true,
         true,
-        false,
-        false,
         "mica",
-        "acrylic_requires_windows_11_22h2",
+        "",
     };
   }
   return {
-      false,
-      false,
       false,
       false,
       "none",
@@ -547,24 +532,6 @@ BackdropResolution ResolveBackdropRequest(const std::string& requested_mode) {
     resolution.fallback_reason = support.fallback_reason.empty()
                                      ? "mica_not_supported"
                                      : support.fallback_reason;
-    return resolution;
-  }
-
-  if (target_mode == "micaalt" && !support.mica_alt_supported) {
-    resolution.applied_mode = support.mica_supported ? "mica" : "none";
-    resolution.fallback_reason = support.fallback_reason.empty()
-                                     ? "mica_alt_requires_windows_11_22h2"
-                                     : support.fallback_reason;
-    resolution.backdrop_type = BackdropTypeFromMode(resolution.applied_mode);
-    return resolution;
-  }
-
-  if (target_mode == "acrylic" && !support.acrylic_supported) {
-    resolution.applied_mode = support.mica_supported ? "mica" : "none";
-    resolution.fallback_reason = support.fallback_reason.empty()
-                                     ? "acrylic_not_supported"
-                                     : support.fallback_reason;
-    resolution.backdrop_type = BackdropTypeFromMode(resolution.applied_mode);
     return resolution;
   }
 

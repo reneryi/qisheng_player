@@ -4,6 +4,20 @@ import 'package:qisheng_player/utils.dart'; // 引入 utils 以使用 duration �
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
+const int waveformBarCount = 52;
+const double waveformBarWidth = 3.5;
+const double waveformBarGap = 2.0;
+
+double waveformSliderPaintWidth() {
+  return waveformBarCount * waveformBarWidth +
+      (waveformBarCount - 1) * waveformBarGap;
+}
+
+double resolveWaveformInteractionWidth(double availableWidth) {
+  if (!availableWidth.isFinite || availableWidth <= 0) return 0;
+  return math.min(availableWidth, waveformSliderPaintWidth());
+}
+
 /// 仿真果冻波形进度条组件
 /// 使用 Canvas 绘制 52 根柱状声波，播放时伴随正弦波动；鼠标悬停时产生局部物理吸附隆起；
 /// 拖拽时呈现高斯果冻受力扁平化和弹簧物理回弹效果；并在光标处叠置毛玻璃时间气泡提示。
@@ -169,100 +183,110 @@ class _WaveformSliderState extends State<WaveformSlider>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
+        final totalWidth =
+            resolveWaveformInteractionWidth(constraints.maxWidth);
         // 计算是否展示时间气泡提示，以及该气泡对应的时间数值
         final showTooltip = (_isHovering || _isDragging) && widget.max > 0;
         final tooltipPercent = _isDragging ? _dragPercent : _hoverPercent;
         final tooltipValue = tooltipPercent * widget.max;
 
-        return Stack(
-          clipBehavior: Clip.none, // 修正为 Clip.none，允许气泡提示浮在波形外面而不被截断
-          children: [
-            GestureDetector(
-              onHorizontalDragStart: (details) =>
-                  _handleDragStart(details.localPosition.dx, totalWidth),
-              onHorizontalDragUpdate: (details) =>
-                  _handleDragUpdate(details.localPosition.dx, totalWidth),
-              onHorizontalDragEnd: (_) => _handleDragEnd(),
-              onHorizontalDragCancel: () => _handleDragEnd(),
-              onTapDown: (details) =>
-                  _handleDragStart(details.localPosition.dx, totalWidth),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onHover: (details) =>
-                    _handleHover(details.localPosition.dx, totalWidth),
-                onExit: (_) => _handleHoverExit(),
-                child: AnimatedBuilder(
-                  animation: _waveController,
-                  builder: (context, child) {
-                    return CustomPaint(
-                      size: Size(totalWidth, widget.height), // 根据高度属性进行自适应绘制
-                      painter: _WaveformSliderPainter(
-                        percent: currentPercent,
-                        wavePhase: _waveController.value * math.pi * 2,
-                        isDragging: _isDragging,
-                        dragPercent: _dragPercent,
-                        dragWeight: _dragWeight,
-                        isHovering: _isHovering,
-                        hoverPercent: _hoverPercent,
-                        hoverWeight: _hoverWeight,
-                        isPlaying: widget.isPlaying,
-                        colorScheme: Theme.of(context).colorScheme,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            // 精致毛玻璃预览时间气泡
-            if (showTooltip)
-              Positioned(
-                // 气泡水平居中对齐当前光标物理位置，并且加 clamp 进行边界溢出保护，防止裁切
-                left: (tooltipPercent * totalWidth - 32.0)
-                    .clamp(0.0, totalWidth - 64.0),
-                bottom: widget.height + 6.0,
-                child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), // 毛玻璃滤镜
-                      child: Container(
-                        width: 64,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainer
-                              .withValues(alpha: 0.74),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+        return Center(
+          child: SizedBox(
+            width: totalWidth,
+            child: Stack(
+              clipBehavior: Clip.none, // 修正为 Clip.none，允许气泡提示浮在波形外面而不被截断
+              children: [
+                GestureDetector(
+                  onHorizontalDragStart: (details) =>
+                      _handleDragStart(details.localPosition.dx, totalWidth),
+                  onHorizontalDragUpdate: (details) =>
+                      _handleDragUpdate(details.localPosition.dx, totalWidth),
+                  onHorizontalDragEnd: (_) => _handleDragEnd(),
+                  onHorizontalDragCancel: () => _handleDragEnd(),
+                  onTapDown: (details) =>
+                      _handleDragStart(details.localPosition.dx, totalWidth),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onHover: (details) =>
+                        _handleHover(details.localPosition.dx, totalWidth),
+                    onExit: (_) => _handleHoverExit(),
+                    child: AnimatedBuilder(
+                      animation: _waveController,
+                      builder: (context, child) {
+                        return CustomPaint(
+                          size:
+                              Size(totalWidth, widget.height), // 根据高度属性进行自适应绘制
+                          painter: _WaveformSliderPainter(
+                            percent: currentPercent,
+                            wavePhase: _waveController.value * math.pi * 2,
+                            isDragging: _isDragging,
+                            dragPercent: _dragPercent,
+                            dragWeight: _dragWeight,
+                            isHovering: _isHovering,
+                            hoverPercent: _hoverPercent,
+                            hoverWeight: _hoverWeight,
+                            isPlaying: widget.isPlaying,
+                            colorScheme: Theme.of(context).colorScheme,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.14),
-                              blurRadius: 10,
-                              spreadRadius: -2,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                // 精致毛玻璃预览时间气泡
+                if (showTooltip)
+                  Positioned(
+                    // 气泡水平居中对齐当前光标物理位置，并且加 clamp 进行边界溢出保护，防止裁切
+                    left: (tooltipPercent * totalWidth - 32.0)
+                        .clamp(0.0, math.max(0.0, totalWidth - 64.0)),
+                    bottom: widget.height + 6.0,
+                    child: IgnorePointer(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: BackdropFilter(
+                          filter:
+                              ImageFilter.blur(sigmaX: 8, sigmaY: 8), // 毛玻璃滤镜
+                          child: Container(
+                            width: 64,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainer
+                                  .withValues(alpha: 0.74),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.14),
+                                  blurRadius: 10,
+                                  spreadRadius: -2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: Text(
-                          Duration(milliseconds: (tooltipValue * 1000).round())
-                              .toStringHMMSS(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
+                            child: Text(
+                              Duration(
+                                      milliseconds:
+                                          (tooltipValue * 1000).round())
+                                  .toStringHMMSS(),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            ),
+          ),
         );
       },
     );

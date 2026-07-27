@@ -13,8 +13,19 @@ List<Color> resolveFluidGradientColors(
 ) {
   final isDark = brightness == Brightness.dark;
   final overlay = isDark ? Colors.black : Colors.white;
-  final alphas = isDark ? const [0.55, 0.70, 0.85] : const [0.65, 0.75, 0.85];
-  final paletteColors = [palette.primary, palette.secondary, palette.muted];
+  final luminance = (palette.primary.computeLuminance() +
+          palette.secondary.computeLuminance() +
+          palette.accent.computeLuminance()) /
+      3;
+  final baseAlpha = isDark
+      ? (0.16 + luminance * 0.10).clamp(0.12, 0.28)
+      : (0.10 + (1 - luminance) * 0.06).clamp(0.08, 0.18);
+  final alphas = [
+    baseAlpha,
+    (baseAlpha + 0.04).clamp(0.0, 1.0),
+    (baseAlpha + 0.08).clamp(0.0, 1.0),
+  ];
+  final paletteColors = [palette.primary, palette.secondary, palette.accent];
   return [
     for (var index = 0; index < paletteColors.length; index++)
       Color.alphaBlend(
@@ -22,6 +33,29 @@ List<Color> resolveFluidGradientColors(
         paletteColors[index],
       ),
   ];
+}
+
+Color resolveFluidBaseColor(List<Color> colors) {
+  if (colors.isEmpty) return const Color(0xFF0F172A);
+  final primary = colors[0];
+  final secondary = colors.length > 1 ? colors[1] : primary;
+  final accent = colors.length > 2 ? colors[2] : secondary;
+  return Color.lerp(
+    Color.lerp(primary, secondary, 0.24),
+    accent,
+    0.10,
+  )!;
+}
+
+double resolveFluidScrimOpacity(List<Color> colors, Brightness brightness) {
+  if (colors.isEmpty) return brightness == Brightness.dark ? 0.22 : 0.28;
+  final luminance = colors
+          .map((color) => color.computeLuminance())
+          .reduce((left, right) => left + right) /
+      colors.length;
+  return brightness == Brightness.dark
+      ? (0.12 + luminance * 0.18).clamp(0.12, 0.24)
+      : (0.18 + (1 - luminance) * 0.10).clamp(0.16, 0.28);
 }
 
 /// 动态情感交融流体背景组件
@@ -136,6 +170,10 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
     }
 
     // 极光流体模式 (Flutter 软件渲染)
+    final scrimOpacity = resolveFluidScrimOpacity(
+      _currentColors,
+      Theme.of(context).brightness,
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -148,6 +186,7 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
                 painter: _FluidGradientPainter(
                   colors: _currentColors,
                   progress: _fluidController.value,
+                  scrimOpacity: scrimOpacity,
                 ),
               );
             },
@@ -164,8 +203,8 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
         Positioned.fill(
           child: Container(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.38) // 暗黑模式：加一层朦胧半透黑，保护前景色
-                : Colors.white.withValues(alpha: 0.48), // 亮色模式：加一层朦胧半透白，防晃眼
+                ? Colors.black.withValues(alpha: scrimOpacity)
+                : Colors.white.withValues(alpha: scrimOpacity),
           ),
         ),
         // 4. 内容层
@@ -180,10 +219,12 @@ class _FluidGradientPainter extends CustomPainter {
   const _FluidGradientPainter({
     required this.colors,
     required this.progress,
+    required this.scrimOpacity,
   });
 
   final List<Color> colors;
   final double progress;
+  final double scrimOpacity;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -191,7 +232,7 @@ class _FluidGradientPainter extends CustomPainter {
     final angle = progress * math.pi * 2;
 
     // 1. 铺设底色：使用最暗/最淡的主色作为底层画布铺垫
-    final bgPaint = Paint()..color = colors[2];
+    final bgPaint = Paint()..color = resolveFluidBaseColor(colors);
     canvas.drawRect(rect, bgPaint);
 
     // 2. 计算光源 1 的运动轨迹：利用正弦与余弦实现圆周状慢飘移动
@@ -228,8 +269,8 @@ class _FluidGradientPainter extends CustomPainter {
     final paint3 = Paint()
       ..shader = RadialGradient(
         colors: [
-          colors[0].withValues(alpha: 0.85),
-          colors[0].withValues(alpha: 0),
+          colors[2].withValues(alpha: 0.85),
+          colors[2].withValues(alpha: 0),
         ],
         radius: 0.75,
       ).createShader(
@@ -239,6 +280,8 @@ class _FluidGradientPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FluidGradientPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.colors != colors;
+    return oldDelegate.progress != progress ||
+        oldDelegate.colors != colors ||
+        oldDelegate.scrimOpacity != scrimOpacity;
   }
 }

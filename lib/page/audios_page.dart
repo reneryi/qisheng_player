@@ -4,6 +4,7 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/audio_lyric_preview_panel.dart';
 import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
+import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/page/uni_page.dart';
@@ -100,24 +101,18 @@ class _AudiosPageState extends State<AudiosPage> {
       enableSortOrder: true,
       enableContentViewSwitch: true,
       extraActions: [
-        IconButton.filledTonal(
+        CpIconButton(
           key: const ValueKey('toggle-lyric-preview'),
+          variant: CpButtonVariant.immersive,
           tooltip: _showLyricPreview ? '关闭歌词预览' : '打开歌词预览',
-          style: ButtonStyle(
-            fixedSize: const WidgetStatePropertyAll(Size(48, 48)),
-            backgroundColor: WidgetStatePropertyAll(
-              _showLyricPreview
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-            ),
-            foregroundColor: WidgetStatePropertyAll(
-              _showLyricPreview
-                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                  : null,
-            ),
-          ),
           onPressed: _toggleLyricPreview,
-          icon: const Icon(Symbols.lyrics),
+          icon: Icon(
+            Symbols.lyrics,
+            fill: _showLyricPreview ? 1 : 0,
+            color: _showLyricPreview
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
         ),
       ],
       locateTo: widget.locateTo,

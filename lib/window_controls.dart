@@ -4,6 +4,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart'
     show ResizeEdge, WindowListener, windowManager;
 
@@ -73,6 +74,24 @@ class WindowControls {
   static final _windowListener = _PlaybackWindowListener();
   static Timer? _resumeSyncTimer;
   static int _resumeSyncGeneration = 0;
+  static final ValueNotifier<WindowLayoutMode> layoutMode =
+      ValueNotifier(WindowLayoutMode.normal);
+
+  static double get shellGap =>
+      layoutMode.value == WindowLayoutMode.maximized ? 20 : 10;
+
+  static Future<void> syncWindowLayoutMode() async {
+    try {
+      final fullscreen = await windowManager.isFullScreen();
+      final maximized = await windowManager.isMaximized();
+      final next = fullscreen
+          ? WindowLayoutMode.fullscreen
+          : maximized
+              ? WindowLayoutMode.maximized
+              : WindowLayoutMode.normal;
+      if (layoutMode.value != next) layoutMode.value = next;
+    } catch (_) {}
+  }
 
   static WindowBackdropModeResult? get lastBackdropResult =>
       _lastBackdropResult;
@@ -240,6 +259,7 @@ class WindowControls {
     unawaited(
       windowManager.ensureInitialized().then((_) {
         windowManager.addListener(_windowListener);
+        unawaited(syncWindowLayoutMode());
       }),
     );
     unawaited(
@@ -278,6 +298,7 @@ class WindowControls {
 class _PlaybackWindowListener with WindowListener {
   @override
   void onWindowResize() {
+    unawaited(WindowControls.syncWindowLayoutMode());
     AppSettings.instance.scheduleSaveSettings();
   }
 
@@ -288,6 +309,21 @@ class _PlaybackWindowListener with WindowListener {
 
   @override
   void onWindowRestore() {
+    unawaited(WindowControls.syncWindowLayoutMode());
     WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window restore');
   }
+
+  @override
+  void onWindowMaximize() => unawaited(WindowControls.syncWindowLayoutMode());
+
+  @override
+  void onWindowUnmaximize() => unawaited(WindowControls.syncWindowLayoutMode());
+
+  @override
+  void onWindowEnterFullScreen() =>
+      unawaited(WindowControls.syncWindowLayoutMode());
+
+  @override
+  void onWindowLeaveFullScreen() =>
+      unawaited(WindowControls.syncWindowLayoutMode());
 }
