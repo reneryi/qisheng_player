@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' show ImageFilter;
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -35,9 +35,11 @@ class LyricViewTile extends StatelessWidget {
     final isMainLine = isCurrentLine || opacity == 1.0;
 
     final settings = AppSettings.instance;
-    final applyDepthBlur = !isCurrentLine &&
-        settings.lyricDepthBlur &&
-        settings.uiEffectsLevel == UiEffectsLevel.visual;
+    final applyDepthBlur = shouldApplyLyricDepthBlur(
+      isCurrentLine: isCurrentLine,
+      enabled: settings.lyricDepthBlur,
+      effectsLevel: settings.uiEffectsLevel,
+    );
 
     return Align(
       alignment: switch (lyricViewController.lyricTextAlign) {
@@ -80,10 +82,9 @@ class LyricViewTile extends StatelessWidget {
                           isPastLine: isPastLine,
                         );
                   if (!applyDepthBlur) return content;
-                  // 统一对所有非焦点歌词行施加平滑高斯模糊 (sigma 1.8)，解决过去与未来歌词模糊度不一致的割裂感
-                  const sigma = 1.8;
+                  // Keep all contextual lyric lines at one depth.
                   return ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                    imageFilter: createLyricDepthBlurFilter(),
                     child: content,
                   );
                 },

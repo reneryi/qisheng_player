@@ -1,4 +1,3 @@
-import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -362,22 +361,27 @@ class AppComponentThemes {
   }
 
   static MenuThemeData menuTheme(
+    ColorScheme scheme,
     AppSurfaceTokens surfaces,
   ) {
     return MenuThemeData(
       style: MenuStyle(
         // 极简锐利卡片模式下使用 100% 实体石墨卡片色，玻璃模式下使用 88% 毛玻璃半透色
         backgroundColor: WidgetStatePropertyAll(
-          AppSettings.instance.uiVisualStyleMode == UiVisualStyleMode.sharpCard
-              ? surfaces.surfaceFloating
-              : surfaces.surfaceFloating.withValues(alpha: 0.88),
+          Color.alphaBlend(
+            scheme.primary.withValues(
+              alpha: scheme.brightness == Brightness.dark ? 0.22 : 0.10,
+            ),
+            surfaces.surfaceFloating.withValues(alpha: 0.92),
+          ),
         ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(surfaces.radiusLg),
             // 降低描边边框的对比度，使之更加柔和不生硬
-            side: BorderSide(color: surfaces.strokeSubtle.withValues(alpha: 0.38)),
+            side: BorderSide(
+                color: surfaces.strokeSubtle.withValues(alpha: 0.38)),
           ),
         ),
         // 提升阴影高度并搭配淡晕投影，以在视觉上将弹出菜单卡片立体化悬浮
@@ -415,7 +419,8 @@ class AppComponentThemes {
           if (states.contains(WidgetState.pressed)) {
             return accents.accentSoft; // 点击时呈现品牌软底色
           }
-          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.focused)) {
             final isDark = scheme.brightness == Brightness.dark;
             return isDark
                 ? Colors.white.withValues(alpha: 0.08) // 深色模式下用微弱白色

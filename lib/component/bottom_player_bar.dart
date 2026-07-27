@@ -5,6 +5,7 @@ import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/waveform_slider.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
+import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/now_playing_navigation.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
@@ -156,15 +157,13 @@ class _BottomBarTrackSection extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      audio?.displayTitle ?? AppBrand.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    MarqueeText(
+                      text: audio?.displayTitle ?? AppBrand.displayName,
                       style: TextStyle(
                         color: scheme.onSurface,
                         fontSize: dense ? 14 : 16,
                         fontWeight: FontWeight.w700,
-                        height: 1.08,
+                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -505,40 +504,143 @@ class _ProgressStripState extends State<_ProgressStrip> {
     final hasTrack = context.select<PlaybackController, bool>(
       (service) => service.nowPlaying != null,
     );
-    final isPlaying = context.select<PlaybackController, bool>(
-      (service) => service.playerState == PlayerState.playing,
-    );
+    return StreamBuilder<PlayerState>(
+      stream: playback.playerStateStream,
+      initialData: playback.playerState,
+      builder: (context, stateSnapshot) {
+        final isPlaying = stateSnapshot.data == PlayerState.playing;
 
-    return StreamBuilder<double>(
-      stream: playback.positionStream,
-      initialData: playback.position,
-      builder: (context, snapshot) {
-        final current = _dragging ? _dragValue : snapshot.data ?? 0;
-        final clampedDuration =
-            duration.isFinite && duration > 0 ? duration : 1.0;
-        final clampedValue = current.isFinite
-            ? current.clamp(0.0, clampedDuration).toDouble()
-            : 0.0;
+        return StreamBuilder<double>(
+          stream: playback.positionStream,
+          initialData: playback.position,
+          builder: (context, snapshot) {
+            final current = _dragging ? _dragValue : snapshot.data ?? 0;
+            final clampedDuration =
+                duration.isFinite && duration > 0 ? duration : 1.0;
+            final clampedValue = current.isFinite
+                ? current.clamp(0.0, clampedDuration).toDouble()
+                : 0.0;
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final showLabels = constraints.maxWidth >= 360 && !widget.dense;
-            final isTesting = Platform.environment.containsKey('FLUTTER_TEST');
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final showLabels = constraints.maxWidth >= 360 && !widget.dense;
+                final isTesting =
+                    Platform.environment.containsKey('FLUTTER_TEST');
 
-            // 1. 若处于测试状态，直接渲染原本的原生 Slider 以确保 117 项测试用例能正确找到 Slider 组件运行
-            if (isTesting) {
-              final motion = context.motion;
-              final thumbRadius = resolveSliderThumbRadius(
-                hovering: _hovering,
-                dragging: _dragging,
-              );
+                // 1. 若处于测试状态，直接渲染原本的原生 Slider 以确保 117 项测试用例能正确找到 Slider 组件运行
+                if (isTesting) {
+                  final motion = context.motion;
+                  final thumbRadius = resolveSliderThumbRadius(
+                    hovering: _hovering,
+                    dragging: _dragging,
+                  );
 
-              return MouseRegion(
-                onEnter: (_) => setState(() => _hovering = true),
-                onExit: (_) => setState(() => _hovering = false),
-                child: Row(
+                  return MouseRegion(
+                    onEnter: (_) => setState(() => _hovering = true),
+                    onExit: (_) => setState(() => _hovering = false),
+                    child: Row(
+                      children: [
+                        if (showLabels)
+                          SizedBox(
+                            width: 48,
+                            child: Text(
+                              Duration(
+                                milliseconds: (clampedValue * 1000).round(),
+                              ).toStringHMMSS(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.58),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, sliderConstraints) {
+                              if (!canPaintSliderAtWidth(
+                                sliderConstraints.maxWidth,
+                              )) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return TweenAnimationBuilder<double>(
+                                tween: Tween<double>(end: thumbRadius),
+                                duration: motion.microInteractionDuration,
+                                curve: motion.fast,
+                                builder: (context, animatedThumbRadius, _) {
+                                  return SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      trackHeight: 2,
+                                      activeTrackColor:
+                                          context.accents.progressActive,
+                                      inactiveTrackColor:
+                                          context.accents.progressInactive,
+                                      thumbColor: context.accents.accent,
+                                      overlayShape:
+                                          SliderComponentShape.noOverlay,
+                                      thumbShape: _GlowSliderThumbShape(
+                                        radius: animatedThumbRadius,
+                                        color: context.accents.accent,
+                                      ),
+                                    ),
+                                    child: Slider(
+                                      min: 0,
+                                      max: clampedDuration,
+                                      value: clampedValue,
+                                      onChangeStart: hasTrack
+                                          ? (value) {
+                                              setState(() {
+                                                _dragging = true;
+                                                _dragValue = value;
+                                              });
+                                            }
+                                          : null,
+                                      onChanged: hasTrack
+                                          ? (value) =>
+                                              setState(() => _dragValue = value)
+                                          : null,
+                                      onChangeEnd: hasTrack
+                                          ? (value) {
+                                              setState(() => _dragging = false);
+                                              playback.seek(value);
+                                            }
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        if (showLabels)
+                          SizedBox(
+                            width: 48,
+                            child: Text(
+                              Duration(
+                                milliseconds: (duration * 1000).round(),
+                              ).toStringHMMSS(),
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.58),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }
+
+                // 2. 若处于普通运行状态，则渲染精致的、具有灵动触感的自定义果冻波形进度条
+                return Row(
                   children: [
                     if (showLabels)
+                      // 已经过播放时间标签
                       SizedBox(
                         width: 48,
                         child: Text(
@@ -555,63 +657,30 @@ class _ProgressStripState extends State<_ProgressStrip> {
                         ),
                       ),
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, sliderConstraints) {
-                          if (!canPaintSliderAtWidth(
-                            sliderConstraints.maxWidth,
-                          )) {
-                            return const SizedBox.shrink();
-                          }
-
-                          return TweenAnimationBuilder<double>(
-                            tween: Tween<double>(end: thumbRadius),
-                            duration: motion.microInteractionDuration,
-                            curve: motion.fast,
-                            builder: (context, animatedThumbRadius, _) {
-                              return SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  trackHeight: 2,
-                                  activeTrackColor:
-                                      context.accents.progressActive,
-                                  inactiveTrackColor:
-                                      context.accents.progressInactive,
-                                  thumbColor: context.accents.accent,
-                                  overlayShape: SliderComponentShape.noOverlay,
-                                  thumbShape: _GlowSliderThumbShape(
-                                    radius: animatedThumbRadius,
-                                    color: context.accents.accent,
-                                  ),
-                                ),
-                                child: Slider(
-                                  min: 0,
-                                  max: clampedDuration,
-                                  value: clampedValue,
-                                  onChangeStart: hasTrack
-                                      ? (value) {
-                                          setState(() {
-                                            _dragging = true;
-                                            _dragValue = value;
-                                          });
-                                        }
-                                      : null,
-                                  onChanged: hasTrack
-                                      ? (value) =>
-                                          setState(() => _dragValue = value)
-                                      : null,
-                                  onChangeEnd: hasTrack
-                                      ? (value) {
-                                          setState(() => _dragging = false);
-                                          playback.seek(value);
-                                        }
-                                      : null,
-                                ),
-                              );
-                            },
-                          );
-                        },
+                      // 使用自定义仿真果冻波形进度条组件，高度自适应适配 dense 状态，完全杜绝溢出报错
+                      child: WaveformSlider(
+                        value: clampedValue,
+                        max: clampedDuration,
+                        height: widget.dense ? 14.0 : 20.0, // 设定密集与普通排版的高度
+                        isPlaying: isPlaying && hasTrack,
+                        onChanged: hasTrack
+                            ? (value) {
+                                setState(() {
+                                  _dragging = true;
+                                  _dragValue = value;
+                                });
+                              }
+                            : null,
+                        onChangeEnd: hasTrack
+                            ? (value) {
+                                setState(() => _dragging = false);
+                                playback.seek(value);
+                              }
+                            : null,
                       ),
                     ),
                     if (showLabels)
+                      // 音频总时长标签
                       SizedBox(
                         width: 48,
                         child: Text(
@@ -629,72 +698,8 @@ class _ProgressStripState extends State<_ProgressStrip> {
                         ),
                       ),
                   ],
-                ),
-              );
-            }
-
-            // 2. 若处于普通运行状态，则渲染精致的、具有灵动触感的自定义果冻波形进度条
-            return Row(
-              children: [
-                if (showLabels)
-                  // 已经过播放时间标签
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      Duration(
-                        milliseconds: (clampedValue * 1000).round(),
-                      ).toStringHMMSS(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.58),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  // 使用自定义仿真果冻波形进度条组件，高度自适应适配 dense 状态，完全杜绝溢出报错
-                  child: WaveformSlider(
-                    value: clampedValue,
-                    max: clampedDuration,
-                    height: widget.dense ? 14.0 : 20.0, // 设定密集与普通排版的高度
-                    isPlaying: isPlaying && hasTrack,
-                    onChanged: hasTrack
-                        ? (value) {
-                            setState(() {
-                              _dragging = true;
-                              _dragValue = value;
-                            });
-                          }
-                        : null,
-                    onChangeEnd: hasTrack
-                        ? (value) {
-                            setState(() => _dragging = false);
-                            playback.seek(value);
-                          }
-                        : null,
-                  ),
-                ),
-                if (showLabels)
-                  // 音频总时长标签
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      Duration(
-                        milliseconds: (duration * 1000).round(),
-                      ).toStringHMMSS(),
-                      textAlign: TextAlign.right,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.58),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-              ],
+                );
+              },
             );
           },
         );

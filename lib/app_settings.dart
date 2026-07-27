@@ -17,12 +17,6 @@ enum WindowBackdropMode {
   /// Windows 11 原生云母材质
   mica,
 
-  /// Windows 11 22H2 标签页云母 Alt 材质
-  micaAlt,
-
-  /// Windows 11 原生亚克力材质
-  acrylic,
-
   /// 极光流体漂移背景材质（Flutter 软件渲染）
   fluid,
 
@@ -31,14 +25,18 @@ enum WindowBackdropMode {
 
   static WindowBackdropMode? fromName(String? value) {
     if (value == null) return null;
-    // 关键修复：进行大小写不区分匹配，以防底层 C++ 返回全小写的 "micaalt" 无法正确匹配 Dart 枚举 "micaAlt" 导致判定为回退
     final normalized = value.toLowerCase();
+    if (normalized == 'micaalt' || normalized == 'acrylic') {
+      return WindowBackdropMode.auto;
+    }
     for (final item in values) {
       if (item.name.toLowerCase() == normalized) return item;
     }
     return null;
   }
 }
+
+enum WindowLayoutMode { normal, maximized, fullscreen }
 
 enum UiEffectsLevel {
   balanced,
@@ -54,12 +52,12 @@ enum UiEffectsLevel {
 }
 
 enum UiVisualStyleMode {
-  glass,
-  contrast,
-  /// 极简锐利卡片风格（类似 Steam 库卡片/大圆角粗体高对比风格）
-  sharpCard;
+  glass;
 
   static UiVisualStyleMode? fromName(String? value) {
+    if (value == 'contrast' || value == 'sharpCard') {
+      return UiVisualStyleMode.glass;
+    }
     for (final item in values) {
       if (item.name == value) return item;
     }
@@ -109,8 +107,8 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，更新为 1.3.1
-  static const String version = "1.3.1";
+  // 当前播放器的全局静态版本号，更新为 1.3.2
+  static const String version = "1.3.2";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
   static const Size defaultWindowSize = Size(1461, 898);

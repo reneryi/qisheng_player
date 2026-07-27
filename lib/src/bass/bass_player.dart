@@ -298,6 +298,13 @@ class BassPlayer {
     if (hplugin != 0) return;
 
     final errCode = _bass.BASS_ErrorGetCode();
+    // Flutter hot restart recreates Dart objects without unloading the native
+    // BASS module. In that case the plugin is already available to this process.
+    if (errCode == BASS.BASS_ERROR_ALREADY) {
+      LOGGER.i("[bass plugin] already loaded: $pluginPath");
+      return;
+    }
+
     if (!required) {
       LOGGER.w(
         "[bass plugin] optional plugin load failed($errCode): $pluginPath",
@@ -314,8 +321,6 @@ class BassPlayer {
         throw FormatException(
           "The plugin requires a different BASS version: $pluginPath",
         );
-      case BASS.BASS_ERROR_ALREADY:
-        throw FormatException("The plugin is already loaded: $pluginPath");
       default:
         throw FormatException(
           "Failed to load plugin($errCode): $pluginPath",

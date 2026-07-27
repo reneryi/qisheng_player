@@ -12,10 +12,10 @@ void main() {
         'nativeApplySucceeded': false,
         'fallbackReason': 'acrylic_requires_windows_11_22h2',
       },
-      WindowBackdropMode.acrylic,
+      WindowBackdropMode.auto,
     );
 
-    expect(result.requestedMode, WindowBackdropMode.acrylic);
+    expect(result.requestedMode, WindowBackdropMode.auto);
     expect(result.appliedMode, WindowBackdropMode.mica);
     expect(result.nativeBackdropSupported, isTrue);
     expect(result.nativeApplySucceeded, isFalse);

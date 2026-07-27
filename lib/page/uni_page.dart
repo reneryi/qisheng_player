@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:qisheng_player/page/page_scaffold.dart';
 import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
@@ -666,7 +667,8 @@ class _UniPageState<T> extends State<UniPage<T>> {
       } else {
         effectiveSecondaryActions = [
           ...effectiveSecondaryActions,
-          IconButton.filledTonal(
+          CpIconButton(
+            variant: CpButtonVariant.immersive,
             tooltip: "更多",
             onPressed: () {
               multiSelectController.useMultiSelectView(true);

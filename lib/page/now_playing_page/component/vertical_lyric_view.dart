@@ -14,8 +14,18 @@ import 'package:flutter/services.dart'; // 引入 services 包用于检测 Ctrl 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+const _compactLyricFocusAlignment = 0.25;
+const _largeLyricFocusAlignment = 0.5;
+
+@visibleForTesting
+double resolveVerticalLyricFocusAlignment({required bool compact}) {
+  return compact ? _compactLyricFocusAlignment : _largeLyricFocusAlignment;
+}
+
 class VerticalLyricView extends StatefulWidget {
-  const VerticalLyricView({super.key});
+  const VerticalLyricView({super.key, this.compact = false});
+
+  final bool compact;
 
   @override
   State<VerticalLyricView> createState() => _VerticalLyricViewState();
@@ -185,7 +195,12 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                               ConnectionState.done => lyricNullable == null
                                   ? noLyricWidget
                                   : _VerticalLyricScrollView(
-                                      lyric: lyricNullable),
+                                      lyric: lyricNullable,
+                                      currentLineAlignment:
+                                          resolveVerticalLyricFocusAlignment(
+                                        compact: widget.compact,
+                                      ),
+                                    ),
                             },
                             Align(
                               alignment: Alignment.bottomRight,
@@ -288,9 +303,13 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
 final LYRIC_VIEW_KEY = GlobalKey();
 
 class _VerticalLyricScrollView extends StatefulWidget {
-  const _VerticalLyricScrollView({required this.lyric});
+  const _VerticalLyricScrollView({
+    required this.lyric,
+    required this.currentLineAlignment,
+  });
 
   final Lyric lyric;
+  final double currentLineAlignment;
 
   @override
   State<_VerticalLyricScrollView> createState() =>
@@ -334,7 +353,12 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   @override
   void didUpdateWidget(covariant _VerticalLyricScrollView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.lyric == widget.lyric) return;
+    if (oldWidget.lyric == widget.lyric) {
+      if (oldWidget.currentLineAlignment != widget.currentLineAlignment) {
+        _scrollCurrentLyricIntoView(animated: false);
+      }
+      return;
+    }
     _lastSafeIndex = null;
     _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
     _initLyricView();
@@ -399,7 +423,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
 
       Scrollable.ensureVisible(
         targetContext,
-        alignment: 0.25,
+        alignment: widget.currentLineAlignment,
         duration: animated ? context.motion.lyricScrollDuration : Duration.zero,
         curve: context.motion.emphasized,
       );

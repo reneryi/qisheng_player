@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:qisheng_player/app_settings.dart';
@@ -11,6 +12,7 @@ import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
+import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
@@ -18,9 +20,9 @@ import 'package:qisheng_player/library/playlist.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/navigation_state.dart';
+import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/vertical_lyric_view.dart';
 import 'package:qisheng_player/app_paths.dart' as app_paths;
-import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -327,8 +329,6 @@ class _NowPlayingAppBar extends StatelessWidget {
                       child: SizedBox.expand(),
                     ),
                   ),
-                  SizedBox(width: 8),
-                  NowPlayingDesktopLyricAction(),
                   SizedBox(width: 8),
                   NowPlayingMoreMenuAction(),
                   SizedBox(width: 8),

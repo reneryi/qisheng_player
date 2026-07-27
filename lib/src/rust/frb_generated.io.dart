@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  InstalledFont dco_decode_box_autoadd_installed_font(dynamic raw);
+
+  @protected
   PictureSizes dco_decode_box_autoadd_picture_sizes(dynamic raw);
 
   @protected
@@ -95,6 +98,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  InstalledFont? dco_decode_opt_box_autoadd_installed_font(dynamic raw);
 
   @protected
   PictureSizes? dco_decode_opt_box_autoadd_picture_sizes(dynamic raw);
@@ -169,6 +175,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  InstalledFont sse_decode_box_autoadd_installed_font(
+      SseDeserializer deserializer);
+
+  @protected
   PictureSizes sse_decode_box_autoadd_picture_sizes(
       SseDeserializer deserializer);
 
@@ -202,6 +212,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  InstalledFont? sse_decode_opt_box_autoadd_installed_font(
+      SseDeserializer deserializer);
 
   @protected
   PictureSizes? sse_decode_opt_box_autoadd_picture_sizes(
@@ -280,6 +294,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_installed_font(
+      InstalledFont self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_picture_sizes(
       PictureSizes self, SseSerializer serializer);
 
@@ -316,6 +334,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_installed_font(
+      InstalledFont? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_picture_sizes(

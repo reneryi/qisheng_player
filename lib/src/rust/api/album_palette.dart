@@ -6,12 +6,11 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `average_bucket`, `channel`, `color_distance_sq`, `median_cut`, `widest_channel`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RgbSample`, `WeightedColor`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `assign_bins`, `cluster_histogram`, `cluster_sums`, `color_distance_sq`, `color`, `distance_sq`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `HistogramBin`, `RgbSample`, `WeightedColor`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
 
-/// for Flutter
-/// 从图片原始字节中提取稳定的 RGB 主色列表，返回值不包含 alpha。
+/// Extracts dominant RGB colors from encoded image bytes for Flutter.
 Future<Uint32List> extractDominantColors(
         {required List<int> imageBytes, required int maxColors}) =>
     RustLib.instance.api.crateApiAlbumPaletteExtractDominantColors(

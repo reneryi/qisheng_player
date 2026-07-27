@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
@@ -124,12 +125,9 @@ class SortOrderSwitch<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var isAscending = sortOrder == SortOrder.ascending;
-    return IconButton.filledTonal(
-      enableFeedback: false,
+    return CpIconButton(
+      variant: CpButtonVariant.immersive,
       tooltip: "切换排序顺序：当前为${isAscending ? "升序" : "降序"}",
-      style: const ButtonStyle(
-        fixedSize: WidgetStatePropertyAll(Size(48, 48)),
-      ),
       onPressed: () => setSortOrder(
         isAscending ? SortOrder.descending : SortOrder.ascending,
       ),
@@ -152,12 +150,9 @@ class ContentViewSwitch<T> extends StatelessWidget {
       ContentView.grid => (Symbols.grid_view, "网格视图", ContentView.list),
     };
 
-    return IconButton.filledTonal(
-      enableFeedback: false,
+    return CpIconButton(
+      variant: CpButtonVariant.immersive,
       tooltip: "切换页面视图：当前为$tooltip",
-      style: const ButtonStyle(
-        fixedSize: WidgetStatePropertyAll(Size(48, 48)),
-      ),
       onPressed: () => setContentView(nextView),
       icon: Icon(icon),
     );
