@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
+import 'package:qisheng_player/play_service/audio_spectrum.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/src/rust/api/smtc_flutter.dart';
@@ -31,6 +32,22 @@ enum PlayMode {
   }
 }
 
+final ValueListenable<List<double>> _emptyAudioSpectrum =
+    ValueNotifier<List<double>>(const <double>[]);
+
+@visibleForTesting
+List<Audio> rebindAudiosToLibrary(
+  Iterable<Audio> audios,
+  Iterable<Audio> libraryAudios,
+) {
+  final canonicalByPath = <String, Audio>{
+    for (final audio in libraryAudios) audio.path: audio,
+  };
+  return audios
+      .map((audio) => canonicalByPath[audio.path] ?? audio)
+      .toList(growable: false);
+}
+
 /// 鎾斁鐩稿叧鐘舵€佷笌鎺у埗鎺ュ彛锛屼究浜庢闈?UI 鍜屾祴璇曞叡鐢ㄣ€?
 /// Playback state and controls shared by UI and tests.
 abstract class PlaybackController extends ChangeNotifier {
@@ -42,9 +59,11 @@ abstract class PlaybackController extends ChangeNotifier {
   double get position;
   Stream<PlayerState> get playerStateStream;
   PlayerState get playerState;
+  bool get isPlaying => playerState == PlayerState.playing;
   ValueNotifier<double> get volumeDspNotifier;
   double get volumeDsp;
   ValueNotifier<PlayMode> get playMode;
+  ValueListenable<List<double>> get audioSpectrum => _emptyAudioSpectrum;
 
   void setPlayMode(PlayMode playMode);
   void setVolumeDsp(double volume);
@@ -99,8 +118,12 @@ class PlaybackService extends PlaybackController {
   final _smtc = SmtcFlutter();
   final _pref = AppPreference.instance.playbackPref;
   final _positionStreamController = StreamController<double>.broadcast();
+  late final AudioSpectrumNotifier _audioSpectrum = AudioSpectrumNotifier(
+    sample: _sampleAudioSpectrum,
+  );
   bool _cueAutoNextTriggered = false;
   DateTime _lastSessionSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<void>? _closeFuture;
 
   late final _wasapiExclusive = ValueNotifier(_player.wasapiExclusive);
   ValueNotifier<bool> get wasapiExclusive => _wasapiExclusive;
@@ -115,10 +138,21 @@ class PlaybackService extends PlaybackController {
   late final _volumeDsp = ValueNotifier(_pref.volumeDsp);
   ValueNotifier<double> get volumeDspNotifier => _volumeDsp;
 
+  @override
+  ValueListenable<List<double>> get audioSpectrum => _audioSpectrum;
+
+  List<double> _sampleAudioSpectrum() {
+    if (nowPlaying == null || playerState != PlayerState.playing) {
+      return const <double>[];
+    }
+    return _player.sampleFft(bins: audioSpectrumBinCount);
+  }
+
   /// 独占模式
   void useExclusiveMode(bool exclusive) {
     if (_player.useExclusiveMode(exclusive)) {
       _wasapiExclusive.value = exclusive;
+      if (exclusive) _audioSpectrum.decayToSilence();
       _applyOutputVolume(nowPlaying);
     }
   }
@@ -314,6 +348,7 @@ class PlaybackService extends PlaybackController {
       _playlistIndex = audioIndex;
       nowPlaying = playlist[audioIndex];
       _cueAutoNextTriggered = false;
+      _audioSpectrum.decayToSilence();
       _player.setSource(nowPlaying!.mediaPath);
       if (nowPlaying!.isCueTrack) {
         _player.seek((nowPlaying!.cueStartMs ?? 0) / 1000.0);
@@ -393,6 +428,18 @@ class PlaybackService extends PlaybackController {
       _playlistBackup = List.from(updated);
       _rememberPlaybackSession(save: true);
     }
+  }
+
+  /// 将歌曲追加到播放队列末尾；当前无播放内容时直接播放该歌曲。
+  void addToQueue(Audio audio) {
+    if (_playlistIndex == null) {
+      play(0, [audio]);
+      return;
+    }
+    final updated = List<Audio>.from(playlist.value)..add(audio);
+    playlist.value = updated;
+    _playlistBackup = List<Audio>.from(updated);
+    _rememberPlaybackSession(save: true);
   }
 
   void useShuffle(bool flag) {
@@ -628,6 +675,26 @@ class PlaybackService extends PlaybackController {
     notifyListeners();
   }
 
+  void reconcileLibraryReferences() {
+    final libraryAudios = AudioLibrary.instance.audioCollection;
+    final canonicalByPath = <String, Audio>{
+      for (final audio in libraryAudios) audio.path: audio,
+    };
+    final currentPath = nowPlaying?.path;
+
+    playlist.value = rebindAudiosToLibrary(playlist.value, libraryAudios);
+    _playlistBackup = rebindAudiosToLibrary(_playlistBackup, libraryAudios);
+    if (currentPath != null) {
+      nowPlaying = canonicalByPath[currentPath] ?? nowPlaying;
+      final reboundIndex =
+          playlist.value.indexWhere((audio) => audio.path == currentPath);
+      if (reboundIndex >= 0) _playlistIndex = reboundIndex;
+    }
+
+    _rememberPlaybackSession(save: true);
+    refreshNowPlaying();
+  }
+
   void seek(double position) {
     final audio = nowPlaying;
     if (audio != null && audio.isCueTrack) {
@@ -726,13 +793,23 @@ class PlaybackService extends PlaybackController {
     }
   }
 
-  void close() {
-    _rememberPlaybackSession(save: true);
-    _playerStateStreamSub.cancel();
-    _smtcEventStreamSub.cancel();
-    _rawPositionStreamSub.cancel();
-    _positionStreamController.close();
-    _player.free();
-    _smtc.close();
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
+    _rememberPlaybackSession();
+    _audioSpectrum.dispose();
+    await Future.wait([
+      _playerStateStreamSub.cancel(),
+      _smtcEventStreamSub.cancel(),
+      _rawPositionStreamSub.cancel(),
+    ]);
+    await _positionStreamController.close();
+    try {
+      _player.free();
+    } catch (err, trace) {
+      LOGGER.e('[shutdown] BASS 资源释放失败: $err', stackTrace: trace);
+    }
+    await _smtc.close();
+    super.dispose();
   }
 }

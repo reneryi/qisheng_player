@@ -40,7 +40,7 @@ void main() {
     expect(changes.last, closeTo(120, 2));
   });
 
-  testWidgets('WaveformSlider starts animating when playback starts', (
+  testWidgets('playback state does not start a synthetic waveform ticker', (
     tester,
   ) async {
     var isPlaying = false;
@@ -72,41 +72,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(tester.binding.hasScheduledFrame, isTrue);
-  });
-
-  testWidgets('WaveformSlider stops animating when playback pauses', (
-    tester,
-  ) async {
-    var isPlaying = true;
-    late StateSetter updateState;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            updateState = setState;
-            return Center(
-              child: SizedBox(
-                width: 320,
-                child: WaveformSlider(
-                  value: 42,
-                  max: 240,
-                  isPlaying: isPlaying,
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-    await tester.pump();
-    expect(tester.binding.hasScheduledFrame, isTrue);
-
-    updateState(() => isPlaying = false);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
+    await tester.pumpAndSettle();
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 }

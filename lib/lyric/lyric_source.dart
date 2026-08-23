@@ -57,6 +57,7 @@ Future<void> readLyricSources() async {
     final supportPath = (await getAppDataDir()).path;
     final lyricSourcePath = "$supportPath\\lyric_source.json";
     final file = File(lyricSourcePath);
+    LYRIC_SOURCES.clear();
     if (!file.existsSync()) return;
 
     final lyricSourceStr = file.readAsStringSync();

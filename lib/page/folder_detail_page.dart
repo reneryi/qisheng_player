@@ -8,19 +8,35 @@ import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class FolderDetailPage extends StatelessWidget {
-  final AudioFolder folder;
+class FolderDetailPage extends StatefulWidget {
   const FolderDetailPage({super.key, required this.folder});
+
+  final AudioFolder folder;
+
+  @override
+  State<FolderDetailPage> createState() => _FolderDetailPageState();
+}
+
+class _FolderDetailPageState extends State<FolderDetailPage> {
+  final multiSelectController = MultiSelectController<Audio>();
+
+  AudioFolder get folder => widget.folder;
+
+  @override
+  void dispose() {
+    multiSelectController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final contentList = List<Audio>.from(folder.audios);
-    final multiSelectController = MultiSelectController<Audio>();
     return UniPage<Audio>(
       pref: AppPreference.instance.folderDetailPagePref,
       title: folder.path,
       subtitle: formatMusicCount(contentList.length),
       contentList: contentList,
+      contentRevision: AudioLibrary.revision.value,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,
         playlist: contentList,

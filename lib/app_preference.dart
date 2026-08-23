@@ -7,7 +7,33 @@ import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/utils.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+@visibleForTesting
+class SerializedSaveCoordinator {
+  SerializedSaveCoordinator(this._persist);
+
+  final Future<void> Function() _persist;
+  Future<void>? _activeSave;
+  bool _saveRequested = false;
+
+  Future<void> save() {
+    _saveRequested = true;
+    return _activeSave ??= _drain();
+  }
+
+  Future<void> _drain() async {
+    try {
+      while (_saveRequested) {
+        _saveRequested = false;
+        await _persist();
+      }
+    } finally {
+      _activeSave = null;
+    }
+  }
+}
 
 class PagePreference {
   int sortMethod;
@@ -251,6 +277,9 @@ class HotkeyPreference {
 }
 
 class AppPreference {
+  late final SerializedSaveCoordinator _saveCoordinator =
+      SerializedSaveCoordinator(_saveOnce);
+
   var audiosPagePref = PagePreference(0, SortOrder.ascending, ContentView.list);
 
   var artistsPagePref =
@@ -305,7 +334,9 @@ class AppPreference {
 
   var hotkeyPref = HotkeyPreference.defaults();
 
-  Future<void> save() async {
+  Future<void> save() => _saveCoordinator.save();
+
+  Future<void> _saveOnce() async {
     try {
       final supportPath = (await getAppDataDir()).path;
       final appPreferencePath = "$supportPath\\app_preference.json";

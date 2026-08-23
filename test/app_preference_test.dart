@@ -1,10 +1,42 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
+import 'dart:async';
+
 import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('SerializedSaveCoordinator serializes and coalesces pending saves',
+      () async {
+    final releaseFirstSave = Completer<void>();
+    var saveCalls = 0;
+    var activeSaves = 0;
+    var maxActiveSaves = 0;
+    final coordinator = SerializedSaveCoordinator(() async {
+      saveCalls++;
+      activeSaves++;
+      maxActiveSaves =
+          activeSaves > maxActiveSaves ? activeSaves : maxActiveSaves;
+      if (saveCalls == 1) await releaseFirstSave.future;
+      activeSaves--;
+    });
+
+    final first = coordinator.save();
+    await Future<void>.delayed(Duration.zero);
+    final second = coordinator.save();
+    final third = coordinator.save();
+
+    expect(saveCalls, 1);
+    expect(activeSaves, 1);
+
+    releaseFirstSave.complete();
+    await Future.wait([first, second, third]);
+
+    expect(saveCalls, 2);
+    expect(maxActiveSaves, 1);
+  });
+
   test('PagePreference reads legacy misspelled descending sort order', () {
     expect(SortOrder.fromString('descending'), SortOrder.descending);
     expect(SortOrder.fromString('decending'), SortOrder.descending);

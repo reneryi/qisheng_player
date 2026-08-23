@@ -9,10 +9,15 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/main_layout_frame.dart';
+import 'package:qisheng_player/component/animated_menu_content.dart';
+import 'package:qisheng_player/component/lyric_line_motion.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
+import 'package:qisheng_player/component/ui/audio_format_badge.dart';
+import 'package:qisheng_player/component/ui/vinyl_record_player_view.dart';
+import 'package:qisheng_player/component/ui/spring_scale_feedback.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
@@ -27,6 +32,7 @@ import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -394,7 +400,7 @@ class _MarqueeText extends StatelessWidget {
 
   String _sanitizeText(String value) {
     final cleaned = value
-        // 移除控制字符、BOM銆佹浛浠ｅ瓧绗︼紝閬垮厤婊氬姩鏂囨湰鍑虹幇寮傚父鍗犱綅鍥惧舰
+        // 移除控制字符、BOM、替代字符，避免滚动文本出现异常占位图形
         .replaceAll(
           RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF\uFFFD]'),
           '',

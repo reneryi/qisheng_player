@@ -1,10 +1,11 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/music_matcher.dart';
+import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_visibility.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
@@ -63,7 +64,7 @@ class _SetLyricSourceBtn extends StatelessWidget {
       onClose: () {
         visibilityController.setMenuOpen(false);
       },
-      menuChildren: [
+      menuChildren: animatedMenuChildren(context, [
         MenuItemButton(
           onPressed: () {
             final nowPlaying = PlayService.instance.playbackService.nowPlaying;
@@ -84,7 +85,7 @@ class _SetLyricSourceBtn extends StatelessWidget {
           leadingIcon: isLocal == true ? const Icon(Symbols.check) : null,
           child: const Text("本地"),
         ),
-      ],
+      ]),
       builder: (context, controller, _) => Tooltip(
         message: "选择歌词来源",
         child: IconButton(

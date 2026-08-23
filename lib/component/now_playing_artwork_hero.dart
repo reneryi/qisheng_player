@@ -4,21 +4,17 @@ import 'package:flutter/material.dart';
 const nowPlayingArtworkHeroTag = 'now-playing-artwork';
 const nowPlayingArtworkHeroRadius = 26.0;
 
-// 自定义的高抛弧线 Tween，让共享元素封面飞越轨迹呈显著的物理抛物线
-class CustomIntenseArcTween extends RectTween {
-  CustomIntenseArcTween({super.begin, super.end});
+class NowPlayingArtworkRectTween extends RectTween {
+  NowPlayingArtworkRectTween({super.begin, super.end});
 
   @override
   Rect? lerp(double t) {
     if (begin == null || end == null) return null;
-    // 基础的线性大小和位置插值
     final rect = Rect.lerp(begin, end, t)!;
-
-    // 采用正弦函数产生高抛拱起进度：t 在 0.5 时达到最大高抛点
     final arcProgress = math.sin(t * math.pi);
-
-    // 强行在 Y 轴方向加深高抛幅度（向上偏移 110 像素），使飞越轨迹极其瞩目和优雅
-    final double offsetY = -110.0 * arcProgress;
+    final travelDistance = (end!.center - begin!.center).distance;
+    final offsetY =
+        -1.0 * (travelDistance * 0.06).clamp(12.0, 40.0) * arcProgress;
 
     return Rect.fromLTWH(
       rect.left,

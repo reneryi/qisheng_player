@@ -1,4 +1,5 @@
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
 import 'package:qisheng_player/utils.dart';
@@ -27,6 +28,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     super.initState();
     AppPreference.instance.playlistDetailPagePref.sortMethod = 0;
     contentList = widget.playlist.audios.values.toList();
+  }
+
+  @override
+  void dispose() {
+    multiSelectController.dispose();
+    super.dispose();
   }
 
   @override
@@ -193,27 +200,30 @@ class _MoveSelectionToPlaylistAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
-      menuChildren: PLAYLISTS
-          .where((item) => item != currentPlaylist)
-          .map(
-            (targetPlaylist) => MenuItemButton(
-              onPressed: () {
-                if (multiSelectController.selected.isEmpty) return;
-                for (final audio in multiSelectController.selected) {
-                  targetPlaylist.addAudio(audio);
-                  currentPlaylist.removeAudioByPath(audio.path);
-                  contentList.removeWhere((item) => item.path == audio.path);
-                }
-                currentPlaylist.applyCustomOrder(contentList);
-                showTextOnSnackBar(
-                  "已移动 ${multiSelectController.selected.length} 首到“${targetPlaylist.name}”",
-                );
-                multiSelectController.useMultiSelectView(false);
-              },
-              child: Text(targetPlaylist.name),
-            ),
-          )
-          .toList(),
+      menuChildren: animatedMenuChildren(
+        context,
+        PLAYLISTS
+            .where((item) => item != currentPlaylist)
+            .map(
+              (targetPlaylist) => MenuItemButton(
+                onPressed: () {
+                  if (multiSelectController.selected.isEmpty) return;
+                  for (final audio in multiSelectController.selected) {
+                    targetPlaylist.addAudio(audio);
+                    currentPlaylist.removeAudioByPath(audio.path);
+                    contentList.removeWhere((item) => item.path == audio.path);
+                  }
+                  currentPlaylist.applyCustomOrder(contentList);
+                  showTextOnSnackBar(
+                    "已移动 ${multiSelectController.selected.length} 首到“${targetPlaylist.name}”",
+                  );
+                  multiSelectController.useMultiSelectView(false);
+                },
+                child: Text(targetPlaylist.name),
+              ),
+            )
+            .toList(),
+      ),
       builder: (context, controller, _) => IconButton.filledTonal(
         tooltip: "移动到歌单",
         onPressed: PLAYLISTS.length <= 1

@@ -28,9 +28,11 @@ namespace {
 #define DWMWA_WINDOW_CORNER_PREFERENCE 33
 #endif
 
-#ifndef DWMSBT_AUTO
-#define DWMSBT_AUTO 0
-#define DWMSBT_NONE 1
+// 注意：必须与 Windows SDK (dwmapi.h) 官方枚举值完全一致，否则在旧版 SDK
+// 构建环境下 DWMSBT_AUTO / DWMSBT_NONE 会颠倒，导致材质开关行为反转。
+#ifndef DWMSBT_NONE
+#define DWMSBT_NONE 0
+#define DWMSBT_AUTO 1
 #define DWMSBT_MAINWINDOW 2
 #define DWMSBT_TRANSIENTWINDOW 3
 #define DWMSBT_TABBEDWINDOW 4
@@ -406,6 +408,8 @@ struct TitleSearchData {
 struct BackdropSupportInfo {
   bool native_supported = false;
   bool mica_supported = false;
+  bool tabbed_supported = false;     // Mica Alt (DWMSBT_TABBEDWINDOW)
+  bool transient_supported = false;  // Acrylic (DWMSBT_TRANSIENTWINDOW)
   std::string auto_mode = "none";
   std::string fallback_reason = "unsupported_platform";
 };
@@ -450,7 +454,9 @@ std::string ToLowerAscii(std::string value) {
 
 std::string NormalizeBackdropMode(const std::string& value) {
   const std::string normalized = ToLowerAscii(value);
-  if (normalized == "auto" || normalized == "mica" || normalized == "none") {
+  if (normalized == "auto" || normalized == "mica" || normalized == "none" ||
+      normalized == "micaalt" || normalized == "tabbed" ||
+      normalized == "acrylic") {
     return normalized;
   }
   return "auto";
@@ -459,6 +465,12 @@ std::string NormalizeBackdropMode(const std::string& value) {
 int BackdropTypeFromMode(const std::string& mode) {
   if (mode == "mica") {
     return DWMSBT_MAINWINDOW;
+  }
+  if (mode == "micaalt" || mode == "tabbed") {
+    return DWMSBT_TABBEDWINDOW;
+  }
+  if (mode == "acrylic") {
+    return DWMSBT_TRANSIENTWINDOW;
   }
   if (mode == "none") {
     return DWMSBT_NONE;
@@ -491,16 +503,13 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
   if (!build_number.has_value()) {
     return {};
   }
+  // DWMWA_SYSTEMBACKDROP_TYPE（属性 38）与 DWMSBT_* 枚举由 Windows 11 22H2
+  // (build 22621) 起公开支持；21H2 (22000+) 上此属性不存在，调用必然失败，
+  // 因此不再标记为支持，由上层明确回退并给出可读提示。
   if (*build_number >= 22621) {
     return {
         true,
         true,
-        "mica",
-        "",
-    };
-  }
-  if (*build_number >= 22000) {
-    return {
         true,
         true,
         "mica",
@@ -510,8 +519,10 @@ BackdropSupportInfo ResolveBackdropSupportInfo() {
   return {
       false,
       false,
+      false,
+      false,
       "none",
-      "system_backdrop_requires_windows_11",
+      "system_backdrop_requires_win11_22h2",
   };
 }
 
@@ -531,6 +542,23 @@ BackdropResolution ResolveBackdropRequest(const std::string& requested_mode) {
     resolution.applied_mode = "none";
     resolution.fallback_reason = support.fallback_reason.empty()
                                      ? "mica_not_supported"
+                                     : support.fallback_reason;
+    return resolution;
+  }
+
+  if ((target_mode == "micaalt" || target_mode == "tabbed") &&
+      !support.tabbed_supported) {
+    resolution.applied_mode = "none";
+    resolution.fallback_reason = support.fallback_reason.empty()
+                                     ? "mica_alt_not_supported"
+                                     : support.fallback_reason;
+    return resolution;
+  }
+
+  if (target_mode == "acrylic" && !support.transient_supported) {
+    resolution.applied_mode = "none";
+    resolution.fallback_reason = support.fallback_reason.empty()
+                                     ? "acrylic_not_supported"
                                      : support.fallback_reason;
     return resolution;
   }
@@ -1023,7 +1051,8 @@ flutter::EncodableMap FlutterWindow::SetWindowBackdropMode(
   ApplyRoundedWindowAppearance();
 
   if (resolution.applied_mode != "none") {
-    MARGINS margins = {-1};
+    // 全客户区扩展 DWM 材质边框，确保 Mica 和 Acrylic 覆盖整个无边框窗口
+    MARGINS margins = {-1, -1, -1, -1};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
   } else {
     MARGINS margins = {0, 0, 0, 0};

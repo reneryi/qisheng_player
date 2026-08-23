@@ -20,6 +20,7 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.secondaryContent,
+    this.secondaryContentRevision,
     required this.secondaryContentBuilder,
     required this.tertiaryContentTitle,
     required this.tertiaryContent,
@@ -43,6 +44,7 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
   final String title;
   final String subtitle;
   final List<S> secondaryContent;
+  final Object? secondaryContentRevision;
   final ContentBuilder<S> secondaryContentBuilder;
   final String tertiaryContentTitle;
   final List<T> tertiaryContent;
@@ -64,24 +66,38 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
       widget.sortMethods?[widget.pref.sortMethod];
   late SortOrder currSortOrder = widget.pref.sortOrder;
   late ContentView currContentView = widget.pref.contentView;
+  late List<S> _sortedContentSnapshot;
 
   @override
   void initState() {
     super.initState();
-    currSortMethod?.method(widget.secondaryContent, currSortOrder);
+    _sortContent();
   }
 
   @override
   void didUpdateWidget(covariant UniDetailPage<P, S, T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final canRestorePreviousOrder = widget.secondaryContentRevision != null &&
+        widget.secondaryContentRevision == oldWidget.secondaryContentRevision &&
+        restorePreviousContentOrder(
+          widget.secondaryContent,
+          _sortedContentSnapshot,
+        );
+    if (!canRestorePreviousOrder) {
+      _sortContent();
+    }
+  }
+
+  void _sortContent() {
     currSortMethod?.method(widget.secondaryContent, currSortOrder);
+    _sortedContentSnapshot = List<S>.from(widget.secondaryContent);
   }
 
   void setSortMethod(SortMethodDesc<S> sortMethod) {
     setState(() {
       currSortMethod = sortMethod;
       widget.pref.sortMethod = widget.sortMethods?.indexOf(sortMethod) ?? 0;
-      currSortMethod?.method(widget.secondaryContent, currSortOrder);
+      _sortContent();
     });
   }
 
@@ -89,7 +105,7 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
     setState(() {
       currSortOrder = sortOrder;
       widget.pref.sortOrder = sortOrder;
-      currSortMethod?.method(widget.secondaryContent, currSortOrder);
+      _sortContent();
     });
   }
 

@@ -66,6 +66,7 @@ class DesktopLyricService extends DesktopLyricController {
     int? onSurface,
     double? windowLeft,
     double? windowTop,
+    bool persist = true,
   }) {
     final pref = AppPreference.instance.desktopLyricPref;
     bool changed = false;
@@ -99,7 +100,7 @@ class DesktopLyricService extends DesktopLyricController {
       changed = true;
     }
 
-    if (changed) {
+    if (changed && persist) {
       AppPreference.instance.save();
     }
   }
@@ -365,14 +366,15 @@ class DesktopLyricService extends DesktopLyricController {
     return false;
   }
 
-  void _setDesktopLyricClosed() {
+  Future<void> _setDesktopLyricClosed() async {
     _stopPositionSyncTimer();
     _desktopLyricPid = null;
     unawaited(WindowControls.setDesktopLyricProcess());
     _desktopLyricStdoutPending = "";
     desktopLyric = Future.value(null);
-    _desktopLyricSubscription?.cancel();
+    final subscription = _desktopLyricSubscription;
     _desktopLyricSubscription = null;
+    await subscription?.cancel();
     _isStarting = false;
     isLocked = false;
     notifyListeners();
@@ -501,7 +503,7 @@ class DesktopLyricService extends DesktopLyricController {
           );
         }
         process?.exitCode.then((_) {
-          _setDesktopLyricClosed();
+          unawaited(_setDesktopLyricClosed());
         });
 
         process?.stderr.transform(utf8.decoder).listen((event) {
@@ -593,17 +595,29 @@ class DesktopLyricService extends DesktopLyricController {
     });
   }
 
-  void killDesktopLyric({bool disablePreference = true}) {
-    desktopLyric.then((value) async {
+  Future<void> stopDesktopLyric({
+    bool disablePreference = true,
+    bool persistPreference = true,
+  }) async {
+    try {
+      final value = await desktopLyric;
       await _syncDesktopLyricWindowPosition(forceSave: true);
       value?.kill(ProcessSignal.sigterm);
       if (disablePreference) {
-        _saveDesktopLyricPreference(enabled: false, locked: false);
+        _saveDesktopLyricPreference(
+          enabled: false,
+          locked: false,
+          persist: persistPreference,
+        );
       }
-      _setDesktopLyricClosed();
-    }).catchError((err, trace) {
+      await _setDesktopLyricClosed();
+    } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
-    });
+    }
+  }
+
+  void killDesktopLyric({bool disablePreference = true}) {
+    unawaited(stopDesktopLyric(disablePreference: disablePreference));
   }
 
   void sendUnlockMessage() {

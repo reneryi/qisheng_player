@@ -33,6 +33,8 @@ class LyricService extends LyricController {
 
   late StreamSubscription _positionStreamSubscription;
   int _lyricLoadVersion = 0;
+  Future<void>? _closeFuture;
+  bool _disposed = false;
 
   LyricService(PlayService playService)
       : _playbackService = playService.playbackService,
@@ -276,8 +278,18 @@ class LyricService extends LyricController {
 
   @override
   void dispose() {
-    _lyricLineStreamController.close();
-    _positionStreamSubscription.cancel();
+    if (_disposed) return;
+    _disposed = true;
+    _lyricLoadVersion++;
+    _closeFuture = Future.wait([
+      _positionStreamSubscription.cancel(),
+      _lyricLineStreamController.close(),
+    ]);
     super.dispose();
+  }
+
+  Future<void> close() {
+    dispose();
+    return _closeFuture!;
   }
 }

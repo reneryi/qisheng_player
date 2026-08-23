@@ -64,13 +64,20 @@ class LyricViewController extends ChangeNotifier {
 
   // 暴露任意字号更新接口，专为双指捏合平滑缩放手势量身定制
   void setFontSize(double size) {
-    lyricFontSize = size.clamp(16.0, 48.0); // 限制歌词主字号在 16 到 48 像素之间，保证视障和高分屏的兼容性
-    translationFontSize = (lyricFontSize - 4.0).clamp(12.0, 44.0); // 翻译字体大小始终随主字号做等比例偏移（差 4 像素），确保主次层次感
+    lyricFontSize =
+        size.clamp(16.0, 48.0); // 限制歌词主字号在 16 到 48 像素之间，保证视障和高分屏的兼容性
+    translationFontSize = (lyricFontSize - 4.0)
+        .clamp(12.0, 44.0); // 翻译字体大小始终随主字号做等比例偏移（差 4 像素），确保主次层次感
 
     nowPlayingPagePref.lyricFontSize = lyricFontSize;
     nowPlayingPagePref.translationFontSize = translationFontSize;
     notifyListeners();
     unawaited(AppPreference.instance.save()); // 异步持久化字号配置，下次打开时自动还原
+  }
+
+  // 重置字号为默认基准大小 (22px / 100%)
+  void resetFontSize() {
+    setFontSize(22.0);
   }
 
   void toggleShowTranslation() {

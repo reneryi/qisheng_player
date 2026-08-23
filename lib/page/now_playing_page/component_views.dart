@@ -79,43 +79,65 @@ class _ImmersiveArtworkStage extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 极简主义设计：非小屏下由原本的 200 放大至 320 像素以呈现海报感，小屏 120 像素
-        final size = compact ? 120.0 : 320.0;
+        final availableHeight =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 600.0;
+        final availableWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
+
+        // 响应式自适应封面尺寸：根据宽高动态计算，保证大屏震撼、小屏精致
+        final size = compact
+            ? (availableHeight * 0.44).clamp(80.0, 150.0).toDouble()
+            : math
+                .min(availableWidth * 0.74, availableHeight * 0.54)
+                .clamp(180.0, 380.0)
+                .toDouble();
 
         return SizedBox.expand(
           child: Stack(
             children: [
               const Positioned.fill(child: _ArtworkStageHitAbsorber()),
               Align(
-                // 大屏下整体居中对齐以展现海报式视觉美感，小屏则靠左对齐
                 alignment: compact ? Alignment.centerLeft : Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: compact
-                      ? CrossAxisAlignment.start
-                      : CrossAxisAlignment.center,
-                  children: [
-                    _NowPlayingArtwork(
-                      size: size,
-                      radius: compact ? 14 : 24, // 大屏下圆角适当增大，让界面更加圆润美观
-                      large: true,
-                      showBackdropGlow: true, // 启用弥散的动态呼吸光晕特效
-                    ),
-                    SizedBox(height: compact ? 12 : 24), // 微调纵向间距为 24 像素，增加呼吸感
-                    _NowPlayingStagedReveal(
-                      begin: 0.24,
-                      end: 0.68,
-                      beginOffset: const Offset(0, 0.06),
-                      child: _NowPlayingTrackIdentity(compact: compact),
-                    ),
-                    const SizedBox(height: 8), // 微调纵向间距，增加高度缓冲
-                    // 引入极简高质感的音频参数元数据行
-                    const _NowPlayingStagedReveal(
-                      begin: 0.3,
-                      end: 0.75,
-                      child: _ImmersiveMetadataStrip(),
-                    ),
-                  ],
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: compact ? Alignment.centerLeft : Alignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: compact
+                        ? CrossAxisAlignment.start
+                        : CrossAxisAlignment.center,
+                    children: [
+                      _NowPlayingArtwork(
+                        size: size,
+                        radius: compact ? 14 : 24,
+                        large: true,
+                        showBackdropGlow: true,
+                      ),
+                      SizedBox(height: compact ? 10 : 20),
+                      _NowPlayingStagedReveal(
+                        begin: 0.24,
+                        end: 0.68,
+                        beginOffset: const Offset(0, 0.06),
+                        child: _NowPlayingTrackIdentity(compact: compact),
+                      ),
+                      const SizedBox(height: 10),
+                      // 极简音频参数胶囊标牌
+                      const _NowPlayingStagedReveal(
+                        begin: 0.3,
+                        end: 0.75,
+                        child: _ImmersiveMetadataStrip(),
+                      ),
+                      // 模块化实时音频频谱律动条
+                      if (AppSettings.instance.showSpectrumVisualizer) ...[
+                        const SizedBox(height: 12),
+                        const _NowPlayingStagedReveal(
+                          begin: 0.35,
+                          end: 0.8,
+                          child: _ImmersiveSpectrumBar(),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -126,30 +148,99 @@ class _ImmersiveArtworkStage extends StatelessWidget {
   }
 }
 
-// 极简主义画册排版：以超细细体文字左对齐显示音频格式、采样率与比特率参数
+/// 沉浸式频谱律动条组件
+class _ImmersiveSpectrumBar extends StatelessWidget {
+  const _ImmersiveSpectrumBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final playbackService = context.watch<PlaybackController>();
+
+    return ValueListenableBuilder<List<double>>(
+      valueListenable: playbackService.audioSpectrum,
+      builder: (context, spectrum, _) {
+        if (spectrum.isEmpty) {
+          return const SizedBox(height: 24, width: 220);
+        }
+        return RepaintBoundary(
+          child: Container(
+            height: 28,
+            width: 220,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: scheme.surfaceContainerHigh.withValues(alpha: 0.3),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.2),
+              ),
+            ),
+            child: CustomPaint(
+              painter: _SpectrumBarPainter(
+                spectrum: spectrum,
+                color: scheme.primary,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SpectrumBarPainter extends CustomPainter {
+  const _SpectrumBarPainter({
+    required this.spectrum,
+    required this.color,
+  });
+
+  final List<double> spectrum;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (spectrum.isEmpty) return;
+
+    final barCount = math.min(spectrum.length, 24);
+    final barWidth = (size.width - (barCount - 1) * 2.5) / barCount;
+    final paint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < barCount; i++) {
+      final val = spectrum[i].clamp(0.08, 1.0);
+      final barHeight = size.height * val;
+      final x = i * (barWidth + 2.5);
+      final y = size.height - barHeight;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, y, barWidth, barHeight),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpectrumBarPainter oldDelegate) => true;
+}
+
+// 现代 Hi-Fi 音频参数胶囊栏：展示格式、Hi-Res 标牌、采样率与比特率
 class _ImmersiveMetadataStrip extends StatelessWidget {
   const _ImmersiveMetadataStrip();
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
         if (audio == null) return const SizedBox.shrink();
-        final rate = audio.sampleRate != null
-            ? '${(audio.sampleRate! / 1000).toStringAsFixed(1)}kHz'
-            : '';
-        final bit = audio.bitrate != null ? '${audio.bitrate}kbps' : '';
-        final ext = audio.fileExtension.toUpperCase();
-        return Text(
-          '$ext · $rate · $bit',
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.46),
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 0.8,
-          ),
+        return AudioFormatBadge(
+          audio: audio,
+          compact: false,
         );
       },
     );
@@ -244,12 +335,39 @@ class _NowPlayingArtwork extends StatefulWidget {
 }
 
 class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  static const double _maxDragDistance = 10;
+  static const double _maxRotation = 0.08;
+  static const double _perspective = 0.0012;
+  static const SpringDescription _returnSpring = SpringDescription(
+    mass: 0.8,
+    stiffness: 190,
+    damping: 18,
+  );
+
+  late final AnimationController _returnController;
+  Animation<double>? _routeAnimation;
+  Offset _dragOffset = Offset.zero;
+  Offset _returnStart = Offset.zero;
+  String? _audioPath;
   late final AnimationController _glowController; // 4s 超慢专辑封面呼吸发光控制器
 
   @override
   void initState() {
     super.initState();
+    _returnController = AnimationController.unbounded(vsync: this)
+      ..addListener(() {
+        final progress = _returnController.value;
+        final nextOffset = _clampDragOffset(_returnStart * (1 - progress));
+        if (nextOffset == _dragOffset || !mounted) return;
+        setState(() => _dragOffset = nextOffset);
+      })
+      ..addStatusListener((status) {
+        if (status != AnimationStatus.completed || !mounted) return;
+        if (_dragOffset != Offset.zero) {
+          setState(() => _dragOffset = Offset.zero);
+        }
+      });
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
@@ -257,9 +375,94 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextRouteAnimation = ModalRoute.of(context)?.animation;
+    if (!identical(nextRouteAnimation, _routeAnimation)) {
+      _routeAnimation?.removeStatusListener(_handleRouteAnimationStatus);
+      _routeAnimation = nextRouteAnimation;
+      _routeAnimation?.addStatusListener(_handleRouteAnimationStatus);
+    }
+
+    final glowEnabled =
+        context.surfaces.effectsLevel == UiEffectsLevel.visual &&
+            !MediaQuery.disableAnimationsOf(context) &&
+            TickerMode.valuesOf(context).enabled;
+    if (glowEnabled && !_glowController.isAnimating) {
+      _glowController.repeat(reverse: true);
+    } else if (!glowEnabled && _glowController.isAnimating) {
+      _glowController.stop();
+      _glowController.value = 0;
+    }
+  }
+
+  @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_handleRouteAnimationStatus);
     _glowController.dispose();
+    _returnController.dispose();
     super.dispose();
+  }
+
+  void _handleRouteAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.forward ||
+        status == AnimationStatus.reverse) {
+      _resetDragState();
+    }
+  }
+
+  void _syncAudio(String? path) {
+    if (_audioPath == path) return;
+    _audioPath = path;
+    _returnController.stop();
+    _dragOffset = Offset.zero;
+    _returnStart = Offset.zero;
+  }
+
+  Offset _clampDragOffset(Offset value) {
+    final distance = value.distance;
+    if (distance <= _maxDragDistance || distance == 0) return value;
+    return value / distance * _maxDragDistance;
+  }
+
+  void _resetDragState() {
+    _returnController.stop();
+    _returnStart = Offset.zero;
+    if (!mounted || _dragOffset == Offset.zero) return;
+    setState(() => _dragOffset = Offset.zero);
+  }
+
+  void _handlePanStart(DragStartDetails details) {
+    _returnController.stop();
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details) {
+    final nextOffset = _clampDragOffset(_dragOffset + details.delta);
+    if (nextOffset == _dragOffset) return;
+    setState(() => _dragOffset = nextOffset);
+  }
+
+  void _handlePanEnd() {
+    if (_dragOffset == Offset.zero) return;
+    _returnStart = _dragOffset;
+    _returnController
+      ..stop()
+      ..value = 0;
+    _returnController.animateWith(
+      SpringSimulation(_returnSpring, 0, 1, 0),
+    );
+  }
+
+  Matrix4 _artworkTransform() {
+    final normalizedX = _dragOffset.dx / _maxDragDistance;
+    final normalizedY = _dragOffset.dy / _maxDragDistance;
+    final scale = 1 - (_dragOffset.distance / _maxDragDistance) * 0.012;
+    return Matrix4.identity()
+      ..setEntry(3, 2, _perspective)
+      ..translateByDouble(_dragOffset.dx, _dragOffset.dy, 0, 1)
+      ..rotateX(-normalizedY * _maxRotation)
+      ..rotateY(normalizedX * _maxRotation)
+      ..scaleByDouble(scale, scale, 1, 1);
   }
 
   @override
@@ -272,6 +475,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
+        _syncAudio(audio?.path);
         final useLargeCover =
             widget.large && effectsLevel == UiEffectsLevel.visual;
         final enableBackdropGlow =
@@ -337,6 +541,45 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
                 ),
               ),
             );
+            final motionEnabled = effectsLevel != UiEffectsLevel.performance &&
+                !MediaQuery.disableAnimationsOf(context);
+            final shadowOffset = Offset(
+              _dragOffset.dx * 0.45,
+              7 + _dragOffset.dy * 0.45,
+            );
+
+            final showVinyl = AppSettings.instance.showVinylRecord && widget.large;
+            final enableBreath = AppSettings.instance.coverBreathEffect &&
+                enableBackdropGlow &&
+                provider != null;
+
+            if (showVinyl) {
+              return SizedBox(
+                width: widget.size * 1.15,
+                height: widget.size,
+                child: Hero(
+                  tag: nowPlayingArtworkHeroTag,
+                  createRectTween: (begin, end) =>
+                      NowPlayingArtworkRectTween(begin: begin, end: end),
+                  flightShuttleBuilder:
+                      nowPlayingArtworkFlightShuttleBuilder,
+                  child: GestureDetector(
+                    key: const ValueKey('now-playing-artwork-drag'),
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: motionEnabled ? _handlePanStart : null,
+                    onPanUpdate: motionEnabled ? _handlePanUpdate : null,
+                    onPanEnd: motionEnabled ? (_) => _handlePanEnd() : null,
+                    child: Center(
+                      child: VinylRecordPlayerView(
+                        size: widget.size * 0.92,
+                        coverProvider: provider,
+                        showTonearm: true,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
 
             return SizedBox(
               width: widget.size,
@@ -344,7 +587,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  if (enableBackdropGlow && provider != null)
+                  if (enableBreath)
                     Positioned.fill(
                       child: Padding(
                         padding: EdgeInsets.all(widget.size * 0.08),
@@ -361,15 +604,15 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
                               scale: scaleVal,
                               child: Opacity(
                                 opacity: opacityVal,
-                                child:
-                                    staticGlowChild, // 仅在 GPU 侧对已经模糊好的缓存纹理做变换，杜绝主线程阻塞
+                                child: staticGlowChild,
                               ),
                             );
                           },
                           child: ImageFiltered(
                             imageFilter: ImageFilter.blur(
-                                sigmaX: 32,
-                                sigmaY: 32), // 将高斯模糊提取为静态 child，确保一整首歌期间只渲染一次
+                              sigmaX: 32,
+                              sigmaY: 32,
+                            ),
                             child: image(provider),
                           ),
                         ),
@@ -383,17 +626,31 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
                           color: accents.accentGlow.withValues(alpha: 0.34),
                           blurRadius: enableBackdropGlow ? 32 : 18,
                           spreadRadius: enableBackdropGlow ? 1 : 0,
+                          offset: shadowOffset,
                         ),
                       ],
                     ),
                     child: Hero(
                       tag: nowPlayingArtworkHeroTag,
-                      // 使用自定义的高抛弧线 Tween，让飞跃轨迹极其显著
                       createRectTween: (begin, end) =>
-                          CustomIntenseArcTween(begin: begin, end: end),
+                          NowPlayingArtworkRectTween(begin: begin, end: end),
                       flightShuttleBuilder:
                           nowPlayingArtworkFlightShuttleBuilder,
-                      child: heroArtwork,
+                      child: GestureDetector(
+                        key: const ValueKey('now-playing-artwork-drag'),
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: motionEnabled ? _handlePanStart : null,
+                        onPanUpdate: motionEnabled ? _handlePanUpdate : null,
+                        onPanEnd: motionEnabled ? (_) => _handlePanEnd() : null,
+                        onPanCancel: motionEnabled ? _handlePanEnd : null,
+                        child: Transform(
+                          alignment: Alignment.center,
+                          transform: motionEnabled
+                              ? _artworkTransform()
+                              : Matrix4.identity(),
+                          child: heroArtwork,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -690,9 +947,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   }
 
   double _lineOpacity({required int index, required bool isCurrent}) {
-    if (isCurrent) return 1.0;
-    // 极简奢华对比：已播放过的歌词显示 0.32 不透明度，未播放的使用较淡的 0.22，清晰区隔当前行
-    return index < _currentLineIndex ? 0.32 : 0.22;
+    return resolveLyricLineOpacity(
+      distanceFromCurrent: (index - _currentLineIndex).abs(),
+      isPastLine: index < _currentLineIndex,
+    );
   }
 
   Color _lineColor(
@@ -850,8 +1108,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                             isCurrent: isCurrent,
                           );
 
-                          final applyDepthBlur = shouldApplyLyricDepthBlur(
-                            isCurrentLine: isCurrent,
+                          final distanceFromCurrent =
+                              (index - _currentLineIndex).abs();
+                          final depthBlurSigma = resolveLyricDepthBlurSigma(
+                            distanceFromCurrent: distanceFromCurrent,
                             enabled: AppSettings.instance.lyricDepthBlur,
                             effectsLevel: AppSettings.instance.uiEffectsLevel,
                           );
@@ -863,10 +1123,10 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                               curve: motion.fast,
                               opacity: _lineOpacity(
                                   index: index, isCurrent: isCurrent),
-                              child: AnimatedScale(
-                                duration: motion.controlTransitionDuration,
-                                curve: motion.normal,
-                                scale: isCurrent ? 1 : 0.982,
+                              child: LyricLineMotion(
+                                isCurrent: isCurrent,
+                                distanceFromCurrent: distanceFromCurrent,
+                                alignment: Alignment.centerLeft,
                                 child: InkWell(
                                   enableFeedback: false,
                                   borderRadius: BorderRadius.circular(24),
@@ -923,11 +1183,11 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                                           ],
                                         ),
                                       );
-                                      if (!applyDepthBlur) return content;
-                                      // Keep all contextual lyric lines at one depth.
+                                      if (depthBlurSigma <= 0) return content;
                                       return ImageFiltered(
-                                        imageFilter:
-                                            createLyricDepthBlurFilter(),
+                                        imageFilter: createLyricDepthBlurFilter(
+                                          depthBlurSigma,
+                                        ),
                                         child: content,
                                       );
                                     },

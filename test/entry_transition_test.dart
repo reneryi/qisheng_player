@@ -1,4 +1,5 @@
 import 'package:qisheng_player/entry.dart';
+import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,5 +70,113 @@ void main() {
       ),
     );
     expect(find.byType(NowPlayingRouteTransitionScope), findsOneWidget);
+  });
+
+  testWidgets('now playing route fully hides and disables its underlay', (
+    tester,
+  ) async {
+    final primary = AnimationController(
+      vsync: tester,
+      value: 1,
+      duration: const Duration(milliseconds: 520),
+    );
+    final secondary = AnimationController(
+      vsync: tester,
+      value: 0,
+      duration: const Duration(milliseconds: 520),
+    );
+    addTearDown(primary.dispose);
+    addTearDown(secondary.dispose);
+    AppNavigationState.instance.setNowPlayingPageActive(true);
+    addTearDown(
+      () => AppNavigationState.instance.setNowPlayingPageActive(false),
+    );
+
+    const page = SlideTransitionPage<void>(
+      child: ColoredBox(
+        key: ValueKey('shell-underlay'),
+        color: Colors.red,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTestTheme(),
+        home: Builder(
+          builder: (context) => page.transitionsBuilder(
+            context,
+            primary,
+            secondary,
+            page.child,
+          ),
+        ),
+      ),
+    );
+
+    Opacity underlayOpacity() => tester.widget<Opacity>(
+          find.byKey(const ValueKey('now-playing-underlay-opacity')),
+        );
+    IgnorePointer underlayPointer() => tester.widget<IgnorePointer>(
+          find.byKey(const ValueKey('now-playing-underlay-pointer')),
+        );
+
+    expect(underlayOpacity().opacity, 1);
+    expect(underlayPointer().ignoring, isFalse);
+
+    secondary.value = 1;
+    await tester.pump();
+    expect(underlayOpacity().opacity, 0);
+    expect(underlayPointer().ignoring, isTrue);
+
+    secondary.value = 0.6;
+    await tester.pump();
+    expect(underlayOpacity().opacity, 0);
+
+    secondary.value = 0.24;
+    await tester.pump();
+    expect(underlayOpacity().opacity, inExclusiveRange(0, 1));
+  });
+
+  testWidgets('now playing hides the complete shell and delays exit reveal', (
+    tester,
+  ) async {
+    AppNavigationState.instance.setNowPlayingPageActive(false);
+    addTearDown(
+      () => AppNavigationState.instance.setNowPlayingPageActive(false),
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NowPlayingShellUnderlay(
+          child: ColoredBox(
+            key: ValueKey('complete-shell'),
+            color: Colors.red,
+          ),
+        ),
+      ),
+    );
+
+    AnimatedOpacity opacity() => tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('now-playing-shell-underlay-opacity')),
+        );
+    IgnorePointer pointer() => tester.widget<IgnorePointer>(
+          find.byKey(const ValueKey('now-playing-shell-underlay-pointer')),
+        );
+
+    expect(opacity().opacity, 1);
+    expect(pointer().ignoring, isFalse);
+
+    AppNavigationState.instance.setNowPlayingPageActive(true);
+    await tester.pump();
+    expect(opacity().opacity, 0);
+    expect(pointer().ignoring, isTrue);
+
+    AppNavigationState.instance.setNowPlayingPageActive(false);
+    await tester.pump(const Duration(milliseconds: 119));
+    expect(opacity().opacity, 0);
+    expect(pointer().ignoring, isTrue);
+
+    await tester.pump(const Duration(milliseconds: 2));
+    expect(opacity().opacity, 1);
+    expect(pointer().ignoring, isFalse);
   });
 }

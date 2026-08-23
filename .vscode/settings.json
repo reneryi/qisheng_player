@@ -1,9 +1,8 @@
 {
-  "cmake.sourceDirectory": "${workspaceFolder}/windows",
-  "cmake.generator": "Visual Studio 17 2022",
-  "cmake.configureSettings": {
-    "CMAKE_GENERATOR_PLATFORM": "x64"
-  },
   "java.import.gradle.enabled": false,
-  "gradle.autoDetect": "off"
+  "gradle.autoDetect": "off",
+  "clangd.arguments": [
+    "--query-driver=**/cl.exe"
+  ],
+  "cmake.sourceDirectory": "E:/PyCharmSave/qisheng_player/windows"
 }

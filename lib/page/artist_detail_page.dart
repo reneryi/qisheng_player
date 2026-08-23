@@ -12,15 +12,29 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class ArtistDetailPage extends StatelessWidget {
+class ArtistDetailPage extends StatefulWidget {
   const ArtistDetailPage({super.key, required this.artist});
 
   final Artist artist;
 
   @override
+  State<ArtistDetailPage> createState() => _ArtistDetailPageState();
+}
+
+class _ArtistDetailPageState extends State<ArtistDetailPage> {
+  final multiSelectController = MultiSelectController<Audio>();
+
+  Artist get artist => widget.artist;
+
+  @override
+  void dispose() {
+    multiSelectController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final secondaryContent = List<Audio>.from(artist.works);
-    final multiSelectController = MultiSelectController<Audio>();
 
     return UniDetailPage<Artist, Audio, Album>(
       pref: AppPreference.instance.artistDetailPagePref,
@@ -34,6 +48,7 @@ class ArtistDetailPage extends StatelessWidget {
       title: artist.name,
       subtitle: formatWorkCount(artist.works.length),
       secondaryContent: secondaryContent,
+      secondaryContentRevision: AudioLibrary.revision.value,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
           AudioTile(
         audioIndex: i,

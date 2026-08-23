@@ -28,79 +28,97 @@ bool isNeutralColor(Color color) {
   return hsl.saturation < 0.08 || channelRange < 18;
 }
 
-/// 依据主导颜色和明暗模式动态生成 3 色流体渐变背景
+/// 依据主导颜色和明暗模式动态生成 135° 对角背景渐变
+/// 日间模式为哑光柔和纸白，夜间模式为午夜深蓝黑
 List<Color> buildDynamicBackgroundGradient(
     Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
   if (isNeutralColor(dominantColor)) {
-    final baseLight = brightness == Brightness.dark
-        ? (hsl.lightness * 0.34).clamp(0.04, 0.18)
-        : (0.78 + hsl.lightness * 0.16).clamp(0.78, 0.96);
-    return [
-      hsl
-          .withSaturation(0)
-          .withLightness((baseLight * 1.12).clamp(0.0, 1.0))
-          .toColor(),
-      hsl.withSaturation(0).withLightness(baseLight).toColor(),
-      hsl
-          .withSaturation(0)
-          .withLightness((baseLight * 0.88).clamp(0.0, 1.0))
-          .toColor(),
-    ];
+    if (brightness == Brightness.dark) {
+      return const [
+        Color(0xFF0A1324), // 深邃午夜蓝
+        Color(0xFF0F1D32), // 微亮静谧蓝灰
+        Color(0xFF070D18), // 纯净玄黑
+      ];
+    } else {
+      return const [
+        Color(0xFFF6F8FA), // 珍珠冷白
+        Color(0xFFF0F2F5), // 柔和哑光纸白
+        Color(0xFFE8EBF0), // 温润浅米灰
+      ];
+    }
   }
 
   if (brightness == Brightness.dark) {
-    // 暗色模式：生成低饱和度、低亮度的同色系暗色流光背景
-    final baseSat = hsl.saturation.clamp(0.04, 0.32); // 控制饱和度，避免过于鲜艳影响文字可读性
-    final baseLight = hsl.lightness.clamp(0.08,
-        0.16); // Keep the dark backdrop visible without flattening it to black.
-
-    // top 颜色：色相微调 -12 度，稍微亮一丁点
+    // 暗色模式：午夜深蓝黑微浸润专辑主色调（极低明度，柔和沉静）
+    final baseSat = hsl.saturation.clamp(0.06, 0.28);
     final top = hsl
-        .withHue((hsl.hue - 12) % 360)
+        .withHue((hsl.hue - 10 + 360) % 360)
         .withSaturation(baseSat)
-        .withLightness((baseLight * 1.18).clamp(0.0, 1.0))
+        .withLightness(0.09)
         .toColor();
-
-    // middle 颜色：保持原色相
-    final middle =
-        hsl.withSaturation(baseSat).withLightness(baseLight).toColor();
-
-    // bottom 颜色：色相微调 +12 度，稍暗，形成过渡
+    final middle = hsl
+        .withSaturation(baseSat * 0.9)
+        .withLightness(0.12)
+        .toColor();
     final bottom = hsl
         .withHue((hsl.hue + 12) % 360)
-        .withSaturation((baseSat * 0.85).clamp(0.0, 1.0))
-        .withLightness((baseLight * 0.88).clamp(0.0, 1.0))
+        .withSaturation(baseSat * 0.75)
+        .withLightness(0.06)
         .toColor();
 
     return [top, middle, bottom];
   } else {
-    // 明亮模式：生成淡雅、高亮度的白昼同色系清爽背景
-    final baseSat = hsl.saturation.clamp(0.06, 0.18); // 极低饱和度，温和不刺眼
-    final baseLight = hsl.lightness.clamp(0.92, 0.96); // 极高亮度，保持类似宣纸的洁净感
-
-    // top 颜色：色相微调 -10 度
+    // 明亮模式：主体为 135° 哑光柔和纸白，微量浸润专辑主色调（极低饱和度，极高明度）
+    final baseSat = hsl.saturation.clamp(0.03, 0.12);
     final top = hsl
-        .withHue((hsl.hue - 10) % 360)
+        .withHue((hsl.hue - 8 + 360) % 360)
         .withSaturation(baseSat)
-        .withLightness(baseLight)
+        .withLightness(0.97)
         .toColor();
-
-    // middle 颜色
     final middle = hsl
-        .withSaturation((baseSat * 1.15).clamp(0.0, 1.0))
-        .withLightness((baseLight * 0.97).clamp(0.0, 1.0))
+        .withSaturation(baseSat)
+        .withLightness(0.95)
         .toColor();
-
-    // bottom 颜色：色相微调 +10 度
     final bottom = hsl
-        .withHue((hsl.hue + 10) % 360)
-        .withSaturation((baseSat * 0.95).clamp(0.0, 1.0))
-        .withLightness((baseLight * 1.01).clamp(0.0, 1.0))
+        .withHue((hsl.hue + 8) % 360)
+        .withSaturation(baseSat * 0.8)
+        .withLightness(0.92)
         .toColor();
 
     return [top, middle, bottom];
   }
+}
+
+/// 返回文档规范中定义的纯净中性渐变（不受任何主题色影响）
+/// 夜间：深邃午夜蓝 → 微亮静谧蓝灰 → 纯净玄黑
+/// 日间：珍珠冷白 → 柔和哑光纸白 → 温润浅米灰
+List<Color> pureNeutralGradient(Brightness brightness) {
+  if (brightness == Brightness.dark) {
+    return const [
+      Color(0xFF0A1324), // 深邃午夜蓝
+      Color(0xFF0F1D32), // 微亮静谧蓝灰
+      Color(0xFF070D18), // 纯净玄黑
+    ];
+  } else {
+    return const [
+      Color(0xFFF6F8FA), // 珍珠冷白
+      Color(0xFFF0F2F5), // 柔和哑光纸白
+      Color(0xFFE8EBF0), // 温润浅米灰
+    ];
+  }
+}
+
+/// 在纯净中性渐变的基础上，以极微弱强度混入主题色调
+/// [tintStrength] 控制浸润程度：0.0 = 完全纯净，1.0 = 完全由主题色生成
+List<Color> buildTintedNeutralGradient(
+    Color tintColor, Brightness brightness, {double tintStrength = 0.08}) {
+  final neutralColors = pureNeutralGradient(brightness);
+  final tintedColors = buildDynamicBackgroundGradient(tintColor, brightness);
+  return [
+    for (int i = 0; i < neutralColors.length; i++)
+      Color.lerp(neutralColors[i], tintedColors[i], tintStrength.clamp(0.0, 0.3))!,
+  ];
 }
 
 Color buildGlassTint(Color dominantColor, Brightness brightness) {
@@ -173,6 +191,7 @@ class ThemeProvider extends ChangeNotifier {
 
   final Map<String, AlbumPalette> _paletteCache = {};
   int _dynamicThemeRequestId = 0;
+  int _windowBackdropRequestId = 0;
 
   Color? _lightAccentColor;
   Color? _darkAccentColor;
@@ -206,6 +225,20 @@ class ThemeProvider extends ChangeNotifier {
   ColorScheme get currScheme =>
       effectiveBrightness == Brightness.dark ? darkScheme : lightScheme;
 
+  WindowBackdropMode get effectiveWindowBackdropMode {
+    if (windowBackdropMode == WindowBackdropMode.meshFlow ||
+        windowBackdropMode == WindowBackdropMode.waterRipple ||
+        windowBackdropMode == WindowBackdropMode.prismaticGlass ||
+        windowBackdropMode == WindowBackdropMode.defaultGradient) {
+      return windowBackdropMode;
+    }
+    final result = windowBackdropResult;
+    if (result == null || result.requestedMode != windowBackdropMode) {
+      return WindowBackdropMode.defaultGradient;
+    }
+    return result.effectiveRenderMode;
+  }
+
   Color get dominantColor {
     return resolveThemeDominantColor(
       fallbackColor: currScheme.primary,
@@ -216,10 +249,51 @@ class ThemeProvider extends ChangeNotifier {
   AlbumPalette get albumPalette =>
       _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
 
-  List<Color> get backgroundGradient => buildDynamicBackgroundGradient(
+  /// 根据当前窗口背景材质模式和色彩浸润设置，返回适合的背景渐变色列表。
+  /// - defaultGradient：严格以文档纯净渐变为基调，仅在开关开启时极微弱浸润
+  /// - meshFlow：完全依赖动态取色/主题色生成流体光斑底色
+  /// - 其他原生/着色器模式：返回中性渐变（实际渲染由着色器或系统负责）
+  List<Color> get backgroundGradient {
+    final mode = effectiveWindowBackdropMode;
+    final brightness = effectiveBrightness;
+    final settings = AppSettings.instance;
+
+    // 弥散流彩模式：需要带色彩的渐变作为着色器底色（保持原逻辑）
+    if (mode == WindowBackdropMode.meshFlow) {
+      return buildDynamicBackgroundGradient(
         albumPalette.secondary,
-        effectiveBrightness,
+        brightness,
       );
+    }
+
+    // 默认渐变模式：根据浸润开关控制色彩
+    if (mode == WindowBackdropMode.defaultGradient) {
+      // 浸润开关关闭 → 纯净中性渐变（文档原版：午夜蓝/哑光纸白）
+      if (!settings.themeColorTintBackground) {
+        return pureNeutralGradient(brightness);
+      }
+
+      // 浸润开关开启 + 动态取色 ON → 适度封面色浸润（暗色约 18%，亮色约 14%）
+      if (settings.dynamicTheme && _dynamicAlbumPalette != null) {
+        return buildTintedNeutralGradient(
+          _dynamicAlbumPalette!.secondary,
+          brightness,
+          tintStrength: brightness == Brightness.dark ? 0.18 : 0.14,
+        );
+      }
+
+      // 浸润开关开启 + 动态取色 OFF → 适度手动主题色浸润（暗色约 15%，亮色约 12%）
+      return buildTintedNeutralGradient(
+        _fallbackDominantColor(),
+        brightness,
+        tintStrength: brightness == Brightness.dark ? 0.15 : 0.12,
+      );
+    }
+
+    // 其他模式（Mica/Acrylic/WaterRipple/PrismaticGlass）：
+    // 实际渲染由原生系统或着色器负责，这里返回中性渐变作为 fallback
+    return pureNeutralGradient(brightness);
+  }
 
   Color get glassTint => buildGlassTint(
         albumPalette.secondary,
@@ -262,6 +336,12 @@ class ThemeProvider extends ChangeNotifier {
       ),
       visualStyleMode: styleMode,
     );
+  }
+
+  /// 通知主题系统重新计算所有派生值（如背景渐变、色调等）并刷新 UI。
+  /// 供外部在修改设置项（如 themeColorTintBackground）后调用。
+  void refreshTheme() {
+    notifyListeners();
   }
 
   void applyTheme({required Color seedColor}) {
@@ -318,7 +398,8 @@ class ThemeProvider extends ChangeNotifier {
   Future<WindowBackdropModeResult> applyWindowBackdropMode(
     WindowBackdropMode mode,
   ) async {
-    if (mode == WindowBackdropMode.fluid &&
+    final requestId = ++_windowBackdropRequestId;
+    if (mode == WindowBackdropMode.meshFlow &&
         !AppSettings.instance.dynamicTheme) {
       AppSettings.instance.dynamicTheme = true;
       final audio = PlayService.instance.playbackService.nowPlaying;
@@ -326,13 +407,24 @@ class ThemeProvider extends ChangeNotifier {
         applyThemeFromAudio(audio);
       }
     }
-    final result = await WindowControls.setWindowBackdropMode(mode);
     windowBackdropMode = mode;
+    windowBackdropResult = null;
+    notifyListeners();
+
+    final result = await WindowControls.setWindowBackdropMode(mode);
+    if (requestId != _windowBackdropRequestId) return result;
+
     windowBackdropResult = result;
     AppSettings.instance.windowBackdropMode = mode;
     notifyListeners();
     await AppSettings.instance.saveSettings();
     return result;
+  }
+
+  void acceptInitialWindowBackdropResult(WindowBackdropModeResult result) {
+    if (result.requestedMode != windowBackdropMode) return;
+    windowBackdropResult = result;
+    notifyListeners();
   }
 
   Future<void> _applyDynamicTheme(Audio audio, int requestId) async {

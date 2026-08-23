@@ -1,12 +1,12 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/build_index_state_view.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/library/playlist.dart';
-import 'package:qisheng_player/lyric/lyric_source.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -157,11 +157,19 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                                 indexPath: snapshot.data!,
                                 folders: folders,
                                 whenIndexBuilt: () async {
-                                  await Future.wait([
-                                    AudioLibrary.initFromIndex(),
-                                    readPlaylists(),
-                                    readLyricSources(),
-                                  ]);
+                                  final status =
+                                      await libraryReloadCoordinator.reload(
+                                    afterReload: PlayService
+                                        .instance
+                                        .playbackService
+                                        .reconcileLibraryReferences,
+                                  );
+                                  if (status != AudioLibraryLoadStatus.loaded) {
+                                    showTextOnSnackBar(
+                                      "曲库索引加载失败，请重新扫描音乐文件夹",
+                                    );
+                                    return;
+                                  }
                                   if (context.mounted) {
                                     Navigator.pop(context);
                                   }

@@ -4,10 +4,7 @@ import 'dart:io';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/library/online_cover_store.dart';
-import 'package:qisheng_player/library/play_count_store.dart';
-import 'package:qisheng_player/library/playlist.dart';
-import 'package:qisheng_player/lyric/lyric_source.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/rust/api/tag_reader.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -75,14 +72,17 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
   StreamSubscription? _subscription;
 
   void whenIndexUpdated() async {
-    await Future.wait([
-      AudioLibrary.initFromIndex(),
-      readPlaylists(),
-      readLyricSources(),
-      PlayCountStore.instance.read(),
-      OnlineCoverStore.instance.read(),
-    ]);
-    await PlayService.instance.playbackService.restoreLastSession();
+    final playback = PlayService.instance.playbackService;
+    final status = await libraryReloadCoordinator.reload(
+      afterReload: playback.reconcileLibraryReferences,
+    );
+    if (status != AudioLibraryLoadStatus.loaded) {
+      showTextOnSnackBar("曲库索引加载失败，请重新扫描音乐文件夹");
+      return;
+    }
+    if (playback.nowPlaying == null) {
+      await playback.restoreLastSession();
+    }
     _subscription?.cancel();
     final ctx = context;
     if (ctx.mounted) {

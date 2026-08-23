@@ -6,15 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 ThemeData _buildTheme(
   UiEffectsLevel level, {
-  WindowBackdropMode windowBackdropMode = WindowBackdropMode.auto,
+  UiVisualStyleMode visualStyleMode = UiVisualStyleMode.liquidGlass,
+  WindowBackdropMode windowBackdropMode = WindowBackdropMode.micaAlt,
 }) {
   final base = ColorScheme.fromSeed(
     seedColor: const Color(0xFF53A4FF),
     brightness: Brightness.dark,
   );
   return AppTheme.build(
-    colorScheme: AppTheme.applyChromeSurfaces(base),
+    colorScheme: AppTheme.applyChromeSurfaces(
+      base,
+      visualStyleMode: visualStyleMode,
+    ),
     effectsLevel: level,
+    visualStyleMode: visualStyleMode,
     windowBackdropMode: windowBackdropMode,
   );
 }
@@ -23,46 +28,46 @@ void main() {
   test('balanced effects profile uses adaptive blur defaults', () {
     final surfaces =
         _buildTheme(UiEffectsLevel.balanced).extension<AppSurfaceTokens>()!;
-    expect(surfaces.glassSigma, 20.0);
-    expect(surfaces.shadowDepthScale, 0.86);
+    expect(surfaces.glassSigma, 20.0 * 0.88);
+    expect(surfaces.shadowDepthScale, 0.86 * 0.9);
     expect(surfaces.backdropStrategy, AppBackdropStrategy.adaptive);
   });
 
   test('visual effects profile increases blur and depth', () {
     final surfaces =
         _buildTheme(UiEffectsLevel.visual).extension<AppSurfaceTokens>()!;
-    expect(surfaces.glassSigma, 36.0);
-    expect(surfaces.shadowDepthScale, 1.2);
+    expect(surfaces.glassSigma, 36.0 * 0.88);
+    expect(surfaces.shadowDepthScale, 1.2 * 0.9);
     expect(surfaces.backdropStrategy, AppBackdropStrategy.forceBlur);
   });
 
   test('performance profile disables glass backdrop blur', () {
     final surfaces =
         _buildTheme(UiEffectsLevel.performance).extension<AppSurfaceTokens>()!;
-    expect(surfaces.glassSigma, 16.0);
-    expect(surfaces.shadowDepthScale, 0.72);
+    expect(surfaces.glassSigma, 16.0 * 0.88);
+    expect(surfaces.shadowDepthScale, 0.72 * 0.9);
     expect(surfaces.backdropStrategy, AppBackdropStrategy.solid);
   });
 
-  test('mica has stronger glass effects than disabled backdrop', () {
+  test('disabled backdrop uses opaque-friendly surfaces without blur', () {
     final micaTheme = _buildTheme(
       UiEffectsLevel.balanced,
-      windowBackdropMode: WindowBackdropMode.mica,
+      windowBackdropMode: WindowBackdropMode.micaAlt,
     );
-    final noneTheme = _buildTheme(
+    final defaultTheme = _buildTheme(
       UiEffectsLevel.balanced,
-      windowBackdropMode: WindowBackdropMode.none,
+      windowBackdropMode: WindowBackdropMode.defaultGradient,
     );
     final micaSurfaces = micaTheme.extension<AppSurfaceTokens>()!;
-    final noneSurfaces = noneTheme.extension<AppSurfaceTokens>()!;
+    final defaultSurfaces = defaultTheme.extension<AppSurfaceTokens>()!;
     final micaChrome = micaTheme.extension<AppChromeTokens>()!;
-    final noneChrome = noneTheme.extension<AppChromeTokens>()!;
+    final defaultChrome = defaultTheme.extension<AppChromeTokens>()!;
 
-    expect(micaSurfaces.glassSigma, greaterThan(noneSurfaces.glassSigma));
-    expect(micaSurfaces.glassAlpha, greaterThan(noneSurfaces.glassAlpha));
+    expect(micaSurfaces.glassSigma, greaterThan(defaultSurfaces.glassSigma));
+    expect(defaultSurfaces.backdropStrategy, AppBackdropStrategy.solid);
     expect(
       micaChrome.backdropBlurSigma,
-      greaterThan(noneChrome.backdropBlurSigma),
+      greaterThan(defaultChrome.backdropBlurSigma),
     );
   });
 

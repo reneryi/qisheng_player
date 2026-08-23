@@ -1,12 +1,15 @@
-import 'dart:ui';
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:qisheng_player/page/page_scaffold.dart';
 import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 typedef ContentBuilder<T> = Widget Function(BuildContext context, T item,
@@ -63,6 +66,326 @@ const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
   mainAxisSpacing: 8.0,
   crossAxisSpacing: 8.0,
 );
+
+// 封面网格委托：优化 childAspectRatio 为 0.65，为长专辑名与两行艺术家排版预留纵向安全缓冲，防止大字号溢出
+const coverGridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+  maxCrossAxisExtent: 220,
+  mainAxisSpacing: 16,
+  crossAxisSpacing: 16,
+  childAspectRatio: 0.65,
+);
+
+double resolveUniPageGridOffset({
+  required int index,
+  required double crossAxisExtent,
+  required double maxCrossAxisExtent,
+  required double mainAxisSpacing,
+  required double crossAxisSpacing,
+  double? mainAxisExtent,
+  double childAspectRatio = 1,
+}) {
+  if (index <= 0 || crossAxisExtent <= 0) return 0;
+  final crossAxisCount = math.max(
+    1,
+    (crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil(),
+  );
+  final usableCrossAxisExtent = math.max(
+    0.0,
+    crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
+  );
+  final childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
+  final childMainAxisExtent =
+      mainAxisExtent ?? childCrossAxisExtent / childAspectRatio;
+  return (index ~/ crossAxisCount) * (childMainAxisExtent + mainAxisSpacing);
+}
+
+double resolveSideNavTransitionGridOffset({
+  required int index,
+  required double crossAxisExtent,
+  required double expansionProgress,
+  required double sideNavWidthDelta,
+  required double maxCrossAxisExtent,
+  required double mainAxisSpacing,
+  required double crossAxisSpacing,
+  double? mainAxisExtent,
+  double childAspectRatio = 1,
+}) {
+  final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
+  final collapsedExtent = math.max(
+    0.0,
+    crossAxisExtent + sideNavWidthDelta * progress,
+  );
+  final expandedExtent = math.max(
+    0.0,
+    crossAxisExtent - sideNavWidthDelta * (1 - progress),
+  );
+  final collapsedOffset = resolveUniPageGridOffset(
+    index: index,
+    crossAxisExtent: collapsedExtent,
+    maxCrossAxisExtent: maxCrossAxisExtent,
+    mainAxisExtent: mainAxisExtent,
+    mainAxisSpacing: mainAxisSpacing,
+    crossAxisSpacing: crossAxisSpacing,
+    childAspectRatio: childAspectRatio,
+  );
+  final expandedOffset = resolveUniPageGridOffset(
+    index: index,
+    crossAxisExtent: expandedExtent,
+    maxCrossAxisExtent: maxCrossAxisExtent,
+    mainAxisExtent: mainAxisExtent,
+    mainAxisSpacing: mainAxisSpacing,
+    crossAxisSpacing: crossAxisSpacing,
+    childAspectRatio: childAspectRatio,
+  );
+  return lerpDouble(collapsedOffset, expandedOffset, progress) ?? 0;
+}
+
+class _SideNavAnimatedTableGrid extends StatelessWidget {
+  const _SideNavAnimatedTableGrid({
+    required this.controller,
+    required this.padding,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  final ScrollController controller;
+  final EdgeInsetsGeometry padding;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final transition = SideNavTransitionScope.maybeOf(context);
+    return GridView.builder(
+      controller: controller,
+      padding: padding,
+      gridDelegate: SideNavAnimatedGridDelegate(
+        expansionProgress: transition?.expansionProgress ?? 0,
+        sideNavWidthDelta: transition?.widthDelta ?? 0,
+        reflowCollapsing: transition?.collapsing ?? false,
+        maxCrossAxisExtent: 300,
+        mainAxisExtent: 64,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemCount: itemCount,
+      itemBuilder: itemBuilder,
+    );
+  }
+}
+
+class SideNavAnimatedGridDelegate extends SliverGridDelegate {
+  const SideNavAnimatedGridDelegate({
+    required this.expansionProgress,
+    required this.sideNavWidthDelta,
+    this.reflowCollapsing = false,
+    required this.maxCrossAxisExtent,
+    required this.mainAxisSpacing,
+    required this.crossAxisSpacing,
+    required this.mainAxisExtent,
+  });
+
+  final double expansionProgress;
+  final double sideNavWidthDelta;
+  final bool reflowCollapsing;
+  final double maxCrossAxisExtent;
+  final double mainAxisSpacing;
+  final double crossAxisSpacing;
+  final double mainAxisExtent;
+
+  SliverGridRegularTileLayout _layoutForExtent(
+    SliverConstraints constraints,
+    double crossAxisExtent,
+  ) {
+    final delegate = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: maxCrossAxisExtent,
+      mainAxisExtent: mainAxisExtent,
+      mainAxisSpacing: mainAxisSpacing,
+      crossAxisSpacing: crossAxisSpacing,
+    );
+    return delegate.getLayout(
+      constraints.copyWith(
+        crossAxisExtent: math.max(0.0001, crossAxisExtent),
+      ),
+    ) as SliverGridRegularTileLayout;
+  }
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
+    final collapsedExtent =
+        constraints.crossAxisExtent + sideNavWidthDelta * progress;
+    final expandedExtent =
+        constraints.crossAxisExtent - sideNavWidthDelta * (1 - progress);
+    final collapsedLayout = _layoutForExtent(
+      constraints,
+      collapsedExtent,
+    );
+    final expandedLayout = _layoutForExtent(
+      constraints,
+      expandedExtent,
+    );
+
+    if (progress <= 0) return collapsedLayout;
+    if (progress >= 1) return expandedLayout;
+    if (collapsedLayout.crossAxisCount == expandedLayout.crossAxisCount) {
+      return _layoutForExtent(constraints, constraints.crossAxisExtent);
+    }
+    return _InterpolatedSliverGridLayout(
+      collapsedLayout: collapsedLayout,
+      expandedLayout: expandedLayout,
+      progress: progress,
+      reflowCollapsing: reflowCollapsing,
+    );
+  }
+
+  @override
+  bool shouldRelayout(SideNavAnimatedGridDelegate oldDelegate) {
+    return expansionProgress != oldDelegate.expansionProgress ||
+        sideNavWidthDelta != oldDelegate.sideNavWidthDelta ||
+        reflowCollapsing != oldDelegate.reflowCollapsing ||
+        maxCrossAxisExtent != oldDelegate.maxCrossAxisExtent ||
+        mainAxisSpacing != oldDelegate.mainAxisSpacing ||
+        crossAxisSpacing != oldDelegate.crossAxisSpacing ||
+        mainAxisExtent != oldDelegate.mainAxisExtent;
+  }
+}
+
+class _InterpolatedSliverGridLayout extends SliverGridLayout {
+  _InterpolatedSliverGridLayout({
+    required this.collapsedLayout,
+    required this.expandedLayout,
+    required this.progress,
+    required this.reflowCollapsing,
+  });
+
+  final SliverGridLayout collapsedLayout;
+  final SliverGridLayout expandedLayout;
+  final double progress;
+  final bool reflowCollapsing;
+
+  // A horizontal-first path prevents a 4->5 column collapse from scattering
+  // every visible item diagonally through the viewport at the same instant.
+  late final ({double cross, double main}) _path = reflowCollapsing
+      ? _collapsePathProgress()
+      : (cross: progress, main: progress);
+
+  ({double cross, double main}) _collapsePathProgress() {
+    final transition = (1 - progress).clamp(0.0, 1.0).toDouble();
+    // Keep both axes active throughout the same timeline. The horizontal
+    // axis leads with a soft deceleration, while the row transition follows
+    // an ease-in-out curve so the handoff never produces a visible pause.
+    return (
+      cross: Curves.easeOutCubic.transform(transition),
+      main: Curves.easeInOutCubic.transform(transition),
+    );
+  }
+
+  @override
+  SliverGridGeometry getGeometryForChildIndex(int index) {
+    final collapsed = collapsedLayout.getGeometryForChildIndex(index);
+    final expanded = expandedLayout.getGeometryForChildIndex(index);
+    final crossAxisProgress = reflowCollapsing ? 1 - _path.cross : _path.cross;
+    final mainAxisProgress = reflowCollapsing ? 1 - _path.main : _path.main;
+    return SliverGridGeometry(
+      scrollOffset: lerpDouble(
+        collapsed.scrollOffset,
+        expanded.scrollOffset,
+        mainAxisProgress,
+      )!,
+      crossAxisOffset: lerpDouble(
+        collapsed.crossAxisOffset,
+        expanded.crossAxisOffset,
+        crossAxisProgress,
+      )!,
+      mainAxisExtent: lerpDouble(
+        collapsed.mainAxisExtent,
+        expanded.mainAxisExtent,
+        progress,
+      )!,
+      crossAxisExtent: lerpDouble(
+        collapsed.crossAxisExtent,
+        expanded.crossAxisExtent,
+        progress,
+      )!,
+    );
+  }
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset) {
+    if (scrollOffset <= 0) return 0;
+    var low = 0;
+    var high = 1;
+    while (getGeometryForChildIndex(high).trailingScrollOffset < scrollOffset) {
+      low = high + 1;
+      high *= 2;
+    }
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (getGeometryForChildIndex(mid).trailingScrollOffset < scrollOffset) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset) {
+    if (scrollOffset <= 0) {
+      var index = 0;
+      while (getGeometryForChildIndex(index + 1).scrollOffset <= 0) {
+        index++;
+      }
+      return index;
+    }
+    var high = 1;
+    while (getGeometryForChildIndex(high).scrollOffset <= scrollOffset) {
+      high *= 2;
+    }
+    var low = 0;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (getGeometryForChildIndex(mid).scrollOffset <= scrollOffset) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return math.max(0, low - 1);
+  }
+
+  @override
+  double computeMaxScrollOffset(int childCount) {
+    if (childCount == 0) return 0;
+    return getGeometryForChildIndex(childCount - 1).trailingScrollOffset;
+  }
+}
+
+bool restorePreviousContentOrder<T>(List<T> content, List<T> previousOrder) {
+  if (content.length != previousOrder.length) return false;
+
+  final currentItemsByValue = <T, List<T>>{};
+  for (final item in content) {
+    currentItemsByValue.putIfAbsent(item, () => <T>[]).add(item);
+  }
+
+  final usedCounts = <T, int>{};
+  final restored = <T>[];
+  for (final previousItem in previousOrder) {
+    final candidates = currentItemsByValue[previousItem];
+    final usedCount = usedCounts[previousItem] ?? 0;
+    if (candidates == null || usedCount >= candidates.length) return false;
+    restored.add(candidates[usedCount]);
+    usedCounts[previousItem] = usedCount + 1;
+  }
+
+  content
+    ..clear()
+    ..addAll(restored);
+  return true;
+}
 
 class MultiSelectController<T> extends ChangeNotifier {
   final Set<T> selected = {};
@@ -133,7 +456,7 @@ class MultiSelectController<T> extends ChangeNotifier {
 }
 
 /// `AudiosPage`, `ArtistsPage`, `AlbumsPage`, `FoldersPage`, `FolderDetailPage`
-/// 鐨勯€氱敤椤甸潰瀹瑰櫒锛屾彁渚涙帓搴忋€佽鍥惧垏鎹€佸閫夊拰瀹氫綅绛夎兘鍔涖€?
+/// 的通用页面容器，提供排序、视图切换、多选和定位等能力。
 class UniPage<T> extends StatefulWidget {
   const UniPage({
     super.key,
@@ -142,6 +465,7 @@ class UniPage<T> extends StatefulWidget {
     this.subtitle,
     this.titleAction,
     required this.contentList,
+    this.contentRevision,
     required this.contentBuilder,
     this.gridBuilder,
     this.primaryAction,
@@ -171,6 +495,7 @@ class UniPage<T> extends StatefulWidget {
   final Widget? titleAction;
 
   final List<T> contentList;
+  final Object? contentRevision;
   final ContentBuilder<T> contentBuilder;
   final ContentBuilder<T>? gridBuilder;
 
@@ -207,43 +532,47 @@ class _UniPageState<T> extends State<UniPage<T>> {
   late SortOrder currSortOrder = widget.pref.sortOrder;
   late ContentView currContentView = widget.pref.contentView;
   late ScrollController scrollController = ScrollController();
+  late List<T> _sortedContentSnapshot;
   String? _activeSideIndexLabel;
 
   @override
   void initState() {
     super.initState();
-    currSortMethod?.method(widget.contentList, currSortOrder);
+    _sortContent();
     if (widget.locateTo == null) return;
 
-    int targetAt = widget.contentList.indexOf(widget.locateTo as T);
+    final targetAt = widget.contentList.indexOf(widget.locateTo as T);
+    if (targetAt < 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (currContentView == ContentView.list) {
-        scrollController.jumpTo(targetAt * 64);
-      } else {
-        final renderObject = context.findRenderObject();
-        if (renderObject is RenderBox) {
-          final ratio =
-              PlatformDispatcher.instance.views.first.devicePixelRatio;
-          final width = renderObject.size.width - 32;
-          final crossAxisCount = (width * ratio / 300).floor();
-          final offset = (targetAt ~/ crossAxisCount) * (64.0 + 8.0);
-          scrollController.jumpTo(offset);
-        }
-      }
+      if (!mounted || !scrollController.hasClients) return;
+      _jumpToListIndex(targetAt, animated: false);
     });
   }
 
   @override
   void didUpdateWidget(covariant UniPage<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final canRestorePreviousOrder = widget.contentRevision != null &&
+        widget.contentRevision == oldWidget.contentRevision &&
+        restorePreviousContentOrder(
+          widget.contentList,
+          _sortedContentSnapshot,
+        );
+    if (!canRestorePreviousOrder) {
+      _sortContent();
+    }
+  }
+
+  void _sortContent() {
     currSortMethod?.method(widget.contentList, currSortOrder);
+    _sortedContentSnapshot = List<T>.from(widget.contentList);
   }
 
   void setSortMethod(SortMethodDesc<T> sortMethod) {
     setState(() {
       currSortMethod = sortMethod;
       widget.pref.sortMethod = widget.sortMethods?.indexOf(sortMethod) ?? 0;
-      currSortMethod?.method(widget.contentList, currSortOrder);
+      _sortContent();
     });
   }
 
@@ -251,7 +580,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
     setState(() {
       currSortOrder = sortOrder;
       widget.pref.sortOrder = sortOrder;
-      currSortMethod?.method(widget.contentList, currSortOrder);
+      _sortContent();
     });
   }
 
@@ -274,32 +603,102 @@ class _UniPageState<T> extends State<UniPage<T>> {
     if (oldIndex == newIndex) return;
     setState(() {
       widget.onReorder!(widget.contentList, oldIndex, newIndex);
+      _sortedContentSnapshot = List<T>.from(widget.contentList);
     });
   }
 
-  void _jumpToListIndex(int index) {
+  void _jumpToListIndex(int index, {bool animated = true}) {
     if (index < 0 || index >= widget.contentList.length) return;
     if (!scrollController.hasClients) return;
-    if (currContentView == ContentView.list) {
+    final targetOffset = switch (currContentView) {
+      ContentView.list => index * 64.0,
+      ContentView.table => _gridOffsetForIndex(
+          index,
+          animateSideNavReflow: true,
+          maxCrossAxisExtent: 300,
+          mainAxisExtent: 64,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
+      ContentView.grid => _gridOffsetForIndex(
+          index,
+          maxCrossAxisExtent: 220,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.72,
+        ),
+    };
+    final position = scrollController.position;
+    if (!position.hasContentDimensions) return;
+    final boundedOffset = targetOffset
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (animated) {
       scrollController.animateTo(
-        index * 64.0,
+        boundedOffset,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
       return;
     }
+    scrollController.jumpTo(boundedOffset);
+  }
 
+  double _gridOffsetForIndex(
+    int index, {
+    required double maxCrossAxisExtent,
+    required double mainAxisSpacing,
+    required double crossAxisSpacing,
+    double? mainAxisExtent,
+    double childAspectRatio = 1,
+    bool animateSideNavReflow = false,
+  }) {
     final renderObject = context.findRenderObject();
-    if (renderObject is! RenderBox) return;
-    final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
-    final width = renderObject.size.width - 32;
-    final crossAxisCount = (width * ratio / 300).floor().clamp(1, 999);
-    final targetOffset = (index ~/ crossAxisCount) * (64.0 + 8.0);
-    scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+    if (renderObject is! RenderBox) return 0;
+    final hasSideIndex =
+        widget.sideIndexLabels != null && widget.sideIndexLabels!.isNotEmpty;
+    final hasLocateButton =
+        widget.locateTo != null || widget.locateIndexResolver != null;
+    final sideRailReserved = hasSideIndex || hasLocateButton ? 60.0 : 0.0;
+    final showRightPane =
+        widget.rightPaneBuilder != null && widget.showRightPane;
+    final rightPaneReserved =
+        showRightPane ? widget.rightPaneWidth + 14.0 : 0.0;
+    final crossAxisExtent =
+        (renderObject.size.width - sideRailReserved - rightPaneReserved)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    if (animateSideNavReflow) {
+      final transition = SideNavTransitionScope.read(context);
+      if (transition != null) {
+        return resolveSideNavTransitionGridOffset(
+          index: index,
+          crossAxisExtent: crossAxisExtent,
+          expansionProgress: transition.expansionProgress,
+          sideNavWidthDelta: transition.widthDelta,
+          maxCrossAxisExtent: maxCrossAxisExtent,
+          mainAxisExtent: mainAxisExtent,
+          mainAxisSpacing: mainAxisSpacing,
+          crossAxisSpacing: crossAxisSpacing,
+          childAspectRatio: childAspectRatio,
+        );
+      }
+    }
+    return resolveUniPageGridOffset(
+      index: index,
+      crossAxisExtent: crossAxisExtent,
+      maxCrossAxisExtent: maxCrossAxisExtent,
+      mainAxisExtent: mainAxisExtent,
+      mainAxisSpacing: mainAxisSpacing,
+      crossAxisSpacing: crossAxisSpacing,
+      childAspectRatio: childAspectRatio,
     );
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
   }
 
   void _jumpBySideIndex(String label) {
@@ -406,73 +805,72 @@ class _UniPageState<T> extends State<UniPage<T>> {
     final listBody = WindowsAccessibilityTooltipGuard(
       child: Material(
         type: MaterialType.transparency,
-        child: switch (currContentView) {
-          ContentView.list => _canReorder
-              ? ReorderableListView.builder(
-                  scrollController: scrollController,
-                  buildDefaultDragHandles: false,
-                  padding: listPadding,
-                  itemCount: widget.contentList.length,
-                  itemExtent: 64,
-                  onReorder: _handleReorder,
-                  itemBuilder: (context, i) => KeyedSubtree(
-                    key: ObjectKey(widget.contentList[i]),
-                    child: ReorderableDelayedDragStartListener(
-                      index: i,
-                      child: widget.contentBuilder(
-                        context,
-                        widget.contentList[i],
-                        i,
-                        multiSelectController,
+        // 键盘导航：Tab/Shift+Tab 与 ↑/↓/←/→ 方向键在列表项之间移动焦点
+        // （ReadingOrderTraversalPolicy 自带方向键几何遍历支持）
+        child: FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: switch (currContentView) {
+            ContentView.list => _canReorder
+                ? ReorderableListView.builder(
+                    scrollController: scrollController,
+                    buildDefaultDragHandles: false,
+                    padding: listPadding,
+                    itemCount: widget.contentList.length,
+                    itemExtent: 64,
+                    onReorder: _handleReorder,
+                    itemBuilder: (context, i) => KeyedSubtree(
+                      key: ObjectKey(widget.contentList[i]),
+                      child: ReorderableDelayedDragStartListener(
+                        index: i,
+                        child: widget.contentBuilder(
+                          context,
+                          widget.contentList[i],
+                          i,
+                          multiSelectController,
+                        ),
                       ),
                     ),
+                  )
+                : ListView.builder(
+                    controller: scrollController,
+                    padding: listPadding,
+                    itemCount: widget.contentList.length,
+                    itemExtent: 64,
+                    itemBuilder: (context, i) => widget.contentBuilder(
+                      context,
+                      widget.contentList[i],
+                      i,
+                      multiSelectController,
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  controller: scrollController,
-                  padding: listPadding,
-                  itemCount: widget.contentList.length,
-                  itemExtent: 64,
-                  itemBuilder: (context, i) => widget.contentBuilder(
-                    context,
-                    widget.contentList[i],
-                    i,
-                    multiSelectController,
-                  ),
-                ),
-          ContentView.table => GridView.builder(
-              controller: scrollController,
-              padding: listPadding,
-              gridDelegate: gridDelegate,
-              itemCount: widget.contentList.length,
-              itemBuilder: (context, i) => widget.contentBuilder(
-                context,
-                widget.contentList[i],
-                i,
-                multiSelectController,
-              ),
-            ),
-          ContentView.grid => GridView.builder(
-              controller: scrollController,
-              padding: listPadding,
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: widget.contentList.length,
-              itemBuilder: (context, i) {
-                final builder = widget.gridBuilder ?? widget.contentBuilder;
-                return builder(
+            ContentView.table => _SideNavAnimatedTableGrid(
+                controller: scrollController,
+                padding: listPadding,
+                itemCount: widget.contentList.length,
+                itemBuilder: (context, i) => widget.contentBuilder(
                   context,
                   widget.contentList[i],
                   i,
                   multiSelectController,
-                );
-              },
-            ),
-        },
+                ),
+              ),
+            ContentView.grid => GridView.builder(
+                controller: scrollController,
+                padding: listPadding,
+                gridDelegate: coverGridDelegate,
+                itemCount: widget.contentList.length,
+                itemBuilder: (context, i) {
+                  final builder = widget.gridBuilder ?? widget.contentBuilder;
+                  return builder(
+                    context,
+                    widget.contentList[i],
+                    i,
+                    multiSelectController,
+                  );
+                },
+              ),
+          },
+        ),
       ),
     );
     final rightPaneChild = widget.rightPaneBuilder?.call(context);

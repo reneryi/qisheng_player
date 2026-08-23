@@ -6,6 +6,7 @@
       "includePath": [
         "${workspaceFolder}/windows",
         "${workspaceFolder}/windows/flutter/ephemeral",
+        "${workspaceFolder}/windows/flutter/ephemeral/cpp_client_wrapper/include",
         "${workspaceFolder}/windows/flutter/ephemeral/.plugin_symlinks/**",
         "${env:FLUTTER_ROOT}/bin/cache/artifacts/engine/windows-x64",
         "${env:FLUTTER_ROOT}/bin/cache/artifacts/engine/windows-x64/cpp_client_wrapper/include"

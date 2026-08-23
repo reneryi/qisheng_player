@@ -26,6 +26,12 @@ class _AudiosPageState extends State<AudiosPage> {
   late final MultiSelectController<Audio> multiSelectController =
       MultiSelectController<Audio>();
 
+  @override
+  void dispose() {
+    multiSelectController.dispose();
+    super.dispose();
+  }
+
   static final List<String> _letters = [
     ...List.generate(26, (i) => String.fromCharCode(65 + i)),
     "#",
@@ -82,6 +88,7 @@ class _AudiosPageState extends State<AudiosPage> {
       title: "音乐",
       subtitle: _buildSubtitle(contentList.length),
       contentList: contentList,
+      contentRevision: AudioLibrary.revision.value,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,
         playlist: contentList,

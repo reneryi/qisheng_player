@@ -3,6 +3,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - third_party/desktop_lyric/**
+    - build/**
   errors:
     camel_case_types: ignore
     constant_identifier_names: ignore

@@ -1,9 +1,13 @@
 {
   "tag_name": "v1.3.2",
   "target_commitish": "main",
-  "name": "v1.3.2",
-  "body": "发布说明见 docs/releases/v1.3.2.md。",
+  "name": "Qisheng Player v1.3.2",
+  "body_path": "docs/releases/v1.3.2.md",
   "draft": false,
   "prerelease": false,
-  "generate_release_notes": false
+  "generate_release_notes": false,
+  "assets": [
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.3.2-Windows-x64.zip",
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.3.2-Setup-x64.exe"
+  ]
 }

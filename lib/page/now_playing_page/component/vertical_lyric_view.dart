@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter; // 引入 ImageFilter 用于毛玻璃背景�
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_visibility.dart';
+import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_tile.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
@@ -226,11 +227,15 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                               alignment: Alignment.topCenter,
                               child: Padding(
                                 padding: const EdgeInsets.only(top: 32.0),
-                                child: IgnorePointer(
-                                  child: AnimatedOpacity(
-                                    opacity: _showScaleIndicator ? 1.0 : 0.0,
-                                    duration: const Duration(milliseconds: 200),
-                                    curve: Curves.easeOutCubic,
+                                child: AnimatedOpacity(
+                                  opacity: _showScaleIndicator ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOutCubic,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      // 点击或双击胶囊立即重置为 100% 默认字号
+                                      lyricViewController.resetFontSize();
+                                    },
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(24),
                                       child: BackdropFilter(
@@ -268,7 +273,7 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                '歌词大小: ${(lyricViewController.lyricFontSize / 22.0 * 100).round()}%',
+                                                '歌词大小: ${(lyricViewController.lyricFontSize / 22.0 * 100).round()}% (点击重置)',
                                                 style: TextStyle(
                                                   color: scheme.onSurface,
                                                   fontSize: 13,
@@ -377,13 +382,18 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       (i) {
         final isCurrent = i == mainLine;
         final isPast = i < mainLine;
-        final opacity = isCurrent ? 1.0 : (isPast ? 0.32 : 0.22);
+        final distanceFromCurrent = (i - mainLine).abs();
+        final opacity = resolveLyricLineOpacity(
+          distanceFromCurrent: distanceFromCurrent,
+          isPastLine: isPast,
+        );
         return LyricViewTile(
           key: i == mainLine ? currentLyricTileKey : null,
           line: widget.lyric.lines[i],
           opacity: opacity,
           isCurrentLine: isCurrent,
           isPastLine: isPast,
+          distanceFromCurrent: distanceFromCurrent,
           onTap: () => _seekToLyricLine(i),
         );
       },

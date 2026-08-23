@@ -12,10 +12,25 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class AlbumDetailPage extends StatelessWidget {
+class AlbumDetailPage extends StatefulWidget {
   const AlbumDetailPage({super.key, required this.album});
 
   final Album album;
+
+  @override
+  State<AlbumDetailPage> createState() => _AlbumDetailPageState();
+}
+
+class _AlbumDetailPageState extends State<AlbumDetailPage> {
+  final multiSelectController = MultiSelectController<Audio>();
+
+  Album get album => widget.album;
+
+  @override
+  void dispose() {
+    multiSelectController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +42,6 @@ class AlbumDetailPage extends StatelessWidget {
       if (trackCompare != 0) return trackCompare;
       return a.title.localeCompareTo(b.title);
     }
-
-    final multiSelectController = MultiSelectController<Audio>();
 
     return UniDetailPage<Album, Audio, Artist>(
       pref: AppPreference.instance.albumDetailPagePref,
@@ -42,6 +55,7 @@ class AlbumDetailPage extends StatelessWidget {
       title: album.name,
       subtitle: formatWorkCount(album.works.length),
       secondaryContent: secondaryContent,
+      secondaryContentRevision: AudioLibrary.revision.value,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
           AudioTile(
         leading: Text(

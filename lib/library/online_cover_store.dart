@@ -1,15 +1,55 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/music_matcher.dart';
 import 'package:qisheng_player/utils.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 const Duration onlineCoverFailureTtl = Duration(days: 7);
+const Duration onlineCoverRequestTimeout = Duration(seconds: 15);
+const int onlineCoverMaxBytes = 12 * 1024 * 1024;
+
+@visibleForTesting
+String onlineCoverCacheKey(String path) {
+  final normalized = path.replaceAll('/', r'\').toLowerCase();
+  return sha256.convert(utf8.encode(normalized)).toString();
+}
+
+@visibleForTesting
+bool isSupportedOnlineCoverContentType(ContentType? contentType) =>
+    contentType?.primaryType.toLowerCase() == 'image';
+
+@visibleForTesting
+Future<Uint8List> readBoundedCoverBytes(
+  Stream<List<int>> response, {
+  int maxBytes = onlineCoverMaxBytes,
+  Duration timeout = onlineCoverRequestTimeout,
+}) {
+  return _collectBoundedCoverBytes(response, maxBytes: maxBytes)
+      .timeout(timeout);
+}
+
+Future<Uint8List> _collectBoundedCoverBytes(
+  Stream<List<int>> response, {
+  required int maxBytes,
+}) async {
+  final builder = BytesBuilder(copy: false);
+  var totalBytes = 0;
+  await for (final chunk in response) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxBytes) {
+      throw const FormatException("在线封面超过大小限制");
+    }
+    builder.add(chunk);
+  }
+  return builder.takeBytes();
+}
 
 Map<String, int> retainRecentCoverFailures(
   Map<String, int> failures,
@@ -145,12 +185,7 @@ class OnlineCoverStore {
   }
 
   String _cacheNameForPath(String path) {
-    final bytes = utf8.encode(path);
-    final builder = StringBuffer();
-    for (final item in bytes) {
-      builder.write(item.toRadixString(16).padLeft(2, '0'));
-    }
-    return builder.toString();
+    return onlineCoverCacheKey(path);
   }
 
   Future<ImageProvider?> getCover(Audio audio) async {
@@ -193,24 +228,37 @@ class OnlineCoverStore {
       await _markFailed(audio.path);
       return null;
     }
-    return setCoverFromUrl(audio: audio, url: hit.coverUrl!);
+    final cover = await setCoverFromUrl(audio: audio, url: hit.coverUrl!);
+    if (cover == null) await _markFailed(audio.path);
+    return cover;
   }
 
   Future<ImageProvider?> setCoverFromUrl({
     required Audio audio,
     required String url,
   }) async {
+    HttpClient? client;
     try {
       final uri = Uri.tryParse(url);
-      if (uri == null) return null;
+      if (uri == null || (uri.scheme != "http" && uri.scheme != "https")) {
+        return null;
+      }
 
-      final client = HttpClient();
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, "QishengPlayer/1.7");
-      final resp = await req.close();
+      client = HttpClient()
+        ..connectionTimeout = onlineCoverRequestTimeout
+        ..idleTimeout = onlineCoverRequestTimeout;
+      final req = await client.getUrl(uri).timeout(onlineCoverRequestTimeout);
+      req.headers.set(
+        HttpHeaders.userAgentHeader,
+        "QishengPlayer/${AppSettings.version}",
+      );
+      final resp = await req.close().timeout(onlineCoverRequestTimeout);
       if (resp.statusCode < 200 || resp.statusCode >= 300) return null;
+      final contentType = resp.headers.contentType;
+      if (!isSupportedOnlineCoverContentType(contentType)) return null;
+      if (resp.contentLength > onlineCoverMaxBytes) return null;
 
-      final bytes = await consolidateHttpClientResponseBytes(resp);
+      final bytes = await readBoundedCoverBytes(resp);
       if (bytes.isEmpty) return null;
 
       final dir = await _coverCacheDir();
@@ -225,6 +273,8 @@ class OnlineCoverStore {
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
       return null;
+    } finally {
+      client?.close(force: true);
     }
   }
 

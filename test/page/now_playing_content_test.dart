@@ -246,6 +246,87 @@ void main() {
     expect(hitWidgets, contains('AbsorbPointer'));
   });
 
+  testWidgets('artwork drag stays bounded and preserves the Hero rectangle', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final first = TestAudio(
+      title: 'Spring Song',
+      artist: 'Spring Artist',
+      album: 'Spring Album',
+      path: r'E:\Music\spring-a.flac',
+    );
+    final second = TestAudio(
+      title: 'Next Song',
+      artist: 'Next Artist',
+      album: 'Next Album',
+      path: r'E:\Music\spring-b.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: first,
+      queue: [first, second],
+    );
+    final lyric = FakeLyricController(
+      Lrc(buildLongLrcLines(), LrcSource.local),
+    );
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: lyric,
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const ImmersiveNowPlayingView(compact: false),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final dragTarget = find.byKey(
+      const ValueKey('now-playing-artwork-drag'),
+    );
+    final hero = find.byType(Hero).first;
+    final initialHeroRect = tester.getRect(hero);
+    final gesture = await tester.startGesture(tester.getCenter(dragTarget));
+    await gesture.moveBy(const Offset(120, 90));
+    await tester.pump();
+
+    Transform artworkTransform() {
+      return tester.widget<Transform>(
+        find.descendant(of: dragTarget, matching: find.byType(Transform)).first,
+      );
+    }
+
+    final transformedOrigin = MatrixUtils.transformPoint(
+      artworkTransform().transform,
+      Offset.zero,
+    );
+    expect(transformedOrigin.distance, lessThanOrEqualTo(10.01));
+    expect(tester.getRect(hero), initialHeroRect);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(
+      MatrixUtils.transformPoint(artworkTransform().transform, Offset.zero)
+          .distance,
+      lessThan(0.01),
+    );
+
+    final secondGesture =
+        await tester.startGesture(tester.getCenter(dragTarget));
+    await secondGesture.moveBy(const Offset(-80, 40));
+    await tester.pump();
+    playback.setNowPlaying(second, queue: [first, second]);
+    await tester.pump();
+    expect(
+      MatrixUtils.transformPoint(artworkTransform().transform, Offset.zero)
+          .distance,
+      lessThan(0.01),
+    );
+    await secondGesture.up();
+  });
+
   testWidgets('ImmersiveNowPlayingView renders synced lyric words', (
     tester,
   ) async {

@@ -46,9 +46,6 @@ app.*.map.json
 lib/page/settings_page/cpfeedback_key.dart
 BASS/
 
-# 内部开发辅助文件（不公开）
-notes/
-
 # Packaged deliverables
 dist/*
 !dist/.gitignore

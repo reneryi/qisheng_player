@@ -30,7 +30,7 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
     }
 
     return MenuAnchor(
-      menuChildren: [
+      menuChildren: animatedMenuChildren(context, [
         SubmenuButton(
           menuChildren: [
             MenuItemButton(
@@ -184,38 +184,40 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
           leadingIcon: const Icon(Symbols.delete),
           child: const Text("删除歌曲"),
         ),
-      ],
-      builder: (context, controller, _) => IconButton(
-        enableFeedback: false,
-        tooltip: '更多',
-        onPressed: () {
-          if (controller.isOpen) {
-            controller.close();
-          } else {
-            controller.open();
-          }
-        },
-        icon: const Icon(Symbols.more_vert),
-        // 重构：定义沉浸式 Style，彻底消除默认和交互时的灰色圆底及描边，保持悬浮在流光背景上的纯净度
-        style: IconButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          side: BorderSide.none,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-        ).copyWith(
-          // 通过 WidgetStateProperty 动态管理不同状态下的图标颜色和透明度，以实现纯粹基于颜色的交互反馈
-          iconColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) {
-              return scheme.onSurface.withValues(alpha: 0.34);
+      ]),
+      builder: (context, controller, _) => SpringScaleFeedback(
+        child: IconButton(
+          enableFeedback: false,
+          tooltip: '更多',
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
             }
-            if (states.contains(WidgetState.pressed)) {
-              return scheme.primary; // 按下时高亮品牌色
-            }
-            if (states.contains(WidgetState.hovered)) {
-              return scheme.onSurface; // 悬停时图标完全高亮
-            }
-            return scheme.onSurface.withValues(alpha: 0.62); // 默认状态显示为半透明
-          }),
+          },
+          icon: const Icon(Symbols.more_vert),
+          // 重构：定义沉浸式 Style，彻底消除默认和交互时的灰色圆底及描边，保持悬浮在流光背景上的纯净度
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            side: BorderSide.none,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+          ).copyWith(
+            // 通过 WidgetStateProperty 动态管理不同状态下的图标颜色和透明度，以实现纯粹基于颜色的交互反馈
+            iconColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return scheme.onSurface.withValues(alpha: 0.34);
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return scheme.primary; // 按下时高亮品牌色
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return scheme.onSurface; // 悬停时图标完全高亮
+              }
+              return scheme.onSurface.withValues(alpha: 0.62); // 默认状态显示为半透明
+            }),
+          ),
         ),
       ),
     );

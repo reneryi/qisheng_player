@@ -49,25 +49,29 @@ float fbm(vec2 point) {
   return value;
 }
 
-vec2 domain_warp(vec2 point, float seed) {
+vec2 shared_domain_warp(vec2 point) {
   float time = u_time * 0.055;
-  float x = fbm(point * 2.2 + vec2(seed * 7.1, time));
-  float y = fbm(point * 2.0 + vec2(-time, seed * 9.7));
+  float x = fbm(point * 2.2 + vec2(3.1, time));
+  float y = fbm(point * 2.0 + vec2(-time, 5.7));
   vec2 first = vec2(x, y) - 0.5;
-  float second = fbm(point * 3.6 + first * 1.8 + seed * 13.0);
+  float second = fbm(point * 3.6 + first * 1.8 + vec2(13.0, 7.0));
   return first * 0.72 + vec2(second - 0.5) * 0.28;
 }
 
-vec2 field_strength(vec2 uv, vec2 center, float seed, vec2 radii) {
+vec2 field_strength(
+    vec2 uv,
+    vec2 center,
+    float seed,
+    vec2 radii,
+    vec2 warp,
+    float edge_noise) {
   vec2 delta = uv - center;
   delta.x *= u_size.x / max(u_size.y, 1.0);
   float angle = seed * 4.3 + sin(u_time * 0.031 + seed) * 0.34;
   mat2 rotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
   delta = rotation * delta;
-  vec2 warp = domain_warp(uv + center * 1.7, seed);
   vec2 deformed = delta / radii + warp * vec2(0.46, 0.34);
   float distance_to_dye = length(deformed);
-  float edge_noise = fbm(uv * 5.1 + seed * 21.0 + u_time * 0.018);
   distance_to_dye += (edge_noise - 0.5) * 0.30;
   float outer = 1.0 - smoothstep(0.55, 1.18, distance_to_dye);
   float core = 1.0 - smoothstep(0.14, 0.58, distance_to_dye);
@@ -76,9 +80,14 @@ vec2 field_strength(vec2 uv, vec2 center, float seed, vec2 radii) {
 
 void main() {
   vec2 uv = FlutterFragCoord().xy / u_size;
-  vec2 dye_1 = field_strength(uv, u_center_1, 0.17, vec2(0.62, 0.50));
-  vec2 dye_2 = field_strength(uv, u_center_2, 0.53, vec2(0.56, 0.54));
-  vec2 dye_3 = field_strength(uv, u_center_3, 0.89, vec2(0.68, 0.46));
+  vec2 warp = shared_domain_warp(uv);
+  float edge_noise = fbm(uv * 5.1 + u_time * 0.018);
+  vec2 dye_1 = field_strength(
+      uv, u_center_1, 0.17, vec2(0.62, 0.50), warp, edge_noise);
+  vec2 dye_2 = field_strength(
+      uv, u_center_2, 0.53, vec2(0.56, 0.54), warp, edge_noise);
+  vec2 dye_3 = field_strength(
+      uv, u_center_3, 0.89, vec2(0.68, 0.46), warp, edge_noise);
 
   vec3 base = mix(mix(u_primary.rgb, u_secondary.rgb, 0.24), u_accent.rgb, 0.10);
   vec3 outer_weights = vec3(dye_1.x, dye_2.x * 0.96, dye_3.x * 0.82);

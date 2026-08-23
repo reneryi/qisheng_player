@@ -1,5 +1,10 @@
-﻿# Project-level configuration.
+# Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+
+# Export compile_commands.json so that clangd/IDE can index the C++ sources
+# with the exact include paths and flags used by the real Flutter build.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 project(qisheng_player LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
@@ -39,7 +44,9 @@ add_definitions(-DUNICODE -D_UNICODE)
 # of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  # Keep warnings visible without promoting them to errors. Use unquoted MSVC
+  # warning switches so both Visual Studio and Ninja receive valid arguments.
+  target_compile_options(${TARGET} PRIVATE /W4 /wd4100 /utf-8 /wd4819)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")

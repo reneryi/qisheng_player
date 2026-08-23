@@ -1,4 +1,5 @@
-﻿import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 enum AppBackdropStrategy {
@@ -15,6 +16,8 @@ Duration _lerpDuration(Duration a, Duration b, double t) {
         (a.inMicroseconds + (b.inMicroseconds - a.inMicroseconds) * t).round(),
   );
 }
+
+final Expando<ThemeData> _fallbackThemeCache = Expando<ThemeData>();
 
 @immutable
 class AppChromeTokens extends ThemeExtension<AppChromeTokens> {
@@ -449,6 +452,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
     required this.slow,
     required this.emphasized,
     required this.standard,
+    required this.elastic,
     required this.microInteractionDuration,
     required this.controlTransitionDuration,
     required this.pageTransitionDuration,
@@ -458,6 +462,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
     required this.navCollapseDuration,
     required this.searchExpandDuration,
     required this.panelTransitionDuration,
+    required this.elasticTransitionDuration,
   });
 
   final Curve fast;
@@ -465,6 +470,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
   final Curve slow;
   final Curve emphasized;
   final Curve standard;
+  final Curve elastic;
   final Duration microInteractionDuration;
   final Duration controlTransitionDuration;
   final Duration pageTransitionDuration;
@@ -474,6 +480,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
   final Duration navCollapseDuration;
   final Duration searchExpandDuration;
   final Duration panelTransitionDuration;
+  final Duration elasticTransitionDuration;
 
   @override
   AppMotionTokens copyWith({
@@ -482,6 +489,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
     Curve? slow,
     Curve? emphasized,
     Curve? standard,
+    Curve? elastic,
     Duration? microInteractionDuration,
     Duration? controlTransitionDuration,
     Duration? pageTransitionDuration,
@@ -491,6 +499,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
     Duration? navCollapseDuration,
     Duration? searchExpandDuration,
     Duration? panelTransitionDuration,
+    Duration? elasticTransitionDuration,
   }) {
     return AppMotionTokens(
       fast: fast ?? this.fast,
@@ -498,6 +507,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
       slow: slow ?? this.slow,
       emphasized: emphasized ?? this.emphasized,
       standard: standard ?? this.standard,
+      elastic: elastic ?? this.elastic,
       microInteractionDuration:
           microInteractionDuration ?? this.microInteractionDuration,
       controlTransitionDuration:
@@ -513,6 +523,8 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
       searchExpandDuration: searchExpandDuration ?? this.searchExpandDuration,
       panelTransitionDuration:
           panelTransitionDuration ?? this.panelTransitionDuration,
+      elasticTransitionDuration:
+          elasticTransitionDuration ?? this.elasticTransitionDuration,
     );
   }
 
@@ -525,6 +537,7 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
       slow: t < 0.5 ? slow : other.slow,
       emphasized: t < 0.5 ? emphasized : other.emphasized,
       standard: t < 0.5 ? standard : other.standard,
+      elastic: t < 0.5 ? elastic : other.elastic,
       microInteractionDuration: _lerpDuration(
         microInteractionDuration,
         other.microInteractionDuration,
@@ -556,6 +569,11 @@ class AppMotionTokens extends ThemeExtension<AppMotionTokens> {
       panelTransitionDuration: _lerpDuration(
         panelTransitionDuration,
         other.panelTransitionDuration,
+        t,
+      ),
+      elasticTransitionDuration: _lerpDuration(
+        elasticTransitionDuration,
+        other.elasticTransitionDuration,
         t,
       ),
     );
@@ -636,16 +654,35 @@ class PlayerTokens extends ThemeExtension<PlayerTokens> {
 }
 
 extension AppThemeContextX on BuildContext {
-  AppChromeTokens get chrome => Theme.of(this).extension<AppChromeTokens>()!;
+  ThemeData get _themeWithAppTokens {
+    final theme = Theme.of(this);
+    if (theme.extension<AppChromeTokens>() != null &&
+        theme.extension<AppSurfaceTokens>() != null &&
+        theme.extension<AppAccentTokens>() != null &&
+        theme.extension<AppVisualTokens>() != null &&
+        theme.extension<AppMotionTokens>() != null &&
+        theme.extension<PlayerTokens>() != null) {
+      return theme;
+    }
+    return _fallbackThemeCache[theme.colorScheme] ??=
+        AppTheme.build(colorScheme: theme.colorScheme);
+  }
+
+  AppChromeTokens get chrome =>
+      _themeWithAppTokens.extension<AppChromeTokens>()!;
 
   AppSurfaceTokens get surfaces =>
-      Theme.of(this).extension<AppSurfaceTokens>()!;
+      _themeWithAppTokens.extension<AppSurfaceTokens>()!;
 
-  AppAccentTokens get accents => Theme.of(this).extension<AppAccentTokens>()!;
+  AppAccentTokens get accents =>
+      _themeWithAppTokens.extension<AppAccentTokens>()!;
 
-  AppVisualTokens get visuals => Theme.of(this).extension<AppVisualTokens>()!;
+  AppVisualTokens get visuals =>
+      _themeWithAppTokens.extension<AppVisualTokens>()!;
 
-  AppMotionTokens get motion => Theme.of(this).extension<AppMotionTokens>()!;
+  AppMotionTokens get motion =>
+      _themeWithAppTokens.extension<AppMotionTokens>()!;
 
-  PlayerTokens get playerTokens => Theme.of(this).extension<PlayerTokens>()!;
+  PlayerTokens get playerTokens =>
+      _themeWithAppTokens.extension<PlayerTokens>()!;
 }

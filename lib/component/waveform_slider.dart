@@ -45,8 +45,6 @@ class WaveformSlider extends StatefulWidget {
 
 class _WaveformSliderState extends State<WaveformSlider>
     with TickerProviderStateMixin {
-  // 持续播放律动动画控制器
-  late final AnimationController _waveController;
   // 拖动时果冻受力挤压动画控制器 (0.0 -> 1.0)
   late final AnimationController _dragController;
   // 悬停时引力形变动画控制器 (0.0 -> 1.0)
@@ -63,16 +61,6 @@ class _WaveformSliderState extends State<WaveformSlider>
   @override
   void initState() {
     super.initState();
-    // 持续不断的播放微幅律动，频率为 1.5 秒一个周期
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-
-    if (widget.isPlaying) {
-      _waveController.repeat();
-    }
-
     // 拖拽阻尼过渡：按下时以 curves.easeOut 变扁，松开时用物理弹簧效果进行回弹
     _dragController = AnimationController(
       vsync: this,
@@ -95,20 +83,7 @@ class _WaveformSliderState extends State<WaveformSlider>
   }
 
   @override
-  void didUpdateWidget(covariant WaveformSlider oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isPlaying != oldWidget.isPlaying) {
-      if (widget.isPlaying) {
-        _waveController.repeat();
-      } else {
-        _waveController.stop();
-      }
-    }
-  }
-
-  @override
   void dispose() {
-    _waveController.dispose();
     _dragController.dispose();
     _hoverController.dispose(); // 销毁悬停控制器
     super.dispose();
@@ -210,26 +185,18 @@ class _WaveformSliderState extends State<WaveformSlider>
                     onHover: (details) =>
                         _handleHover(details.localPosition.dx, totalWidth),
                     onExit: (_) => _handleHoverExit(),
-                    child: AnimatedBuilder(
-                      animation: _waveController,
-                      builder: (context, child) {
-                        return CustomPaint(
-                          size:
-                              Size(totalWidth, widget.height), // 根据高度属性进行自适应绘制
-                          painter: _WaveformSliderPainter(
-                            percent: currentPercent,
-                            wavePhase: _waveController.value * math.pi * 2,
-                            isDragging: _isDragging,
-                            dragPercent: _dragPercent,
-                            dragWeight: _dragWeight,
-                            isHovering: _isHovering,
-                            hoverPercent: _hoverPercent,
-                            hoverWeight: _hoverWeight,
-                            isPlaying: widget.isPlaying,
-                            colorScheme: Theme.of(context).colorScheme,
-                          ),
-                        );
-                      },
+                    child: CustomPaint(
+                      size: Size(totalWidth, widget.height),
+                      painter: _WaveformSliderPainter(
+                        percent: currentPercent,
+                        isDragging: _isDragging,
+                        dragPercent: _dragPercent,
+                        dragWeight: _dragWeight,
+                        isHovering: _isHovering,
+                        hoverPercent: _hoverPercent,
+                        hoverWeight: _hoverWeight,
+                        colorScheme: Theme.of(context).colorScheme,
+                      ),
                     ),
                   ),
                 ),
@@ -297,26 +264,22 @@ class _WaveformSliderState extends State<WaveformSlider>
 class _WaveformSliderPainter extends CustomPainter {
   const _WaveformSliderPainter({
     required this.percent,
-    required this.wavePhase,
     required this.isDragging,
     required this.dragPercent,
     required this.dragWeight,
     required this.isHovering,
     required this.hoverPercent,
     required this.hoverWeight,
-    required this.isPlaying,
     required this.colorScheme,
   });
 
   final double percent; // 激活的长度占比 (0.0 到 1.0)
-  final double wavePhase; // 播放时波形的运动相位
   final bool isDragging; // 是否正在被拖拽
   final double dragPercent; // 拖拽焦点百分比 (0.0 到 1.0)
   final double dragWeight; // 果冻受力物理形变系数 (0.0 -> 1.0)
   final bool isHovering; // 鼠标当前是否处于悬停状态
   final double hoverPercent; // 悬停焦点百分比 (0.0 到 1.0)
   final double hoverWeight; // 悬停引力物理系数 (0.0 -> 0.45)
-  final bool isPlaying; // 是否播放中
   final ColorScheme colorScheme;
 
   static const int _barCount = 52; // 精细波形柱子总数
@@ -362,13 +325,8 @@ class _WaveformSliderPainter extends CustomPainter {
       double barHeight = _minHeight +
           20.0 * math.sin(normalizedIdx * math.pi) * (0.6 + 0.4 * centerFactor);
 
-      // 2. 仿真播放微幅正弦律动 (暂停时缓缓平息)
-      if (isPlaying) {
-        final double sineWave = math.sin(wavePhase + i * 0.22) * 3.5;
-        barHeight += sineWave;
-      }
-
-      // 3. 极具生命力的【果冻挤压拉伸与悬停引力吸附】物理仿真算法
+      // Continuous audio movement is drawn by LiquidAudioVisualizer. This
+      // control only reacts to direct hover and drag input.
       if (activeWeight > 0) {
         final double d = (i - dragIndex).abs();
         // 触点正下方高斯受力形变范围
@@ -423,14 +381,12 @@ class _WaveformSliderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _WaveformSliderPainter oldDelegate) {
     return oldDelegate.percent != percent ||
-        oldDelegate.wavePhase != wavePhase ||
         oldDelegate.isDragging != isDragging ||
         oldDelegate.dragPercent != dragPercent ||
         oldDelegate.dragWeight != dragWeight ||
         oldDelegate.isHovering != isHovering ||
         oldDelegate.hoverPercent != hoverPercent ||
         oldDelegate.hoverWeight != hoverWeight ||
-        oldDelegate.isPlaying != isPlaying ||
         oldDelegate.colorScheme != colorScheme;
   }
 }

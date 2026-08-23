@@ -147,18 +147,18 @@ Set-Location ..\..
 再生成发布包：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version <version>
 ```
 
 发布产物输出到 `dist/windows/artifacts/packages/`：
-- `Qisheng-Player-v1.0.0-Windows-x64.zip`
-- `Qisheng-Player-v1.0.0-Setup-x64.exe` (生成安装器需要本机安装 Inno Setup 6)
+- `Qisheng-Player-v<version>-Windows-x64.zip`
+- `Qisheng-Player-v<version>-Setup-x64.exe` (生成安装器需要本机安装 Inno Setup 6)
 
 完整流程见 [docs/release_workflow.md](docs/release_workflow.md)。
 
-## 📖 文档与变更记录
+## 📖 文档与发布说明
 
-- [**更新日志与历史变更 (Changelog)**](docs/changelog.md) —— 查看当前版本与历史版本的详细更新内容。
+- [**版本发布说明**](docs/releases/README.md) —— 按版本查看已发布或准备发布的功能说明与 Release payload。
 - [项目结构](docs/project_structure.md)
 - [Windows 发布流程](docs/release_workflow.md)
 - [贡献指南](CONTRIBUTING.md)

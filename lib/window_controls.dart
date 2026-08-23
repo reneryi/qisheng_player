@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/app_shutdown.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart'
@@ -25,6 +28,26 @@ class WindowBackdropModeResult {
 
   bool get usesSimulatedBackdropOnly => !nativeApplySucceeded;
 
+  /// The backdrop mode that Flutter can safely render against.
+  ///
+  /// A requested native material is only considered active after the platform
+  /// confirms that it was applied. Until then, rendering falls back to
+  /// `defaultGradient` so the desktop cannot leak through the window.
+  WindowBackdropMode get effectiveRenderMode {
+    if (requestedMode == WindowBackdropMode.meshFlow ||
+        requestedMode == WindowBackdropMode.waterRipple ||
+        requestedMode == WindowBackdropMode.prismaticGlass ||
+        requestedMode == WindowBackdropMode.defaultGradient) {
+      return requestedMode;
+    }
+    if (!nativeApplySucceeded) return WindowBackdropMode.defaultGradient;
+    return switch (appliedMode) {
+      WindowBackdropMode.micaAlt => WindowBackdropMode.micaAlt,
+      WindowBackdropMode.acrylic => WindowBackdropMode.acrylic,
+      _ => WindowBackdropMode.defaultGradient,
+    };
+  }
+
   static WindowBackdropModeResult fallback(
     WindowBackdropMode requestedMode, {
     WindowBackdropMode? appliedMode,
@@ -33,7 +56,7 @@ class WindowBackdropModeResult {
   }) {
     return WindowBackdropModeResult(
       requestedMode: requestedMode,
-      appliedMode: appliedMode ?? WindowBackdropMode.none,
+      appliedMode: appliedMode ?? WindowBackdropMode.defaultGradient,
       nativeBackdropSupported: nativeBackdropSupported,
       nativeApplySucceeded: false,
       fallbackReason: fallbackReason,
@@ -49,7 +72,7 @@ class WindowBackdropModeResult {
             requestedMode;
     final applied =
         WindowBackdropMode.fromName(map['appliedMode'] as String?) ??
-            WindowBackdropMode.none;
+            WindowBackdropMode.defaultGradient;
     final nativeBackdropSupported =
         (map['nativeBackdropSupported'] as bool?) ?? false;
     final nativeApplySucceeded =
@@ -99,13 +122,24 @@ class WindowControls {
   static Future<WindowBackdropModeResult> setWindowBackdropMode(
     WindowBackdropMode mode,
   ) async {
-    // 极光流体模式在原生窗口层不需要透明材质支持，因此在原生端使用 none 进行渲染
-    final effectiveMode =
-        mode == WindowBackdropMode.fluid ? WindowBackdropMode.none : mode;
+    // 软件渲染材质（默认对角渐变、弥散流彩、水波纹、琉璃透镜）在原生窗口层通知底层关闭 DWM 材质
+    final bool isSoftwareMaterial =
+        mode == WindowBackdropMode.defaultGradient ||
+            mode == WindowBackdropMode.meshFlow ||
+            mode == WindowBackdropMode.waterRipple ||
+            mode == WindowBackdropMode.prismaticGlass;
+    // 与 windows/runner/flutter_window.cpp 的 NormalizeBackdropMode /
+    // BackdropTypeFromMode 保持一致的规范化字符串协议（小写）。
+    final String nativeParam = switch (mode) {
+      WindowBackdropMode.micaAlt => "micaalt",
+      WindowBackdropMode.acrylic => "acrylic",
+      _ => "none",
+    };
+
     try {
       final appliedMode = await _channel.invokeMapMethod<Object?, Object?>(
         "set_window_backdrop_mode",
-        {"mode": effectiveMode.name},
+        {"mode": nativeParam},
       );
       var result = appliedMode == null
           ? WindowBackdropModeResult.fallback(
@@ -114,15 +148,12 @@ class WindowControls {
             )
           : WindowBackdropModeResult.fromMap(appliedMode, mode);
 
-      // 新增：如果原本请求的是极光流体，虽然我们为了关闭原生材质传给底层 none，
-      // 但由于极光流体已成功在 Dart/Flutter 层生效，我们在这里把 appliedMode 纠正为 fluid，
-      // 并判定为应用成功，从而避免触发回退 SnackBar 提示。
-      if (mode == WindowBackdropMode.fluid) {
-        result = const WindowBackdropModeResult(
-          requestedMode: WindowBackdropMode.fluid,
-          appliedMode: WindowBackdropMode.fluid,
-          nativeBackdropSupported: true, // 软件渲染的流体材质是必定支持的
-          nativeApplySucceeded: true, // 标记为成功应用状态
+      if (isSoftwareMaterial) {
+        result = WindowBackdropModeResult(
+          requestedMode: mode,
+          appliedMode: mode,
+          nativeBackdropSupported: true,
+          nativeApplySucceeded: true,
         );
       }
 
@@ -251,20 +282,55 @@ class WindowControls {
     unawaited(_syncPlayingState(playbackService.playerState));
   }
 
-  static void init() {
-    if (_initialized) return;
+  static bool _isExiting = false;
+
+  /// 全局统一退出应用程序入口
+  ///
+  /// 执行完整的保存与释放流程，带有超时保护，并通过原生通道与窗口管理器彻底退出进程。
+  static Future<void> exitApp() async {
+    if (_isExiting) return;
+    _isExiting = true;
+
+    try {
+      // 执行应用状态与播放器资源持久化与释放（限时 1.5 秒兜底）
+      await appShutdownCoordinator
+          .shutdown()
+          .timeout(const Duration(milliseconds: 1500));
+    } catch (err, trace) {
+      LOGGER.e('[exitApp] 应用退出释放异常: $err', stackTrace: trace);
+    }
+
+    try {
+      // 销毁窗口
+      await windowManager.destroy();
+    } catch (_) {}
+
+    try {
+      // 通知原生平台清理托盘图标并退出消息循环
+      await _channel.invokeMethod("exit_app");
+    } catch (_) {}
+
+    // 保证 Dart 进程完全终止
+    exit(0);
+  }
+
+  static Future<WindowBackdropModeResult> init() async {
+    if (_initialized) {
+      return _lastBackdropResult ??
+          WindowBackdropModeResult.fallback(
+            AppSettings.instance.windowBackdropMode,
+            fallbackReason: 'initialization_pending',
+          );
+    }
     _initialized = true;
 
     final playbackService = PlayService.instance.playbackService;
-    unawaited(
-      windowManager.ensureInitialized().then((_) {
-        windowManager.addListener(_windowListener);
-        unawaited(syncWindowLayoutMode());
-      }),
-    );
-    unawaited(
-      setWindowBackdropMode(AppSettings.instance.windowBackdropMode),
-    );
+    await windowManager.ensureInitialized();
+    windowManager.addListener(_windowListener);
+    await windowManager.setPreventClose(true);
+    unawaited(syncWindowLayoutMode());
+    final initialBackdropResult =
+        await setWindowBackdropMode(AppSettings.instance.windowBackdropMode);
     unawaited(_syncPlayingState(playbackService.playerState));
     playbackService.playerStateStream.listen((state) {
       unawaited(_syncPlayingState(state));
@@ -290,12 +356,21 @@ class WindowControls {
         case "window_restored_from_tray":
           resyncPlaybackAfterWindowActivated(reason: 'tray restore');
           return;
+        case "exit_app":
+          unawaited(exitApp());
+          return;
       }
     });
+    return initialBackdropResult;
   }
 }
 
 class _PlaybackWindowListener with WindowListener {
+  @override
+  void onWindowClose() {
+    unawaited(WindowControls.exitApp());
+  }
+
   @override
   void onWindowResize() {
     unawaited(WindowControls.syncWindowLayoutMode());

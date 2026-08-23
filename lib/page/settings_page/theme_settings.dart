@@ -139,14 +139,24 @@ class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "UI 视觉风格",
-      hint: "在玻璃拟态、高对比度与极简锐利卡片风格之间切换，界面排版与视觉层级会同步调整。",
+      hint: "在纯净实体卡片、无界极简悬浮与液态玻璃风格之间切换。",
       action: SegmentedButton<UiVisualStyleMode>(
         showSelectedIcon: false,
         segments: const [
           ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.glass,
-            icon: Icon(Symbols.blur_on),
-            label: Text("玻璃"),
+            value: UiVisualStyleMode.solidCard,
+            icon: Icon(Symbols.layers),
+            label: Text("纯净卡片"),
+          ),
+          ButtonSegment<UiVisualStyleMode>(
+            value: UiVisualStyleMode.borderless,
+            icon: Icon(Symbols.crop_free),
+            label: Text("无界悬浮"),
+          ),
+          ButtonSegment<UiVisualStyleMode>(
+            value: UiVisualStyleMode.liquidGlass,
+            icon: Icon(Symbols.water_drop),
+            label: Text("液态玻璃"),
           ),
         ],
         selected: {settings.uiVisualStyleMode},
@@ -158,6 +168,7 @@ class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
             settings.uiVisualStyleMode = nextMode;
           });
           await ThemeProvider.instance.applyVisualStyleMode(nextMode);
+          await settings.saveSettings();
         },
       ),
     );
@@ -195,6 +206,43 @@ class _DynamicThemeSwitchState extends State<DynamicThemeSwitch> {
               ThemeProvider.instance.applyThemeFromAudio(audio);
             }
           }
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
+/// 控制主题色（手动选择或动态取色）是否微弱浸润默认渐变背景。
+/// 关闭时，默认渐变背景为纯净中性色（夜间午夜蓝 / 日间哑光纸白）。
+class ThemeColorTintBackgroundSwitch extends StatefulWidget {
+  const ThemeColorTintBackgroundSwitch({super.key});
+
+  @override
+  State<ThemeColorTintBackgroundSwitch> createState() =>
+      _ThemeColorTintBackgroundSwitchState();
+}
+
+class _ThemeColorTintBackgroundSwitchState
+    extends State<ThemeColorTintBackgroundSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "主题色浸润背景",
+      hint: settings.themeColorTintBackground
+          ? "默认渐变背景会带有极淡的主题色调倾向。关闭后恢复纯净中性渐变。"
+          : "默认渐变背景为纯净中性色（夜间午夜蓝 / 日间哑光纸白）。",
+      action: Switch(
+        value: settings.themeColorTintBackground,
+        onChanged: (_) async {
+          setState(() {
+            settings.themeColorTintBackground =
+                !settings.themeColorTintBackground;
+          });
+          // 通知主题系统重新计算背景渐变
+          ThemeProvider.instance.refreshTheme();
           await settings.saveSettings();
         },
       ),
@@ -278,6 +326,104 @@ class _LyricDepthBlurSwitchState extends State<LyricDepthBlurSwitch> {
   }
 }
 
+/// 播放页沉浸模块的布尔设置开关。
+///
+/// 这些设置目前保存在 [AppSettings] 中，但没有单独的通知器，因此使用
+/// [StatefulBuilder] 在修改后刷新当前设置项，同时将结果持久化到磁盘。
+Widget _buildPlaybackImmersiveSwitch({
+  required String description,
+  required String hint,
+  required bool Function(AppSettings settings) readValue,
+  required void Function(AppSettings settings, bool value) writeValue,
+}) {
+  return StatefulBuilder(
+    builder: (context, setState) {
+      final settings = AppSettings.instance;
+      return SettingsTile(
+        description: description,
+        hint: hint,
+        action: Switch(
+          value: readValue(settings),
+          onChanged: (value) async {
+            setState(() => writeValue(settings, value));
+            await settings.saveSettings();
+          },
+        ),
+      );
+    },
+  );
+}
+
+class ShowVinylRecordSwitch extends StatelessWidget {
+  const ShowVinylRecordSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildPlaybackImmersiveSwitch(
+      description: "显示黑胶唱盘",
+      hint: "在大尺寸播放页中显示旋转唱盘与唱针。",
+      readValue: (settings) => settings.showVinylRecord,
+      writeValue: (settings, value) => settings.showVinylRecord = value,
+    );
+  }
+}
+
+class ShowSpectrumVisualizerSwitch extends StatelessWidget {
+  const ShowSpectrumVisualizerSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildPlaybackImmersiveSwitch(
+      description: "显示频谱可视化",
+      hint: "在播放页显示实时音频频谱动效。",
+      readValue: (settings) => settings.showSpectrumVisualizer,
+      writeValue: (settings, value) => settings.showSpectrumVisualizer = value,
+    );
+  }
+}
+
+class ShowKaraokeAnimationSwitch extends StatelessWidget {
+  const ShowKaraokeAnimationSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildPlaybackImmersiveSwitch(
+      description: "卡拉 OK 逐字动效",
+      hint: "让当前歌词按演唱进度平滑高亮。",
+      readValue: (settings) => settings.showKaraokeAnimation,
+      writeValue: (settings, value) => settings.showKaraokeAnimation = value,
+    );
+  }
+}
+
+class CoverBreathEffectSwitch extends StatelessWidget {
+  const CoverBreathEffectSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildPlaybackImmersiveSwitch(
+      description: "封面呼吸律动",
+      hint: "根据播放节拍让播放页封面产生轻微呼吸缩放。",
+      readValue: (settings) => settings.coverBreathEffect,
+      writeValue: (settings, value) => settings.coverBreathEffect = value,
+    );
+  }
+}
+
+class AutoHideControlsSwitch extends StatelessWidget {
+  const AutoHideControlsSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildPlaybackImmersiveSwitch(
+      description: "自动隐藏播放控件",
+      hint: "鼠标静止时自动隐藏沉浸播放页的控件栏。",
+      readValue: (settings) => settings.autoHideControls,
+      writeValue: (settings, value) => settings.autoHideControls = value,
+    );
+  }
+}
+
 class WindowBackdropModeControl extends StatefulWidget {
   const WindowBackdropModeControl({super.key});
 
@@ -292,10 +438,12 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
 
   String _modeLabel(String mode) {
     return switch (WindowBackdropMode.fromName(mode)) {
-      WindowBackdropMode.auto => "自动",
-      WindowBackdropMode.mica => "云母",
-      WindowBackdropMode.fluid => "极光流体",
-      WindowBackdropMode.none => "关闭",
+      WindowBackdropMode.defaultGradient => "默认渐变",
+      WindowBackdropMode.micaAlt => "增强云母",
+      WindowBackdropMode.acrylic => "亚克力",
+      WindowBackdropMode.meshFlow => "弥散流彩",
+      WindowBackdropMode.waterRipple => "水波纹",
+      WindowBackdropMode.prismaticGlass => "琉璃透镜",
       null => mode,
     };
   }
@@ -307,8 +455,10 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
       "platform_exception" => "平台通道调用失败",
       "unsupported_platform" => "系统不支持原生背景材质",
       "system_backdrop_requires_windows_11" => "需要 Windows 11",
-      "acrylic_requires_windows_11_22h2" => "亚克力需要 Windows 11 22H2 或更高版本",
-      "mica_alt_requires_windows_11_22h2" => "云母 Alt 需要 Windows 11 22H2 或更高版本",
+      "system_backdrop_requires_win11_22h2" => "需要 Windows 11 22H2 及以上版本",
+      "mica_alt_not_supported" => "当前系统不支持增强云母",
+      "acrylic_not_supported" => "当前系统不支持亚克力",
+      "native_backdrop_not_supported" => "系统不支持该原生材质",
       "window_handle_unavailable" => "窗口句柄不可用",
       final other => other,
     };
@@ -326,53 +476,48 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
           fallbackReason: 'unknown',
         );
     final effectiveModeLabel = _modeLabel(result.appliedMode.name);
-    final nativeStatus = result.nativeApplySucceeded ? '' : '（应用内模拟效果）';
     final fallbackText = _fallbackLabel(result.fallbackReason);
     final fallbackHint = fallbackText.isEmpty ? '' : '，回退原因：$fallbackText';
     return SettingsTile(
-      description: "Windows 背景材质",
-      hint:
-          "自动模式会跟随系统策略；不支持的模式会回退。当前实际模式：$effectiveModeLabel$nativeStatus$fallbackHint",
-      action: SegmentedButton<WindowBackdropMode>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.auto,
-            label: Text("自动"),
-          ),
-          ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.mica,
-            label: Text("云母"),
-          ),
-          ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.fluid,
-            label: Text("极光流体"),
-          ),
-          ButtonSegment<WindowBackdropMode>(
-            value: WindowBackdropMode.none,
-            label: Text("关闭"),
-          ),
+      description: "窗口底座材质",
+      hint: "包含原生云母/亚克力及着色器流体。当前实际模式：$effectiveModeLabel$fallbackHint",
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _buildBackdropChip(WindowBackdropMode.defaultGradient, "默认渐变"),
+          _buildBackdropChip(WindowBackdropMode.micaAlt, "增强云母"),
+          _buildBackdropChip(WindowBackdropMode.acrylic, "亚克力"),
+          _buildBackdropChip(WindowBackdropMode.meshFlow, "弥散流彩"),
+          _buildBackdropChip(WindowBackdropMode.waterRipple, "水波纹"),
+          _buildBackdropChip(WindowBackdropMode.prismaticGlass, "琉璃透镜"),
         ],
-        selected: {theme.windowBackdropMode},
-        onSelectionChanged: (selection) async {
-          final requested = selection.first;
-          if (requested == theme.windowBackdropMode) return;
-
-          final result = await ThemeProvider.instance.applyWindowBackdropMode(
-            requested,
-          );
-          setState(() {
-            settings.windowBackdropMode = requested;
-            _latestResult = result;
-          });
-          await settings.saveSettings();
-          if (result.appliedMode != requested && context.mounted) {
-            showTextOnSnackBar(
-              "背景材质已从 ${_modeLabel(requested.name)} 回退为 ${_modeLabel(result.appliedMode.name)}",
-            );
-          }
-        },
       ),
+    );
+  }
+
+  Widget _buildBackdropChip(WindowBackdropMode mode, String label) {
+    final theme = context.watch<ThemeProvider>();
+    final isSelected = theme.windowBackdropMode == mode;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) async {
+        if (!selected || mode == theme.windowBackdropMode) return;
+        final result = await ThemeProvider.instance.applyWindowBackdropMode(
+          mode,
+        );
+        setState(() {
+          settings.windowBackdropMode = mode;
+          _latestResult = result;
+        });
+        await settings.saveSettings();
+        if (result.appliedMode != mode && mounted) {
+          showTextOnSnackBar(
+            "背景材质已从 ${_modeLabel(mode.name)} 回退为 ${_modeLabel(result.appliedMode.name)}",
+          );
+        }
+      },
     );
   }
 }

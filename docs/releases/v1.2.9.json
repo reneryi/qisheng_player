@@ -1,9 +1,13 @@
 {
   "tag_name": "v1.2.9",
   "target_commitish": "main",
-  "name": "v1.2.9",
-  "body": "## 说明\n\n本版本为稳定发布版本，基于 1.2.8 进行了深入的动效微调与关键 Bug 修复，彻底解决了点击控制栏进入播放页时发生的界面卡死问题，补回了被遗漏的控制栏淡入淡出动画，对齐了全局转场时长，并完美消除了返回控制栏时的封面定位错位闪跳。\n\n## 与 1.2.8 的对比\n\n- 1.2.8 进行了整体结构的重大悬浮与大屏沉浸改造，但在跳转交互及底层通知上存在由于 build 期间同步派发通知而导致 Flutter 渲染死锁卡死的致命漏洞。\n- 1.2.9 在 1.2.8 的基础上做到了百分之百的稳定性收敛，修复了 Build 冲突卡死、底栏动效遗漏、转场时长测试不通过以及退出详情页时的封面 Hero 飞行路径定位错误。\n\n## 新增与改进\n\n- **修复点击控制栏卡死**：重构导航状态管理器中路径记录方法的 `notifyListeners()` 通知逻辑，使用 `WidgetsBinding.instance.addPostFrameCallback` 保证在当前帧 build 结束后再进行异步派发刷新，彻底杜绝死锁与 `markNeedsBuild` 崩溃。\n- **补回底栏淡出淡入过渡（`AnimatedOpacity`）**：在播放详情页控制栏显隐动画结构里，重新回填被漏掉的 `AnimatedOpacity`，让底栏滑出滑入时的透明度过渡非常自然平滑，并修复测试用例的组件定位报错。\n- **对齐全局转场动画时长**：将播放详情页卡片拉起转场时长统一修正为与主路由一致的 `520ms`（入场）和 `380ms`（出场），让视觉动效平顺呼吸，并通过了时长断言测试。\n- **解决 Hero 飞行路径定位错误**：优化控制栏 Hero 状态树，播放页内部的底栏显示通过 `disableHero: true` 保证在转场中静默且不与中央封面 tag 冲突；同时保持底层主页面背景在转场期间锁定不动，确保大封面 Hero 在退场时能够精准重合降落，消除瞬间跳变。\n\n## 测试与验证\n\n- 执行 `flutter analyze` 静态分析完全通过。\n- 执行 `flutter test` 对全局 115 个单元/UI 测试全部百分之百通过。\n\n## 下载内容\n\n- 安装程序：`Qisheng-Player-v1.2.9-Setup-x64.exe`\n- 便携压缩包：`Qisheng-Player-v1.2.9-Windows-x64.zip`",
+  "name": "Qisheng Player v1.2.9",
+  "body_path": "docs/releases/v1.2.9.md",
   "draft": false,
   "prerelease": false,
-  "generate_release_notes": false
+  "generate_release_notes": false,
+  "assets": [
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.2.9-Windows-x64.zip",
+    "dist/windows/artifacts/packages/Qisheng-Player-v1.2.9-Setup-x64.exe"
+  ]
 }

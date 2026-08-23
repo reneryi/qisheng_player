@@ -1,7 +1,8 @@
 ﻿import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
-import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -157,7 +158,10 @@ class __ArtistSeparatorEditDialogState
                             appSettings.artistSplitPattern =
                                 appSettings.artistSeparator.join("|");
                             await appSettings.saveSettings();
-                            await AudioLibrary.initFromIndex();
+                            await libraryReloadCoordinator.reload(
+                              afterReload: PlayService.instance.playbackService
+                                  .reconcileLibraryReferences,
+                            );
                             if (context.mounted) {
                               Navigator.pop(context);
                             }

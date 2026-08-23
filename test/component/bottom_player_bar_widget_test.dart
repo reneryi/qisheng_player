@@ -1,4 +1,7 @@
-﻿import 'package:qisheng_player/component/bottom_player_bar.dart';
+import 'package:qisheng_player/component/bottom_player_bar.dart';
+import 'package:qisheng_player/component/audio_visualizer/liquid_audio_visualizer.dart';
+import 'package:qisheng_player/component/marquee_text.dart';
+import 'package:qisheng_player/component/spectrum_progress_slider.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
@@ -40,10 +43,17 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Wide Song'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is MarqueeText && widget.text == 'Wide Song',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SpectrumProgressSlider), findsOneWidget);
+    expect(find.byType(LiquidAudioVisualizer), findsNothing);
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(Slider), findsWidgets);
+    expect(find.byType(SpectrumProgressSlider), findsOneWidget);
     expect(find.byTooltip('打开播放队列'), findsOneWidget);
   });
 
@@ -112,7 +122,7 @@ void main() {
 
     await tester.pumpWidget(buildFrame(1360));
     await tester.pump();
-    expect(find.byType(Slider), findsWidgets);
+    expect(find.byType(SpectrumProgressSlider), findsOneWidget);
 
     await tester.pumpWidget(buildFrame(920));
     await tester.pump(const Duration(milliseconds: 80));
@@ -149,11 +159,18 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byTooltip('音量'));
+    final volumeButton = find.byWidgetPredicate(
+      (widget) =>
+          widget is Tooltip &&
+          widget.message?.startsWith('音量（支持鼠标滚轮无级调节）') == true,
+    );
+    expect(volumeButton, findsOneWidget);
+
+    await tester.tap(volumeButton);
     await tester.pump();
     expect(playback.volumeDsp, 0.0);
 
-    await tester.tap(find.byTooltip('音量'));
+    await tester.tap(volumeButton);
     await tester.pump();
     expect(playback.volumeDsp, 0.5);
   });
@@ -165,6 +182,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: buildTestTheme(),
         home: StatefulBuilder(
           builder: (context, setState) {
             updateState = setState;
@@ -235,6 +253,11 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Overlay Song'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is MarqueeText && widget.text == 'Overlay Song',
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -8,8 +8,35 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-const _sideNavTransitionDuration = Duration(milliseconds: 280);
-const _sideNavTransitionCurve = Curves.easeInOutCubic;
+class SideNavTransitionScope extends InheritedWidget {
+  const SideNavTransitionScope({
+    super.key,
+    required this.expansionProgress,
+    required this.widthDelta,
+    this.collapsing = false,
+    required super.child,
+  })  : assert(expansionProgress >= 0 && expansionProgress <= 1),
+        assert(widthDelta >= 0);
+
+  final double expansionProgress;
+  final double widthDelta;
+  final bool collapsing;
+
+  static SideNavTransitionScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<SideNavTransitionScope>();
+  }
+
+  static SideNavTransitionScope? read(BuildContext context) {
+    return context.getInheritedWidgetOfExactType<SideNavTransitionScope>();
+  }
+
+  @override
+  bool updateShouldNotify(SideNavTransitionScope oldWidget) {
+    return expansionProgress != oldWidget.expansionProgress ||
+        widthDelta != oldWidget.widthDelta ||
+        collapsing != oldWidget.collapsing;
+  }
+}
 
 class DestinationDesc {
   const DestinationDesc(this.icon, this.label, this.desPath);
@@ -32,10 +59,12 @@ class SideNav extends StatelessWidget {
   const SideNav({
     super.key,
     this.collapsed = false,
+    this.expansionProgress,
     this.onToggleCollapsed,
   });
 
   final bool collapsed;
+  final double? expansionProgress;
   final ValueChanged<bool>? onToggleCollapsed;
 
   @override
@@ -69,6 +98,7 @@ class SideNav extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: _SideNavShell(
                     collapsed: false,
+                    expansionProgress: 1,
                     selected: selected,
                     onDestinationSelected: onDestinationSelected,
                     onToggleCollapsed: null,
@@ -82,21 +112,25 @@ class SideNav extends StatelessWidget {
               width: context.chrome.sideNavCollapsedWidth,
               child: _SideNavShell(
                 collapsed: true,
+                expansionProgress: 0,
                 selected: selected,
                 onDestinationSelected: onDestinationSelected,
                 onToggleCollapsed: null,
               ),
             );
           case ScreenType.large:
-            return AnimatedContainer(
+            final progress =
+                (expansionProgress ?? (collapsed ? 0.0 : 1.0)).clamp(0.0, 1.0);
+            return SizedBox(
               key: const ValueKey('side-nav-large'),
-              duration: _sideNavTransitionDuration,
-              curve: _sideNavTransitionCurve,
-              width: collapsed
-                  ? context.chrome.sideNavCollapsedWidth
-                  : context.chrome.sideNavExpandedWidth,
+              width: lerpDouble(
+                context.chrome.sideNavCollapsedWidth,
+                context.chrome.sideNavExpandedWidth,
+                progress,
+              ),
               child: _SideNavShell(
                 collapsed: collapsed,
+                expansionProgress: progress,
                 selected: selected,
                 onDestinationSelected: onDestinationSelected,
                 onToggleCollapsed: onToggleCollapsed,
@@ -111,50 +145,107 @@ class SideNav extends StatelessWidget {
 class _SideNavShell extends StatelessWidget {
   const _SideNavShell({
     required this.collapsed,
+    required this.expansionProgress,
     required this.selected,
     required this.onDestinationSelected,
     required this.onToggleCollapsed,
   });
 
   final bool collapsed;
+  final double expansionProgress;
   final int selected;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<bool>? onToggleCollapsed;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accents = context.accents;
+
     // 拆除外层胶囊背景，改为通透、纯透悬浮设计，只保留最外层的 SafeArea 与 Padding
     return SafeArea(
       bottom: false,
-      child: AnimatedPadding(
-        duration: _sideNavTransitionDuration,
-        curve: _sideNavTransitionCurve,
-        padding: EdgeInsets.fromLTRB(
-          collapsed ? 8 : 12,
-          24, // 增加顶部 Padding 使得整体布局更加优雅
-          collapsed ? 8 : 12,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          8,
+          24,
+          8,
           12,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const _SideNavBrand(),
-            SizedBox(height: collapsed ? 12 : 16),
+            const SizedBox(height: 16),
             Expanded(
               child: SingleChildScrollView(
-                child: Column(
+                child: Stack(
                   children: [
-                    for (int index = 0;
-                        index < destinations.length;
-                        index++) ...[
-                      _SideNavItem(
-                        collapsed: collapsed,
-                        selected: index == selected,
-                        destination: destinations[index],
-                        onTap: () => onDestinationSelected(index),
+                    // 统一管理的物理连续滑行药丸胶囊与指示条：切换项时平滑上下滑行并产生弹性吸附
+                    if (selected >= 0 && selected < destinations.length) ...[
+                      // 背景滑动药丸
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        left: 0,
+                        right: 0,
+                        top: selected * (48.0 + 6.0),
+                        height: 48,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.04),
+                              width: 1,
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 6), // 稍微缩小间距
+                      // 左侧吸附发光线
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        left: 0,
+                        top: selected * (48.0 + 6.0) + 15.0,
+                        width: 3,
+                        height: 18,
+                        child: Container(
+                          key: const ValueKey('side-nav-active-indicator'),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: accents.accent,
+                            boxShadow: [
+                              BoxShadow(
+                                color: accents.accentGlow.withValues(alpha: 0.45),
+                                blurRadius: 8,
+                                spreadRadius: -1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
+                    Column(
+                      children: [
+                        for (int index = 0;
+                            index < destinations.length;
+                            index++) ...[
+                          _SideNavItem(
+                            collapsed: collapsed,
+                            expansionProgress: expansionProgress,
+                            selected: index == selected,
+                            destination: destinations[index],
+                            onTap: () => onDestinationSelected(index),
+                          ),
+                          const SizedBox(height: 6), // 间距
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -163,6 +254,8 @@ class _SideNavShell extends StatelessWidget {
               const SizedBox(height: 8),
               _SideNavItem(
                 collapsed: true,
+                expansionProgress: expansionProgress,
+                centerIcon: true,
                 selected: false,
                 destination: DestinationDesc(
                   collapsed
@@ -206,14 +299,13 @@ class _SideNavBrand extends StatelessWidget {
 
 class _MetalNavIcon extends StatelessWidget {
   const _MetalNavIcon({
+    super.key,
     required this.icon,
     required this.selected,
-    this.size = 21, // 调大至 21 像素以与新字号平衡
   });
 
   final IconData icon;
   final bool selected;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -222,10 +314,9 @@ class _MetalNavIcon extends StatelessWidget {
     // 极简图标设计：直接根据选中状态输出纯色，去除了渐变遮罩和大面积光晕
     return Icon(
       icon,
-      size: size,
-      color: selected
-          ? accents.accent
-          : scheme.onSurface.withValues(alpha: 0.52),
+      size: 21,
+      color:
+          selected ? accents.accent : scheme.onSurface.withValues(alpha: 0.52),
     );
   }
 }
@@ -233,15 +324,19 @@ class _MetalNavIcon extends StatelessWidget {
 class _SideNavItem extends StatefulWidget {
   const _SideNavItem({
     required this.collapsed,
+    required this.expansionProgress,
     required this.selected,
     required this.destination,
     required this.onTap,
+    this.centerIcon = false,
   });
 
   final bool collapsed;
+  final double expansionProgress;
   final bool selected;
   final DestinationDesc destination;
   final VoidCallback onTap;
+  final bool centerIcon;
 
   @override
   State<_SideNavItem> createState() => _SideNavItemState();
@@ -259,12 +354,12 @@ class _SideNavItemState extends State<_SideNavItem> {
     final motion = context.motion;
     final isDark = scheme.brightness == Brightness.dark;
 
-    // 极简高亮逻辑：在无边框背景下，使用纯粹低饱和度的灰度背景色做悬浮与选中过渡
-    final highlightColor = widget.selected
-        ? (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05))
-        : (_hovered || _focused)
-            ? (isDark ? Colors.white.withValues(alpha: 0.035) : Colors.black.withValues(alpha: 0.02))
-            : Colors.transparent;
+    // 悬浮与选中色彩交互：选中项的背景由外层连续滑行药丸呈现，自身在非选中且悬浮时呈现微光高亮
+    final highlightColor = (!widget.selected && (_hovered || _focused))
+        ? (isDark
+            ? Colors.white.withValues(alpha: 0.045)
+            : Colors.black.withValues(alpha: 0.03))
+        : Colors.transparent;
 
     final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -281,8 +376,8 @@ class _SideNavItemState extends State<_SideNavItem> {
           duration: motion.microInteractionDuration,
           curve: motion.fast,
           child: AnimatedContainer(
-            duration: _sideNavTransitionDuration,
-            curve: _sideNavTransitionCurve,
+            duration: motion.controlTransitionDuration,
+            curve: motion.normal,
             height: 48, // 从 58 调矮至 48，更加简洁干练
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12), // 更加挺拔的 12px 圆角
@@ -299,38 +394,15 @@ class _SideNavItemState extends State<_SideNavItem> {
                   enableFeedback: false,
                   borderRadius: BorderRadius.circular(12),
                   onTap: widget.onTap,
-                  child: Stack(
-                    children: [
-                      // 极简侧边指示条：一条纤细的、无阴影的选中滑块
-                      AnimatedPositioned(
-                        duration: _sideNavTransitionDuration,
-                        curve: _sideNavTransitionCurve,
-                        left: 0,
-                        top: widget.selected ? 15 : 24,
-                        child: AnimatedContainer(
-                          key: widget.selected
-                              ? const ValueKey('side-nav-active-indicator')
-                              : null,
-                          duration: _sideNavTransitionDuration,
-                          curve: _sideNavTransitionCurve,
-                          width: 3,
-                          height: widget.selected ? 18 : 0,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            color: accents.accent,
-                          ),
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: _SideNavItemContent(
-                          collapsed: widget.collapsed,
-                          selected: widget.selected,
-                          icon: widget.destination.icon,
-                          label: widget.destination.label,
-                          textColor: widget.selected ? accents.accent : scheme.onSurface,
-                        ),
-                      ),
-                    ],
+                  child: _SideNavItemContent(
+                    expansionProgress: widget.expansionProgress,
+                    selected: widget.selected,
+                    icon: widget.destination.icon,
+                    label: widget.destination.label,
+                    iconKey: widget.destination.desPath,
+                    centerIcon: widget.centerIcon,
+                    textColor:
+                        widget.selected ? accents.accent : scheme.onSurface,
                   ),
                 ),
               ),
@@ -347,80 +419,91 @@ class _SideNavItemState extends State<_SideNavItem> {
 
 class _SideNavItemContent extends StatelessWidget {
   const _SideNavItemContent({
-    required this.collapsed,
+    required this.expansionProgress,
     required this.selected,
     required this.icon,
     required this.label,
+    required this.iconKey,
+    required this.centerIcon,
     required this.textColor,
   });
 
-  final bool collapsed;
+  final double expansionProgress;
   final bool selected;
   final IconData icon;
   final String label;
+  final String iconKey;
+  final bool centerIcon;
   final Color textColor;
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: collapsed ? 0 : 1),
-      duration: _sideNavTransitionDuration,
-      curve: _sideNavTransitionCurve,
-      builder: (context, progress, _) {
-        final resolvedProgress = Curves.easeOutCubic.transform(progress);
-        final horizontalPadding = lerpDouble(10, 12, progress) ?? 12;
-        final labelSlide = 8 * (1 - resolvedProgress);
+    if (centerIcon) {
+      return Center(
+        child: AnimatedSwitcher(
+          duration: context.motion.microInteractionDuration,
+          switchInCurve: context.motion.fast,
+          switchOutCurve: context.motion.fast,
+          child: _MetalNavIcon(
+            key: ValueKey(icon),
+            icon: icon,
+            selected: selected,
+          ),
+        ),
+      );
+    }
 
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Align(
-                alignment: Alignment.lerp(
-                      Alignment.center,
-                      Alignment.centerLeft,
-                      resolvedProgress,
-                    ) ??
-                    Alignment.centerLeft,
-                child: _MetalNavIcon(
-                  icon: icon,
-                  selected: selected,
-                  size: 21, // 显式传参以修复 analyzer 警告
-                ),
-              ),
-              IgnorePointer(
-                ignoring: resolvedProgress < 0.98,
-                child: ClipRect(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 36),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Transform.translate(
-                        offset: Offset(labelSlide, 0),
-                        child: Opacity(
-                          opacity: resolvedProgress,
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 15,
-                              fontWeight:
-                                  selected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                          ),
-                        ),
+    final labelOpacity = const Interval(0.15, 0.85).transform(
+      expansionProgress.clamp(0.0, 1.0),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          left: 20,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: _MetalNavIcon(
+              key: ValueKey('side-nav-icon-$iconKey'),
+              icon: icon,
+              selected: selected,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 52,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            ignoring: labelOpacity < 0.98,
+            child: ClipRect(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Opacity(
+                    key: ValueKey('side-nav-label-$iconKey'),
+                    opacity: labelOpacity,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }

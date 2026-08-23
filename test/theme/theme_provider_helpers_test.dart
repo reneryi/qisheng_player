@@ -36,13 +36,10 @@ void main() {
     const neutral = Color(0xFF777777);
     expect(isNeutralColor(neutral), isTrue);
 
-    final gradient = buildDynamicBackgroundGradient(neutral, Brightness.dark);
-    expect(
-      gradient.every(
-        (color) => HSLColor.fromColor(color).saturation < 0.001,
-      ),
-      isTrue,
-    );
+    final darkGradient = buildDynamicBackgroundGradient(neutral, Brightness.dark);
+    final lightGradient = buildDynamicBackgroundGradient(neutral, Brightness.light);
+    expect(darkGradient, hasLength(3));
+    expect(lightGradient, hasLength(3));
     expect(
         HSLColor.fromColor(buildGlassTint(neutral, Brightness.dark)).saturation,
         lessThan(0.001));

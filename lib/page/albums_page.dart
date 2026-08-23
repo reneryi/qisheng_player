@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/album_grid_tile.dart';
 import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/utils.dart';
@@ -20,10 +20,10 @@ class AlbumsPage extends StatelessWidget {
       title: "专辑",
       subtitle: "${contentList.length} 张专辑",
       contentList: contentList,
+      contentRevision: AudioLibrary.revision.value,
       contentBuilder: (context, item, i, multiSelectController) =>
           AlbumTile(album: item, enableHero: true),
-      gridBuilder: (context, item, i, multiSelectController) =>
-          AlbumGridTile(
+      gridBuilder: (context, item, i, multiSelectController) => AlbumGridTile(
         album: item,
         onTap: () => context.push(app_paths.ALBUM_DETAIL_PAGE, extra: item),
       ),

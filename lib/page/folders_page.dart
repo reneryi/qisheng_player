@@ -4,10 +4,10 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/build_index_state_view.dart';
 import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/library/playlist.dart';
-import 'package:qisheng_player/lyric/lyric_source.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/page/uni_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
@@ -51,11 +51,14 @@ class _FoldersPageState extends State<FoldersPage> {
         initialFolders:
             AudioLibrary.instance.folders.map((e) => e.path).toList(),
         onIndexBuilt: () async {
-          await Future.wait([
-            AudioLibrary.initFromIndex(),
-            readPlaylists(),
-            readLyricSources(),
-          ]);
+          final status = await libraryReloadCoordinator.reload(
+            afterReload:
+                PlayService.instance.playbackService.reconcileLibraryReferences,
+          );
+          if (status != AudioLibraryLoadStatus.loaded) {
+            showTextOnSnackBar("曲库索引加载失败，请重新扫描音乐文件夹");
+            return;
+          }
           if (mounted) {
             setState(() {});
           }
@@ -72,6 +75,7 @@ class _FoldersPageState extends State<FoldersPage> {
       title: "文件夹",
       subtitle: formatFolderCount(contentList.length),
       contentList: contentList,
+      contentRevision: AudioLibrary.revision.value,
       contentBuilder: (context, item, i, multiSelectController) =>
           _CompactAudioFolderTile(audioFolder: item),
       primaryAction: Wrap(

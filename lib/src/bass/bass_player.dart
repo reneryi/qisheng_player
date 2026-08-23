@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/play_service/audio_spectrum.dart';
 import 'package:qisheng_player/src/bass/bass_wasapi.dart' as BASS;
 import 'package:qisheng_player/utils.dart';
 import 'package:ffi/ffi.dart' as ffi;
@@ -50,6 +51,8 @@ const BASS_OPTIONAL_PLUGINS = [
 
 class BassPlayer {
   static const int _maxInitializationRetries = 2;
+  static const int _fftValueCount = 1024;
+  static const int _channelGetDataError = 0xFFFFFFFF;
 
   void _ensureInitializationRetryAvailable(String operation, int retries) {
     if (retries >= _maxInitializationRetries) {
@@ -63,6 +66,7 @@ class BassPlayer {
   late final ffi.DynamicLibrary _bassWasapiLib;
   late final BASS.Bass _bass;
   late final BASS.BassWasapi _bassWasapi;
+  ffi.Pointer<ffi.Float>? _fftBuffer;
 
   String? _fPath;
   int? _fstream;
@@ -140,6 +144,38 @@ class BassPlayer {
       return volDsp.value;
     } finally {
       ffi.malloc.free(volDsp);
+    }
+  }
+
+  /// Samples a normalized, log-spaced FFT without exposing the native handle.
+  /// WASAPI exclusive mode is intentionally excluded because its channel is a
+  /// decoding stream and reading it can advance playback data.
+  List<double> sampleFft({int bins = audioSpectrumBinCount}) {
+    if (_fstream == null || wasapiExclusive) return const <double>[];
+    if (playerState != PlayerState.playing) return const <double>[];
+
+    final requestedBins = bins.clamp(1, audioSpectrumBinCount).toInt();
+    final buffer = _fftBuffer ??= ffi.malloc.allocate<ffi.Float>(
+      _fftValueCount * ffi.sizeOf<ffi.Float>(),
+    );
+    try {
+      final read = _bass.BASS_ChannelGetData(
+        _fstream!,
+        buffer.cast<ffi.Void>(),
+        BASS.BASS_DATA_FFT2048,
+      );
+      final expectedBytes = _fftValueCount * ffi.sizeOf<ffi.Float>();
+      if (read <= 0 || read == _channelGetDataError || read > expectedBytes) {
+        return const <double>[];
+      }
+
+      return shapeFftSpectrum(
+        buffer.asTypedList(_fftValueCount),
+        bins: requestedBins,
+      );
+    } catch (err) {
+      LOGGER.w('[bass fft] sample failed: $err');
+      return const <double>[];
     }
   }
 
@@ -727,6 +763,12 @@ class BassPlayer {
           throw const FormatException(
               "The device is currently being reinitialized.");
       }
+    }
+
+    final fftBuffer = _fftBuffer;
+    if (fftBuffer != null) {
+      ffi.malloc.free(fftBuffer);
+      _fftBuffer = null;
     }
 
     _bassWasapiLib.close();

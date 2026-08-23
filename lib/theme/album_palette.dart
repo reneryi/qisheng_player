@@ -2,42 +2,68 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// 栖声播放器 5 色调和专辑调色板模型
 class AlbumPalette {
   const AlbumPalette({
     required this.primary,
     required this.secondary,
     required this.accent,
     required this.muted,
+    required this.highlight,
   });
 
+  /// 主导色 (Primary Dominant)
   final Color primary;
+
+  /// 次主色 / 灵动色 (Vibrant Secondary)
   final Color secondary;
+
+  /// 强调色 (Vibrant Accent)
   final Color accent;
+
+  /// 柔和环境底色 (Soft Muted / Ambient)
   final Color muted;
 
+  /// 高光点缀色 (Highlight Glow)
+  final Color highlight;
+
   factory AlbumPalette.fallback(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    final isDark = hsl.lightness < 0.5;
     return AlbumPalette(
       primary: color,
-      secondary: color,
-      accent: color,
-      muted: color,
+      secondary: hsl.withHue((hsl.hue + 25) % 360).toColor(),
+      accent: hsl.withHue((hsl.hue - 30 + 360) % 360).toColor(),
+      muted: hsl
+          .withSaturation((hsl.saturation * 0.5).clamp(0.0, 1.0))
+          .withLightness(isDark ? 0.12 : 0.88)
+          .toColor(),
+      highlight: hsl
+          .withLightness((hsl.lightness + (isDark ? 0.25 : -0.25)).clamp(0.0, 1.0))
+          .toColor(),
     );
   }
 
   factory AlbumPalette.fromColors(
-    List<Color> colors, {
+    List<Color> rawColors, {
     required Color fallback,
   }) {
-    if (colors.isEmpty) return AlbumPalette.fallback(fallback);
+    if (rawColors.isEmpty) return AlbumPalette.fallback(fallback);
 
-    final primary = colors.first;
-    final secondaryCandidate = _selectSecondary(colors, primary);
+    // 1. 色彩清洗：过滤极度发灰的脏色
+    final cleanedColors = rawColors.map(_cleanColor).toList();
+    final primary = cleanedColors.first;
+
+    // 2. 提取次主色
+    final secondaryCandidate = _selectSecondary(cleanedColors, primary);
     final secondary = secondaryCandidate == null ||
             perceptualColorDistance(primary, secondaryCandidate) < 0.10
         ? _deriveRoleColor(primary, const [], preferLighter: true)
         : secondaryCandidate;
+
+    // 3. 提取强调色
     final accentCandidate = _selectAccent(
-      colors,
+      cleanedColors,
       primary: primary,
       secondary: secondary,
     );
@@ -53,17 +79,33 @@ class AlbumPalette {
             preferLighter: false,
           )
         : accentCandidate;
-    final muted = _selectMuted(colors, primary, secondary, accent);
+
+    // 4. 提取柔和底色
+    final muted = _selectMuted(cleanedColors, primary, secondary, accent);
+
+    // 5. 提取高光色
+    final highlight = _selectHighlight(cleanedColors, primary, secondary, accent, muted);
 
     return AlbumPalette(
       primary: primary,
       secondary: secondary,
       accent: accent,
       muted: muted,
+      highlight: highlight,
     );
   }
 
-  List<Color> get colors => [primary, secondary, accent, muted];
+  List<Color> get colors => [primary, secondary, accent, muted, highlight];
+}
+
+/// 对提取色进行色彩清洗与饱和度/明度适度校准
+Color _cleanColor(Color color) {
+  final hsl = HSLColor.fromColor(color);
+  // 若饱和度过低且非纯黑白，提升微量饱和度以消除灰浊感
+  if (hsl.saturation > 0.03 && hsl.saturation < 0.18) {
+    return hsl.withSaturation(0.22).toColor();
+  }
+  return color;
 }
 
 Color? _selectSecondary(List<Color> colors, Color primary) {
@@ -115,16 +157,41 @@ Color _selectMuted(
   final candidates = colors.where(
     (color) => color != primary && color != secondary && color != accent,
   );
-  if (candidates.isEmpty) return secondary;
+  if (candidates.isEmpty) {
+    final hsl = HSLColor.fromColor(primary);
+    return hsl
+        .withSaturation((hsl.saturation * 0.4).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness * 0.5).clamp(0.08, 0.25))
+        .toColor();
+  }
 
   return candidates.reduce((left, right) {
-    final leftIndex = colors.indexOf(left);
-    final rightIndex = colors.indexOf(right);
-    final leftScore = HSLColor.fromColor(left).saturation + leftIndex * 0.025;
-    final rightScore =
-        HSLColor.fromColor(right).saturation + rightIndex * 0.025;
-    return leftScore <= rightScore ? left : right;
+    final leftHsl = HSLColor.fromColor(left);
+    final rightHsl = HSLColor.fromColor(right);
+    return leftHsl.saturation <= rightHsl.saturation ? left : right;
   });
+}
+
+Color _selectHighlight(
+  List<Color> colors,
+  Color primary,
+  Color secondary,
+  Color accent,
+  Color muted,
+) {
+  final candidates = colors.where(
+    (c) => c != primary && c != secondary && c != accent && c != muted,
+  );
+  if (candidates.isNotEmpty) {
+    return candidates.reduce((left, right) {
+      final leftHsl = HSLColor.fromColor(left);
+      final rightHsl = HSLColor.fromColor(right);
+      return leftHsl.lightness >= rightHsl.lightness ? left : right;
+    });
+  }
+
+  final hsl = HSLColor.fromColor(primary);
+  return hsl.withLightness((hsl.lightness * 1.35).clamp(0.70, 0.95)).toColor();
 }
 
 Color _deriveRoleColor(

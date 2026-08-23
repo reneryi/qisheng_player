@@ -7,7 +7,10 @@ import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/utils.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -115,10 +118,14 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
                     indexPath: snapshot.data!,
                     folders: folders,
                     whenIndexBuilt: () async {
-                      await Future.wait([
-                        AppSettings.instance.saveSettings(),
-                        AudioLibrary.initFromIndex(),
-                      ]);
+                      await AppSettings.instance.saveSettings();
+                      final status = await libraryReloadCoordinator.reload();
+                      if (status != AudioLibraryLoadStatus.loaded) {
+                        showTextOnSnackBar(
+                          "曲库索引加载失败，请重新扫描音乐文件夹",
+                        );
+                        return;
+                      }
                       if (context.mounted) {
                         context.go(app_paths.AUDIOS_PAGE);
                       }
@@ -290,7 +297,8 @@ class __WindowControllsState extends State<_WindowControlls>
         ),
         IconButton(
           tooltip: "退出",
-          onPressed: windowManager.close,
+          // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
+          onPressed: () => unawaited(WindowControls.exitApp()),
           icon: const Icon(Symbols.close),
         ),
       ],

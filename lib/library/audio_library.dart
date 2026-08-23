@@ -18,6 +18,8 @@ typedef CoverSizesLoader = Future<PictureSizes?> Function({
   required int largeHeight,
 });
 
+enum AudioLibraryLoadStatus { loaded, missing, empty, invalid }
+
 class _AudioCoverProviders {
   const _AudioCoverProviders(this.small, this.medium, this.large);
 
@@ -68,21 +70,38 @@ class AudioLibrary {
   ///     "version": 113
   /// }
   /// ```
-  static Future<void> initFromIndex() async {
+  static Future<AudioLibraryLoadStatus> initFromIndex() async {
     try {
       final supportPath = (await getAppDataDir()).path;
       final indexPath = "$supportPath\\index.json";
+      final indexFile = File(indexPath);
+      if (!indexFile.existsSync()) {
+        return AudioLibraryLoadStatus.missing;
+      }
 
-      final indexStr = await File(indexPath).readAsString();
-      if (indexStr.trim().isEmpty) return;
-      final Map indexJson = json.decode(indexStr);
-      final List foldersJson = indexJson["folders"];
+      final indexStr = await indexFile.readAsString();
+      if (indexStr.trim().isEmpty) {
+        return AudioLibraryLoadStatus.empty;
+      }
+      final decoded = json.decode(indexStr);
+      if (decoded is! Map || decoded["folders"] is! List) {
+        throw const FormatException("index.json 缺少有效的 folders 数组");
+      }
+      final List foldersJson = decoded["folders"] as List;
       final List<AudioFolder> folders = [];
 
-      for (Map folderMap in foldersJson) {
-        final List audiosJson = folderMap["audios"];
+      for (final folderValue in foldersJson) {
+        if (folderValue is! Map || folderValue["audios"] is! List) {
+          throw const FormatException("index.json 包含无效的文件夹条目");
+        }
+        final folderMap = folderValue;
+        final List audiosJson = folderMap["audios"] as List;
         final List<Audio> audios = [];
-        for (Map audioMap in audiosJson) {
+        for (final audioValue in audiosJson) {
+          if (audioValue is! Map) {
+            throw const FormatException("index.json 包含无效的音频条目");
+          }
+          final audioMap = audioValue;
           audios.add(Audio.fromMap(audioMap));
         }
         folders.add(AudioFolder.fromMap(folderMap, audios));
@@ -94,8 +113,10 @@ class AudioLibrary {
       AudioMetadataOverrideStore.instance.applyToLibrary(instance);
       instance._rebuildCollections();
       notifyChanged();
+      return AudioLibraryLoadStatus.loaded;
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
+      return AudioLibraryLoadStatus.invalid;
     }
   }
 

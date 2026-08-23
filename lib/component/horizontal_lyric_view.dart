@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,7 +40,8 @@ class HorizontalLyricView extends StatelessWidget {
                 child: Text(
                   "开始播放音乐",
                   style: TextStyle(
-                    color: scheme.onSurface, // 重构：文字颜色替换为 onSurface 以确保沉浸在渐变背景上的易读性
+                    color: scheme
+                        .onSurface, // 重构：文字颜色替换为 onSurface 以确保沉浸在渐变背景上的易读性
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -170,6 +173,17 @@ class _LyricHorizontalScrollAreaState
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final effectsLevel = theme.extension<AppSurfaceTokens>()?.effectsLevel ??
+        UiEffectsLevel.balanced;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final enableMotion =
+        !reduceMotion && effectsLevel != UiEffectsLevel.performance;
+    final transitionDuration = reduceMotion
+        ? Duration.zero
+        : enableMotion
+            ? const Duration(milliseconds: 180)
+            : const Duration(milliseconds: 100);
 
     return RepaintBoundary(
       child: Padding(
@@ -180,28 +194,29 @@ class _LyricHorizontalScrollAreaState
           child: Align(
             alignment: Alignment.centerLeft,
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 360),
-              reverseDuration: const Duration(milliseconds: 220),
+              duration: transitionDuration,
+              reverseDuration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 120),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
-                final curved = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                  reverseCurve: Curves.easeInCubic,
-                );
+                // 顶栏歌词切换：平稳向上的 0.2 微滑入 + 优雅淡入，彻底消除颠簸
                 return FadeTransition(
-                  opacity: curved,
+                  opacity: animation,
                   child: SlideTransition(
                     position: Tween<Offset>(
-                      begin: const Offset(0.035, -0.08),
+                      begin: enableMotion
+                          ? const Offset(0.0, 0.25)
+                          : Offset.zero,
                       end: Offset.zero,
-                    ).animate(curved),
-                    child: ScaleTransition(
-                      scale:
-                          Tween<double>(begin: 0.992, end: 1).animate(curved),
-                      child: child,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
                     ),
+                    child: child,
                   ),
                 );
               },
@@ -209,7 +224,8 @@ class _LyricHorizontalScrollAreaState
                 currContent,
                 key: ValueKey(currContent),
                 style: TextStyle(
-                  color: scheme.onSurface, // 重构：前景色调整为 onSurface 以配合沉浸式背景的高对比度表现
+                  color:
+                      scheme.onSurface, // 前景色调整为 onSurface 确保沉浸式对比度
                   fontWeight: FontWeight.w700,
                   shadows: [
                     Shadow(

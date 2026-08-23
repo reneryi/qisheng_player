@@ -1,3 +1,7 @@
+# Qisheng Player v1.6.1
+
+本文件保留品牌化前的历史发布说明，原始发布 tag 为 `v1.6.1`。
+
 ## 📦 下载
 
 下载 `Coriander-Player-v1.6.1-Windows-x64.zip`，解压后运行 `coriander_player.exe` 即可使用。

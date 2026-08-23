@@ -5,7 +5,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/src/rust/api/utils.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:github/github.dart';
 import 'package:material_symbols_icons/symbols.dart';
 

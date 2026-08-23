@@ -4,14 +4,13 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/horizontal_lyric_view.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
-import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
-import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/search_page/search_page.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -38,18 +37,9 @@ class TitleBar extends StatelessWidget {
           },
         );
 
-        // 如果是透明模式，直接使用 Padding 包裹，去掉外部的 AppSurface 卡片白框与模糊
-        if (transparent) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: childWidget,
-          );
-        }
-
-        return AppSurface(
-          variant: AppSurfaceVariant.glass,
-          radius: context.surfaces.radiusXxl,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        // 沉浸式单层背景模式：直接去除外部的独立胶囊卡片框，让顶栏元素自然悬浮在流体背景顶部
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: childWidget,
         );
       },
@@ -276,9 +266,17 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
           curve: motion.emphasized,
           width: _expanded ? 14 : 8,
         ),
-        const Expanded(
+        Expanded(
           child: WindowDragRegion(
-            child: HorizontalLyricView(),
+            child: AnimatedOpacity(
+              duration: motion.controlTransitionDuration,
+              curve: motion.normal,
+              opacity: _expanded ? 0.0 : 1.0,
+              child: IgnorePointer(
+                ignoring: _expanded,
+                child: const HorizontalLyricView(),
+              ),
+            ),
           ),
         ),
       ],
@@ -476,10 +474,8 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         ),
         _WindowButton(
           tooltip: '退出',
-          onPressed: () async {
-            await PlayCountStore.instance.save();
-            await windowManager.close();
-          },
+          // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
+          onPressed: () => unawaited(WindowControls.exitApp()),
           icon: Symbols.close,
           color: scheme.error,
         ),

@@ -6,10 +6,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/entry.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/library/online_cover_store.dart';
-import 'package:qisheng_player/library/play_count_store.dart';
-import 'package:qisheng_player/library/playlist.dart';
-import 'package:qisheng_player/lyric/lyric_source.dart';
+import 'package:qisheng_player/library/library_reload_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/rust/api/tag_reader.dart';
 import 'package:qisheng_player/src/rust/api/logger.dart';
@@ -59,14 +56,14 @@ Future<void> loadPrefFont() async {
   }
 }
 
-Future<void> _loadLibraryState() async {
-  await Future.wait([
-    AudioLibrary.initFromIndex(),
-    readPlaylists(),
-    readLyricSources(),
-    PlayCountStore.instance.read(),
-    OnlineCoverStore.instance.read(),
-  ]);
+Future<AudioLibraryLoadStatus> _loadLibraryState({
+  bool reconcilePlayback = false,
+}) {
+  return libraryReloadCoordinator.reload(
+    afterReload: reconcilePlayback
+        ? PlayService.instance.playbackService.reconcileLibraryReferences
+        : null,
+  );
 }
 
 Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
@@ -74,7 +71,10 @@ Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
     await for (final action in updateIndex(indexPath: supportPath)) {
       LOGGER.i("[update index silent] ${action.progress}: ${action.message}");
     }
-    await _loadLibraryState();
+    final status = await _loadLibraryState(reconcilePlayback: true);
+    if (status != AudioLibraryLoadStatus.loaded) {
+      LOGGER.e("[update index silent] reload failed: ${status.name}");
+    }
   } catch (err, trace) {
     LOGGER.e("[update index silent] $err", stackTrace: trace);
   }
@@ -99,14 +99,20 @@ Future<void> main() async {
   if (File("$supportPath\\app_preference.json").existsSync()) {
     await AppPreference.read();
   }
-  final welcome = !File("$supportPath\\index.json").existsSync();
+  var welcome = !File("$supportPath\\index.json").existsSync();
   if (!welcome) {
-    await _loadLibraryState();
-    await PlayService.instance.playbackService.restoreLastSession();
+    final status = await _loadLibraryState();
+    welcome = status != AudioLibraryLoadStatus.loaded;
+    if (!welcome) {
+      await PlayService.instance.playbackService.restoreLastSession();
+    }
   }
 
   // Must initialize after loading preferences to avoid default-volume capture.
-  WindowControls.init();
+  final initialBackdropResult = await WindowControls.init();
+  ThemeProvider.instance.acceptInitialWindowBackdropResult(
+    initialBackdropResult,
+  );
   await initWindow();
   await HotkeysHelper.init();
 

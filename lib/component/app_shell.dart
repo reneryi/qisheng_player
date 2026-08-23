@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -10,13 +11,9 @@ import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/component/cp/cp_components.dart';
-import 'package:qisheng_player/component/ui/liquid_surface_background.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
-import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -32,16 +29,64 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
   bool largeSidebarCollapsed = AppPreference.instance.sidebarCollapsedLarge;
+  late final AnimationController _largeSidebarController;
+
+  @override
+  void initState() {
+    super.initState();
+    _largeSidebarController = AnimationController(
+      vsync: this,
+      value: largeSidebarCollapsed ? 0 : 1,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _largeSidebarController.duration = context.motion.navCollapseDuration;
+  }
 
   void _toggleLargeSidebar(bool collapsed) {
     if (largeSidebarCollapsed == collapsed) return;
     setState(() {
       largeSidebarCollapsed = collapsed;
     });
+    _animateLargeSidebar(collapsed ? 0.0 : 1.0);
     AppPreference.instance.sidebarCollapsedLarge = collapsed;
     unawaited(AppPreference.instance.save());
+  }
+
+  void _animateLargeSidebar(double target) {
+    final current = _largeSidebarController.value;
+    final distance = (target - current).abs().clamp(0.0, 1.0).toDouble();
+    if (distance == 0) return;
+
+    // Animate the visual progress itself. Applying the themed curve to the
+    // segment (instead of transforming a value that is later reversed) keeps
+    // collapsing responsive at the beginning and soft at the end.
+    final baseDuration = context.motion.navCollapseDuration;
+    final duration = Duration(
+      microseconds: math.max(
+        1,
+        (baseDuration.inMicroseconds * distance).round(),
+      ),
+    );
+    final curve =
+        target < current ? Curves.easeInOutCubic : context.motion.emphasized;
+    _largeSidebarController.animateTo(
+      target,
+      duration: duration,
+      curve: curve,
+    );
+  }
+
+  @override
+  void dispose() {
+    _largeSidebarController.dispose();
+    super.dispose();
   }
 
   @override
@@ -56,8 +101,9 @@ class _AppShellState extends State<AppShell> {
             drawer: useDrawer ? const SideNav() : null,
             drawerScrimColor: Theme.of(context).colorScheme.scrim,
             body: MainLayoutFrame(
-              titleBar: const SizedBox.shrink(), // 移除外层独立的顶栏
-              overlay: null, // 移除外层独立的底栏
+              // 采用经典稳定的桌面架构：顶部 TitleBar 和底部 BottomPlayerBar 作为全局通栏
+              titleBar: const TitleBar(),
+              overlay: const BottomPlayerBar(),
               child: switch (screenType) {
                 ScreenType.small => _ShellPagePanel(
                     page: widget.page,
@@ -71,10 +117,9 @@ class _AppShellState extends State<AppShell> {
                 ScreenType.large => _ShellWideContent(
                     page: widget.page,
                     pageIdentity: widget.pageIdentity,
-                    sideNav: SideNav(
-                      collapsed: largeSidebarCollapsed,
-                      onToggleCollapsed: _toggleLargeSidebar,
-                    ),
+                    sideNavAnimation: _largeSidebarController,
+                    sideNavCollapsed: largeSidebarCollapsed,
+                    onToggleCollapsed: _toggleLargeSidebar,
                   ),
               },
             ),
@@ -96,27 +141,12 @@ class _ShellPagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>();
-    // 窄屏模式下，重新启用带有毛玻璃的 CpSurface 面板，使主内容区域形成半透悬浮质感
-    // 重构：将透明顶栏和底栏以垂直列排版装入面板中
-    return CpSurface(
-      tone: CpSurfaceTone.panel,
-      dynamicGradientColors: theme.surfaceGradient,
-      backgroundBuilder: _panelBackgroundBuilder(theme),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        children: [
-          const TitleBar(transparent: true), // 嵌入透明顶栏
-          const SizedBox(height: 12),
-          Expanded(
-            child: _ShellPageTransition(
-              pageIdentity: pageIdentity,
-              child: page,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const BottomPlayerBar(transparent: true), // 嵌入透明底栏
-        ],
+    // 窄屏模式下直接呈现页面内容，去除多层卡片背景包裹
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: _ShellPageTransition(
+        pageIdentity: pageIdentity,
+        child: page,
       ),
     );
   }
@@ -126,65 +156,69 @@ class _ShellWideContent extends StatelessWidget {
   const _ShellWideContent({
     required this.page,
     required this.pageIdentity,
-    required this.sideNav,
+    this.sideNav,
+    this.sideNavAnimation,
+    this.sideNavCollapsed,
+    this.onToggleCollapsed,
   });
 
   final Widget page;
   final String pageIdentity;
-  final Widget sideNav;
+  final Widget? sideNav;
+  final Animation<double>? sideNavAnimation;
+  final bool? sideNavCollapsed;
+  final ValueChanged<bool>? onToggleCollapsed;
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>();
+    final isAnimated = sideNavAnimation != null;
+    final widthDelta = isAnimated
+        ? context.chrome.sideNavExpandedWidth -
+            context.chrome.sideNavCollapsedWidth
+        : 0.0;
+    // 宽屏模式下主页面内容直接平铺在底层单层背景上，彻底消除多层胶囊框与背景割裂
+    final pageContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: _ShellPageTransition(
+        pageIdentity: pageIdentity,
+        child: page,
+      ),
+    );
+
     return ValueListenableBuilder<WindowLayoutMode>(
       valueListenable: WindowControls.layoutMode,
-      builder: (context, _, __) => Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          sideNav,
-          // 还原左右分栏间的 shellGap 空隙，产生呼吸感，突出悬浮效果
-          SizedBox(width: WindowControls.shellGap),
-          Expanded(
-            // 还原主内容区域的 CpSurface 磨砂玻璃气泡框，悬浮于底色之上
-            // 重构：将透明顶栏和底栏以垂直列的形式，整体包在右侧的 CpSurface 画板大卡片里
-            child: CpSurface(
-              tone: CpSurfaceTone.panel,
-              dynamicGradientColors: theme.surfaceGradient,
-              backgroundBuilder: _panelBackgroundBuilder(theme),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              child: Column(
-                children: [
-                  const TitleBar(transparent: true), // 嵌入透明顶栏
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: _ShellPageTransition(
-                      pageIdentity: pageIdentity,
-                      child: page,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const BottomPlayerBar(transparent: true), // 嵌入透明底栏
-                ],
-              ),
-            ),
-          ),
-        ],
+      builder: (context, _, __) => AnimatedBuilder(
+        animation: sideNavAnimation ?? kAlwaysCompleteAnimation,
+        child: pageContent,
+        builder: (context, child) {
+          final progress = isAnimated ? sideNavAnimation!.value : 0.0;
+          final resolvedSideNav = isAnimated
+              ? SideNav(
+                  collapsed: sideNavCollapsed!,
+                  expansionProgress: progress,
+                  onToggleCollapsed: onToggleCollapsed,
+                )
+              : sideNav!;
+          final resolvedPanel = isAnimated
+              ? SideNavTransitionScope(
+                  expansionProgress: progress,
+                  widthDelta: widthDelta,
+                  collapsing: sideNavCollapsed!,
+                  child: child!,
+                )
+              : child!;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              resolvedSideNav,
+              const SizedBox(width: 8.0),
+              Expanded(child: resolvedPanel),
+            ],
+          );
+        },
       ),
     );
   }
-}
-
-Widget Function(BuildContext context)? _panelBackgroundBuilder(
-  ThemeProvider theme,
-) {
-  if (theme.windowBackdropMode != WindowBackdropMode.fluid) return null;
-
-  return (context) => LiquidSurfaceBackground(
-        paletteColors: theme.albumPalette.colors,
-        effectsLevel: theme.uiEffectsLevel,
-        borderRadius: BorderRadius.circular(context.surfaces.radiusXxl),
-        child: const SizedBox.expand(),
-      );
 }
 
 class _ShellPageTransition extends StatelessWidget {

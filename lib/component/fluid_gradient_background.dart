@@ -1,65 +1,16 @@
+import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
+import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/theme/album_palette.dart';
+import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/theme_provider.dart';
 
-List<Color> resolveFluidGradientColors(
-  AlbumPalette palette,
-  Brightness brightness,
-) {
-  final isDark = brightness == Brightness.dark;
-  final overlay = isDark ? Colors.black : Colors.white;
-  final luminance = (palette.primary.computeLuminance() +
-          palette.secondary.computeLuminance() +
-          palette.accent.computeLuminance()) /
-      3;
-  final baseAlpha = isDark
-      ? (0.16 + luminance * 0.10).clamp(0.12, 0.28)
-      : (0.10 + (1 - luminance) * 0.06).clamp(0.08, 0.18);
-  final alphas = [
-    baseAlpha,
-    (baseAlpha + 0.04).clamp(0.0, 1.0),
-    (baseAlpha + 0.08).clamp(0.0, 1.0),
-  ];
-  final paletteColors = [palette.primary, palette.secondary, palette.accent];
-  return [
-    for (var index = 0; index < paletteColors.length; index++)
-      Color.alphaBlend(
-        overlay.withValues(alpha: alphas[index]),
-        paletteColors[index],
-      ),
-  ];
-}
-
-Color resolveFluidBaseColor(List<Color> colors) {
-  if (colors.isEmpty) return const Color(0xFF0F172A);
-  final primary = colors[0];
-  final secondary = colors.length > 1 ? colors[1] : primary;
-  final accent = colors.length > 2 ? colors[2] : secondary;
-  return Color.lerp(
-    Color.lerp(primary, secondary, 0.24),
-    accent,
-    0.10,
-  )!;
-}
-
-double resolveFluidScrimOpacity(List<Color> colors, Brightness brightness) {
-  if (colors.isEmpty) return brightness == Brightness.dark ? 0.22 : 0.28;
-  final luminance = colors
-          .map((color) => color.computeLuminance())
-          .reduce((left, right) => left + right) /
-      colors.length;
-  return brightness == Brightness.dark
-      ? (0.12 + luminance * 0.18).clamp(0.12, 0.24)
-      : (0.18 + (1 - luminance) * 0.10).clamp(0.16, 0.28);
-}
-
-/// 动态情感交融流体背景组件
-/// 能够随歌曲专辑封面的主色调缓慢交融流动，提供极其灵动的质感
+/// 栖声播放器多材质窗口背景容器 (Multi-Material Window Backdrop Pipeline)
 class FluidGradientBackground extends StatefulWidget {
   const FluidGradientBackground({super.key, required this.child});
 
@@ -71,217 +22,420 @@ class FluidGradientBackground extends StatefulWidget {
 }
 
 class _FluidGradientBackgroundState extends State<FluidGradientBackground>
-    with TickerProviderStateMixin {
-  // 慢速流体运动动画控制器
-  late final AnimationController _fluidController;
-  // 颜色平滑渐变过渡动画控制器
-  late final AnimationController _colorTransitionController;
+    with SingleTickerProviderStateMixin {
+  // 着色器程序实例缓存
+  static ui.FragmentProgram? _meshFlowProgram;
+  static ui.FragmentProgram? _waterRippleProgram;
+  static ui.FragmentProgram? _lensGlassProgram;
 
-  // 默认的主题色彩，在未播放或无封面时使用 Zinc/Slate 的高雅冷灰色调
-  static const Color _defaultColor1 = Color(0xFF1E293B); // Slate 800
-  static const Color _defaultColor2 = Color(0xFF0F172A); // Slate 900
-  static const Color _defaultColor3 = Color(0xFF020617); // Slate 950
+  late final AnimationController _animController;
+  double _elapsedTime = 0;
 
-  List<Color> _sourceColors = [_defaultColor1, _defaultColor2, _defaultColor3];
-  List<Color> _targetColors = [_defaultColor1, _defaultColor2, _defaultColor3];
-  final List<Color> _currentColors = [
-    _defaultColor1,
-    _defaultColor2,
-    _defaultColor3,
-  ];
+  // 鼠标交互状态（用于水波纹着色器）
+  Offset _mousePos = const Offset(0.5, 0.5);
+  double _mouseSpeed = 0.0;
+  Offset _lastMousePos = const Offset(0.5, 0.5);
+  Offset _clickPos = const Offset(-1.0, -1.0);
+  DateTime _lastClickTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
     super.initState();
-    // 25 秒超慢循环：用于驱动背景流体光源的平移流动，确保灵动且温和
-    _fluidController = AnimationController(
+    _animController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 25),
-    )..repeat();
-
-    // 1.5 秒颜色渐变控制器：用于在切换新歌曲、提取出新色调时，实现色彩过渡的无缝化
-    _colorTransitionController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(seconds: 60),
     )..addListener(() {
         setState(() {
-          final t = _colorTransitionController.value;
-          for (int i = 0; i < 3; i++) {
-            _currentColors[i] =
-                Color.lerp(_sourceColors[i], _targetColors[i], t) ??
-                    _targetColors[i];
-          }
+          _elapsedTime += 0.016;
         });
       });
+    _animController.repeat();
+
+    _loadShaders();
+  }
+
+  Future<void> _loadShaders() async {
+    try {
+      _meshFlowProgram ??=
+          await ui.FragmentProgram.fromAsset('shaders/mesh_flow.frag');
+      _waterRippleProgram ??=
+          await ui.FragmentProgram.fromAsset('shaders/water_ripple.frag');
+      _lensGlassProgram ??=
+          await ui.FragmentProgram.fromAsset('shaders/lens_glass.frag');
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _fluidController.dispose();
-    _colorTransitionController.dispose();
+    _animController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final theme = context.watch<ThemeProvider>();
-    final newColors = resolveFluidGradientColors(
-      theme.albumPalette,
-      Theme.of(context).brightness,
+  void _onPointerHover(PointerHoverEvent event, Size size) {
+    if (size.width == 0 || size.height == 0) return;
+    final normalized = Offset(
+      event.localPosition.dx / size.width,
+      event.localPosition.dy / size.height,
     );
-    if (_sameColors(_targetColors, newColors)) return;
-    _triggerColorTransition(newColors);
+    final dist = (normalized - _lastMousePos).distance;
+    setState(() {
+      _mouseSpeed = (_mouseSpeed * 0.7) + (dist * 15.0).clamp(0.0, 1.0);
+      _mousePos = normalized;
+      _lastMousePos = normalized;
+    });
   }
 
-  bool _sameColors(List<Color> first, List<Color> second) {
-    if (first.length != second.length) return false;
-    for (var index = 0; index < first.length; index++) {
-      if (first[index] != second[index]) return false;
-    }
-    return true;
-  }
-
-  void _triggerColorTransition(List<Color> newColors) {
-    _sourceColors = List.from(_currentColors);
-    _targetColors = newColors;
-    _colorTransitionController.forward(from: 0);
+  void _onPointerDown(PointerDownEvent event, Size size) {
+    if (size.width == 0 || size.height == 0) return;
+    setState(() {
+      _clickPos = Offset(
+        event.localPosition.dx / size.width,
+        event.localPosition.dy / size.height,
+      );
+      _lastClickTime = DateTime.now();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = context.watch<ThemeProvider>();
-    final backdropMode = theme.windowBackdropMode;
+    final chrome = context.chrome;
 
-    // 若当前不是极光流体模式，需做材质隔离
-    if (backdropMode != WindowBackdropMode.fluid) {
-      // 1. 如果是关闭材质效果，需要显示实色的主题底色作为软件不透光背景
-      if (backdropMode == WindowBackdropMode.none) {
-        return Container(
-          color: isDark
-              ? const Color(0xFF0F141C) // 极简暗黑实色背景
-              : const Color(0xFFF3F6FB), // 洁净亮白实色背景
-          child: widget.child,
+    return ValueListenableBuilder<int>(
+      valueListenable: AppSettings.instance.backgroundVersion,
+      builder: (context, _, __) {
+        final backgroundFile = _resolveBackgroundFile();
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final size = Size(constraints.maxWidth, constraints.maxHeight);
+
+            return Listener(
+              onPointerHover: (e) => _onPointerHover(e, size),
+              onPointerDown: (e) => _onPointerDown(e, size),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildBackdropLayer(context, theme, size),
+                  if (backgroundFile != null)
+                    _UserBackgroundImage(
+                      file: backgroundFile,
+                      tint: chrome.windowScrim,
+                    ),
+                  widget.child,
+                ],
+              ),
+            );
+          },
         );
-      }
-      // 2. 如果是云母、云母 Alt、亚克力等原生系统材质，底层必须保持完全透明，让原生桌面背景透过来
-      return widget.child;
+      },
+    );
+  }
+
+  Widget _buildBackdropLayer(
+    BuildContext context,
+    ThemeProvider theme,
+    Size size,
+  ) {
+    final mode = theme.effectiveWindowBackdropMode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = theme.albumPalette;
+
+    // 1. 原生增强型云母 (Mica Alt) 或 实时亚克力 (Acrylic)
+    // DWM 材质由系统绘制在窗口背后（最大化/全屏时同样持续生效），本层只保留
+    // 极低透明度衬底。严格遵循微软规范：想要透出材质的层必须尽量透明。
+    // Mica Alt: 0.06~0.10 极淡底衬，壁纸珠光与色泽浸润完整透出（与 Win11 设置/记事本一致）
+    // Acrylic: 0.12~0.15 柔光 scrim，兼顾实时毛玻璃通透与前文文字可读性
+    if (mode == WindowBackdropMode.micaAlt ||
+        mode == WindowBackdropMode.acrylic) {
+      final bool isMicaAlt = mode == WindowBackdropMode.micaAlt;
+      final double topScrimAlpha = isMicaAlt ? 0.06 : 0.12;
+      final double bottomScrimAlpha = isMicaAlt ? 0.10 : 0.15;
+
+      final topColor = isDark
+          ? const Color(0xFF0A1324).withValues(alpha: topScrimAlpha)
+          : const Color(0xFFF6F8FA).withValues(alpha: topScrimAlpha);
+      final bottomColor = isDark
+          ? const Color(0xFF070D18).withValues(alpha: bottomScrimAlpha)
+          : const Color(0xFFE8EBF0).withValues(alpha: bottomScrimAlpha);
+
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [topColor, bottomColor],
+          ),
+        ),
+      );
     }
 
-    // 极光流体模式 (Flutter 软件渲染)
-    final scrimOpacity = resolveFluidScrimOpacity(
-      _currentColors,
-      Theme.of(context).brightness,
+    // 2. 弥散流彩 / 灵动流光 (Mesh Flow)
+    if (mode == WindowBackdropMode.meshFlow && _meshFlowProgram != null) {
+      return CustomPaint(
+        size: size,
+        painter: _MeshFlowPainter(
+          program: _meshFlowProgram!,
+          time: _elapsedTime,
+          palette: palette,
+          isDark: isDark,
+          baseGradient: theme.backgroundGradient,
+        ),
+      );
+    }
+
+    // 3. 交互水波纹 (Interactive Water Ripple - 独立自洽深色水光)
+    if (mode == WindowBackdropMode.waterRipple && _waterRippleProgram != null) {
+      final clickElapsed =
+          DateTime.now().difference(_lastClickTime).inMilliseconds / 1000.0;
+      return CustomPaint(
+        size: size,
+        painter: _WaterRipplePainter(
+          program: _waterRippleProgram!,
+          time: _elapsedTime,
+          mousePos: _mousePos,
+          mouseSpeed: _mouseSpeed,
+          clickPos: _clickPos,
+          clickTime: clickElapsed,
+          bassEnergy: 0.0, // 将在有音频播放时注入低音振幅
+        ),
+      );
+    }
+
+    // 4. 琉璃透镜 (Prismatic Glass)
+    if (mode == WindowBackdropMode.prismaticGlass &&
+        _lensGlassProgram != null) {
+      return CustomPaint(
+        size: size,
+        painter: _LensGlassPainter(
+          program: _lensGlassProgram!,
+          time: _elapsedTime,
+          tintColor: theme.glassTint,
+          isDark: isDark,
+        ),
+      );
+    }
+
+    // 5. 原生默认对角渐变 (Default 135° Gradient: 日间柔和纸白 vs 夜间深邃午夜蓝)
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: theme.backgroundGradient,
+        ),
+      ),
     );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // 1. 流体渲染 Canvas 层：在其内绘制慢速移动的径向渐变
-        RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _fluidController,
-            builder: (context, _) {
-              return CustomPaint(
-                painter: _FluidGradientPainter(
-                  colors: _currentColors,
-                  progress: _fluidController.value,
-                  scrimOpacity: scrimOpacity,
-                ),
-              );
-            },
-          ),
-        ),
-        // 2. 超强模糊毛玻璃层：把上面的多光源径向渐变，完美相融渲染成平滑温润的“流体渐变”
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 96, sigmaY: 96),
-            child: const SizedBox.shrink(),
-          ),
-        ),
-        // 3. 微弱的遮罩叠加层：保证前台文字和控件有足够的高对比度与舒适观感
-        Positioned.fill(
-          child: Container(
-            color: isDark
-                ? Colors.black.withValues(alpha: scrimOpacity)
-                : Colors.white.withValues(alpha: scrimOpacity),
-          ),
-        ),
-        // 4. 内容层
-        widget.child,
-      ],
-    );
+  }
+
+  File? _resolveBackgroundFile() {
+    final path = AppSettings.instance.backgroundImagePath;
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    return file.existsSync() ? file : null;
   }
 }
 
-/// 绘制流体背景中漂移色块的 Painter
-class _FluidGradientPainter extends CustomPainter {
-  const _FluidGradientPainter({
-    required this.colors,
-    required this.progress,
-    required this.scrimOpacity,
+/// 弥散流彩着色器绘制器
+class _MeshFlowPainter extends CustomPainter {
+  const _MeshFlowPainter({
+    required this.program,
+    required this.time,
+    required this.palette,
+    required this.isDark,
+    required this.baseGradient,
   });
 
-  final List<Color> colors;
-  final double progress;
-  final double scrimOpacity;
+  final ui.FragmentProgram program;
+  final double time;
+  final AlbumPalette palette;
+  final bool isDark;
+  final List<Color> baseGradient;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final angle = progress * math.pi * 2;
+    if (size.width <= 0 || size.height <= 0) return;
+    final shader = program.fragmentShader();
 
-    // 1. 铺设底色：使用最暗/最淡的主色作为底层画布铺垫
-    final bgPaint = Paint()..color = resolveFluidBaseColor(colors);
-    canvas.drawRect(rect, bgPaint);
+    // uniforms 传递
+    shader.setFloat(0, size.width);
+    shader.setFloat(1, size.height);
+    shader.setFloat(2, time);
 
-    // 2. 计算光源 1 的运动轨迹：利用正弦与余弦实现圆周状慢飘移动
-    final center1 = Offset(
-      size.width * (0.5 + 0.3 * math.sin(angle)),
-      size.height * (0.4 + 0.25 * math.cos(angle)),
-    );
-    final paint1 = Paint()
-      ..shader = RadialGradient(
-        colors: [colors[0], colors[0].withValues(alpha: 0)],
-        radius: 0.9,
-      ).createShader(
-          Rect.fromCircle(center: center1, radius: size.width * 0.9));
-    canvas.drawCircle(center1, size.width * 0.9, paint1);
+    // 5 色调和
+    _setColor(shader, 3, palette.primary);
+    _setColor(shader, 7, palette.secondary);
+    _setColor(shader, 11, palette.accent);
+    _setColor(shader, 15, palette.muted);
+    _setColor(shader, 19, palette.highlight);
 
-    // 3. 计算光源 2 的运动轨迹：相位相差 pi/2，实现相向而行的交织流动
-    final center2 = Offset(
-      size.width * (0.4 + 0.28 * math.cos(angle + math.pi / 2)),
-      size.height * (0.6 + 0.22 * math.sin(angle + math.pi / 3)),
-    );
-    final paint2 = Paint()
-      ..shader = RadialGradient(
-        colors: [colors[1], colors[1].withValues(alpha: 0)],
-        radius: 0.8,
-      ).createShader(
-          Rect.fromCircle(center: center2, radius: size.width * 0.8));
-    canvas.drawCircle(center2, size.width * 0.8, paint2);
+    // 底板色
+    final baseColor = baseGradient.isNotEmpty
+        ? baseGradient.first
+        : (isDark ? const Color(0xFF0A1324) : const Color(0xFFF6F8FA));
+    _setColor(shader, 23, baseColor);
 
-    // 4. 计算光源 3 的运动轨迹：相位相差 pi，在窗口下部和对角线区域呼应
-    final center3 = Offset(
-      size.width * (0.6 + 0.25 * math.sin(angle + math.pi)),
-      size.height * (0.5 + 0.28 * math.cos(angle + math.pi / 4)),
-    );
-    final paint3 = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          colors[2].withValues(alpha: 0.85),
-          colors[2].withValues(alpha: 0),
-        ],
-        radius: 0.75,
-      ).createShader(
-          Rect.fromCircle(center: center3, radius: size.width * 0.75));
-    canvas.drawCircle(center3, size.width * 0.75, paint3);
+    // 5 个动态光斑锚点 (基于时间正弦缓慢公转推移)
+    final t = time * 0.15;
+    shader.setFloat(27, 0.25 + 0.18 * math.cos(t));
+    shader.setFloat(28, 0.30 + 0.18 * math.sin(t));
+
+    shader.setFloat(29, 0.75 + 0.15 * math.sin(t * 0.8));
+    shader.setFloat(30, 0.25 + 0.15 * math.cos(t * 0.8));
+
+    shader.setFloat(31, 0.35 + 0.20 * math.sin(t * 1.2));
+    shader.setFloat(32, 0.75 + 0.15 * math.cos(t * 1.2));
+
+    shader.setFloat(33, 0.80 + 0.12 * math.cos(t * 0.6));
+    shader.setFloat(34, 0.70 + 0.16 * math.sin(t * 0.6));
+
+    shader.setFloat(35, 0.50 + 0.14 * math.cos(t * 1.1));
+    shader.setFloat(36, 0.50 + 0.14 * math.sin(t * 1.1));
+
+    // 明暗模式控制与强度
+    shader.setFloat(37, isDark ? 1.0 : 0.0);
+    shader.setFloat(38, 1.0); // 强度
+
+    final paint = Paint()..shader = shader;
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  void _setColor(ui.FragmentShader shader, int startIndex, Color color) {
+    shader.setFloat(startIndex, color.r);
+    shader.setFloat(startIndex + 1, color.g);
+    shader.setFloat(startIndex + 2, color.b);
+    shader.setFloat(startIndex + 3, color.a);
   }
 
   @override
-  bool shouldRepaint(covariant _FluidGradientPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.colors != colors ||
-        oldDelegate.scrimOpacity != scrimOpacity;
+  bool shouldRepaint(covariant _MeshFlowPainter oldDelegate) => true;
+}
+
+/// 交互水波纹着色器绘制器
+class _WaterRipplePainter extends CustomPainter {
+  const _WaterRipplePainter({
+    required this.program,
+    required this.time,
+    required this.mousePos,
+    required this.mouseSpeed,
+    required this.clickPos,
+    required this.clickTime,
+    required this.bassEnergy,
+  });
+
+  final ui.FragmentProgram program;
+  final double time;
+  final Offset mousePos;
+  final double mouseSpeed;
+  final Offset clickPos;
+  final double clickTime;
+  final double bassEnergy;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final shader = program.fragmentShader();
+
+    shader.setFloat(0, size.width);
+    shader.setFloat(1, size.height);
+    shader.setFloat(2, time);
+
+    shader.setFloat(3, mousePos.dx);
+    shader.setFloat(4, mousePos.dy);
+    shader.setFloat(5, mouseSpeed);
+
+    shader.setFloat(6, clickPos.dx);
+    shader.setFloat(7, clickPos.dy);
+    shader.setFloat(8, clickTime);
+
+    shader.setFloat(9, bassEnergy);
+
+    // 深水色、浅水色与镜面高光色 (独立深邃幽静水光空间)
+    _setColor(shader, 10, const Color(0xFF06101E));
+    _setColor(shader, 14, const Color(0xFF0F2C4A));
+    _setColor(shader, 18, const Color(0xFF90D5FF));
+
+    final paint = Paint()..shader = shader;
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  void _setColor(ui.FragmentShader shader, int startIndex, Color color) {
+    shader.setFloat(startIndex, color.r);
+    shader.setFloat(startIndex + 1, color.g);
+    shader.setFloat(startIndex + 2, color.b);
+    shader.setFloat(startIndex + 3, color.a);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaterRipplePainter oldDelegate) => true;
+}
+
+/// 琉璃透镜着色器绘制器
+class _LensGlassPainter extends CustomPainter {
+  const _LensGlassPainter({
+    required this.program,
+    required this.time,
+    required this.tintColor,
+    required this.isDark,
+  });
+
+  final ui.FragmentProgram program;
+  final double time;
+  final Color tintColor;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final shader = program.fragmentShader();
+
+    shader.setFloat(0, size.width);
+    shader.setFloat(1, size.height);
+    shader.setFloat(2, time);
+
+    // 动态氛围微染色
+    shader.setFloat(3, tintColor.r);
+    shader.setFloat(4, tintColor.g);
+    shader.setFloat(5, tintColor.b);
+    shader.setFloat(6, tintColor.a);
+
+    shader.setFloat(7, isDark ? 1.0 : 0.0);
+    shader.setFloat(8, 0.85); // 折射强度
+
+    final paint = Paint()..shader = shader;
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LensGlassPainter oldDelegate) => true;
+}
+
+class _UserBackgroundImage extends StatelessWidget {
+  const _UserBackgroundImage({required this.file, required this.tint});
+
+  final File file;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Opacity(
+              opacity: AppSettings.instance.backgroundImageOpacity,
+              child: Image.file(
+                file,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+            ColoredBox(color: tint),
+          ],
+        ),
+      ),
+    );
   }
 }

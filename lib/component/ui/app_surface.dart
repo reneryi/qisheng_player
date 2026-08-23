@@ -1,9 +1,10 @@
 import 'dart:ui';
 
-import 'package:qisheng_player/theme/app_theme_extensions.dart';
-import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/theme_provider.dart';
 
 enum AppSurfaceVariant {
   inset,
@@ -24,7 +25,9 @@ enum AppSurfaceBackdropBehavior {
   forceBlur,
 }
 
-class AppSurface extends StatelessWidget {
+/// 栖声播放器现代 UI 表面容器 (UI Surface Container)
+/// 负责实现纯净实体卡片 (solidCard)、无界极简悬浮 (borderless)、液态玻璃 (liquidGlass)
+class AppSurface extends StatefulWidget {
   const AppSurface({
     super.key,
     required this.child,
@@ -47,9 +50,19 @@ class AppSurface extends StatelessWidget {
   final AppSurfaceBackdropBehavior backdropBehavior;
 
   @override
+  State<AppSurface> createState() => _AppSurfaceState();
+}
+
+class _AppSurfaceState extends State<AppSurface> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final surfaces = context.surfaces;
+    final styleMode = context.select<ThemeProvider, UiVisualStyleMode>(
+      (p) => p.visualStyleMode,
+    );
     Color glassTint = scheme.primary;
     try {
       glassTint = context.select<ThemeProvider, Color>(
@@ -57,282 +70,204 @@ class AppSurface extends StatelessWidget {
       );
     } catch (_) {}
 
-    final resolvedRadius = radius ?? surfaces.radiusXl;
-    final contentChild = RepaintBoundary(child: child);
-    final content = padding == null
+    final resolvedRadius = widget.radius ?? surfaces.radiusXl;
+    final contentChild = RepaintBoundary(child: widget.child);
+    final content = widget.padding == null
         ? contentChild
-        : Padding(padding: padding!, child: contentChild);
-    final shouldUseGlass = variant == AppSurfaceVariant.glass ||
-        surfaces.backdropStrategy != AppBackdropStrategy.solid;
-    final applyBlur = _resolveApplyBlur(surfaces);
+        : Padding(padding: widget.padding!, child: contentChild);
 
-    final surface = shouldUseGlass
-        ? _GlassSurface(
-            variant: variant,
-            radius: resolvedRadius,
-            margin: margin,
-            clipBehavior: clipBehavior,
-            sigma: _resolveGlassSigma(surfaces) * _variantSigmaScale(),
-            applyBlur: applyBlur,
-            tintColor: glassTint,
-            shadowColor: surfaces.shadowColor,
-            shadowBlur: surfaces.shadowBlurLg * surfaces.shadowDepthScale,
-            shadowOffset: surfaces.shadowOffsetSm * surfaces.shadowDepthScale,
-            child: content,
-          )
-        : Container(
-            margin: margin,
-            decoration: _buildSolidDecoration(
-              scheme,
-              surfaces,
-              resolvedRadius,
-              glassTint,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(resolvedRadius),
-              clipBehavior: clipBehavior,
-              child: content,
-            ),
-          );
-
-    return Material(
-      type: MaterialType.transparency,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
-        duration: context.motion.panelTransitionDuration,
-        curve: context.motion.normal,
-        child: surface,
+        duration: const Duration(milliseconds: 220),
+        curve: const Cubic(0.05, 0.7, 0.1, 1.0),
+        margin: widget.margin,
+        transform: (styleMode == UiVisualStyleMode.borderless && _isHovered)
+            ? Matrix4.translationValues(0.0, -1.5, 0.0)
+            : Matrix4.identity(),
+        child: _buildSurfaceContent(
+          context,
+          styleMode,
+          scheme,
+          surfaces,
+          resolvedRadius,
+          glassTint,
+          content,
+        ),
       ),
     );
   }
 
-  double _resolveGlassSigma(AppSurfaceTokens surfaces) {
-    final densityScale = switch (glassDensity) {
-      AppSurfaceGlassDensity.low => 1.0,
-      AppSurfaceGlassDensity.medium => 1.12,
-      AppSurfaceGlassDensity.high => 1.24,
-    };
-    return surfaces.glassSigma * densityScale;
-  }
-
-  double _variantSigmaScale() {
-    return switch (variant) {
-      AppSurfaceVariant.inset => 0.72,
-      AppSurfaceVariant.raised => 0.88,
-      AppSurfaceVariant.floating => 1.04,
-      AppSurfaceVariant.glass => 1.0,
-    };
-  }
-
-  bool _resolveApplyBlur(AppSurfaceTokens surfaces) {
-    return switch (backdropBehavior) {
-      AppSurfaceBackdropBehavior.themeDefault =>
-        surfaces.backdropStrategy != AppBackdropStrategy.solid,
-      AppSurfaceBackdropBehavior.preferStableGlass => false,
-      AppSurfaceBackdropBehavior.forceBlur => true,
-    };
-  }
-
-  BoxDecoration _buildSolidDecoration(
+  Widget _buildSurfaceContent(
+    BuildContext context,
+    UiVisualStyleMode styleMode,
     ColorScheme scheme,
     AppSurfaceTokens surfaces,
     double radius,
     Color glassTint,
+    Widget content,
   ) {
-    final depthScale = surfaces.shadowDepthScale;
+    return switch (styleMode) {
+      // 1. 纯净实体卡片风格
+      UiVisualStyleMode.solidCard => _buildSolidCard(
+          scheme,
+          surfaces,
+          radius,
+          content,
+        ),
 
-    final baseColor = switch (variant) {
-      AppSurfaceVariant.inset => surfaces.surfaceInset,
-      AppSurfaceVariant.raised => surfaces.surfaceRaised,
-      AppSurfaceVariant.floating => surfaces.surfaceFloating,
-      AppSurfaceVariant.glass => Color.alphaBlend(
-          glassTint.withValues(
-            alpha: scheme.brightness == Brightness.dark ? 0.28 : 0.12,
-          ),
-          surfaces.surfaceRaised.withValues(alpha: surfaces.glassAlpha),
+      // 2. 无界极简悬浮风格
+      UiVisualStyleMode.borderless => _buildBorderless(
+          scheme,
+          surfaces,
+          radius,
+          content,
+        ),
+
+      // 3. 液态玻璃空间风格 (Apple iOS / visionOS 空间 UI 质感)
+      UiVisualStyleMode.liquidGlass => _buildLiquidGlass(
+          scheme,
+          surfaces,
+          radius,
+          glassTint,
+          content,
         ),
     };
-
-    final outerShadow = switch (variant) {
-      AppSurfaceVariant.inset => <BoxShadow>[],
-      AppSurfaceVariant.raised => [
-          BoxShadow(
-            color: surfaces.shadowColor,
-            blurRadius: surfaces.shadowBlurSm * depthScale,
-            offset: Offset(0, surfaces.shadowOffsetSm * depthScale),
-          ),
-          BoxShadow(
-            color: surfaces.highlightColor,
-            blurRadius: 12,
-            offset: const Offset(-2, -2),
-            spreadRadius: -2,
-          ),
-        ],
-      AppSurfaceVariant.floating => [
-          BoxShadow(
-            color: surfaces.shadowColor,
-            blurRadius: surfaces.shadowBlurLg * depthScale,
-            offset: Offset(0, surfaces.shadowOffsetLg * depthScale),
-          ),
-          BoxShadow(
-            color: surfaces.highlightColor,
-            blurRadius: 18,
-            offset: const Offset(-3, -3),
-            spreadRadius: -4,
-          ),
-        ],
-      AppSurfaceVariant.glass => <BoxShadow>[],
-    };
-
-    return BoxDecoration(
-      color: baseColor.withValues(alpha: surfaces.panelAlpha),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: switch (variant) {
-          AppSurfaceVariant.inset => surfaces.strokeSubtle,
-          AppSurfaceVariant.glass => Colors.white.withValues(alpha: 0.08),
-          _ => surfaces.strokeStrong.withValues(alpha: 0.72),
-        },
-      ),
-      boxShadow: outerShadow,
-      gradient: switch (variant) {
-        AppSurfaceVariant.inset => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              baseColor.withValues(alpha: 0.96),
-              baseColor.withValues(alpha: 0.82),
-            ],
-          ),
-        AppSurfaceVariant.glass => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.alphaBlend(
-                scheme.primary.withValues(alpha: 0.08),
-                baseColor.withValues(alpha: 0.94),
-              ),
-              baseColor.withValues(alpha: 0.84),
-            ],
-          ),
-        _ => LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              baseColor.withValues(alpha: 0.96),
-              baseColor,
-            ],
-          ),
-      },
-    );
   }
-}
 
-class _GlassSurface extends StatelessWidget {
-  const _GlassSurface({
-    required this.variant,
-    required this.radius,
-    required this.margin,
-    required this.clipBehavior,
-    required this.sigma,
-    required this.applyBlur,
-    required this.tintColor,
-    required this.shadowColor,
-    required this.shadowBlur,
-    required this.shadowOffset,
-    required this.child,
-  });
-
-  final AppSurfaceVariant variant;
-  final double radius;
-  final EdgeInsetsGeometry? margin;
-  final Clip clipBehavior;
-  final double sigma;
-  final bool applyBlur;
-  final Color tintColor;
-  final Color shadowColor;
-  final double shadowBlur;
-  final double shadowOffset;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final surfaces = context.surfaces;
+  Widget _buildSolidCard(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    double radius,
+    Widget content,
+  ) {
     final isDark = scheme.brightness == Brightness.dark;
-    final base = switch (variant) {
+    final baseColor = switch (widget.variant) {
       AppSurfaceVariant.inset => surfaces.surfaceInset,
       AppSurfaceVariant.raised => surfaces.surfaceRaised,
       AppSurfaceVariant.floating => surfaces.surfaceFloating,
-      AppSurfaceVariant.glass => surfaces.surfaceBase,
-    };
-    final tintAlpha = switch (variant) {
-      AppSurfaceVariant.inset => 0.1,
-      AppSurfaceVariant.raised => 0.13,
-      AppSurfaceVariant.floating => isDark ? 0.22 : 0.16,
-      AppSurfaceVariant.glass => isDark ? 0.36 : 0.18,
-    };
-    final fillAlpha = switch (variant) {
-      AppSurfaceVariant.inset => isDark ? 0.28 : 0.3,
-      AppSurfaceVariant.raised => isDark ? 0.3 : 0.36,
-      AppSurfaceVariant.floating => isDark ? 0.36 : 0.44,
-      AppSurfaceVariant.glass => isDark ? 0.28 : 0.34,
+      AppSurfaceVariant.glass => surfaces.surfaceRaised,
     };
 
-    final background = Color.alphaBlend(
-      tintColor.withValues(alpha: tintAlpha),
-      base.withValues(alpha: fillAlpha),
+    final decoration = BoxDecoration(
+      color: baseColor,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: isDark
+            ? const Color(0xFF2C3A52).withValues(alpha: 0.65)
+            : const Color(0xFFE1E4E8),
+        width: 0.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    );
+
+    return Container(
+      decoration: decoration,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: widget.clipBehavior,
+        child: content,
+      ),
+    );
+  }
+
+  Widget _buildBorderless(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    double radius,
+    Widget content,
+  ) {
+    final isDark = scheme.brightness == Brightness.dark;
+
+    // 默认 0 边框、0 阴影，Hover 时浮现呼吸微光胶囊
+    final glowColor = _isHovered
+        ? (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08)
+        : Colors.transparent;
+
+    final decoration = BoxDecoration(
+      color: glowColor,
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: _isHovered
+          ? [
+              BoxShadow(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                blurRadius: 18,
+                spreadRadius: 2,
+              ),
+            ]
+          : const [],
+    );
+
+    return Container(
+      decoration: decoration,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: widget.clipBehavior,
+        child: content,
+      ),
+    );
+  }
+
+  Widget _buildLiquidGlass(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    double radius,
+    Color glassTint,
+    Widget content,
+  ) {
+    final isDark = scheme.brightness == Brightness.dark;
+
+    // 液态玻璃底色与内边缘次表面高光
+    final glassFill = Color.alphaBlend(
+      glassTint.withValues(alpha: isDark ? 0.16 : 0.08),
+      (isDark ? const Color(0xFF0C1626) : Colors.white).withValues(alpha: isDark ? 0.45 : 0.65),
     );
 
     final decoration = BoxDecoration(
+      color: glassFill,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: Colors.white.withValues(alpha: isDark ? 0.18 : 0.52),
-        width: 1,
+        color: isDark
+            ? Colors.white.withValues(alpha: _isHovered ? 0.28 : 0.16)
+            : Colors.white.withValues(alpha: _isHovered ? 0.90 : 0.70),
+        width: 1.2,
       ),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Color.alphaBlend(
-            Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
-            background,
-          ),
-          Color.alphaBlend(
-            tintColor.withValues(alpha: isDark ? 0.1 : 0.06),
-            background.withValues(alpha: isDark ? 0.78 : 0.68),
-          ),
+          // 左上受光面 1.2px 内高光反射
+          (isDark ? Colors.white : Colors.white).withValues(alpha: isDark ? 0.15 : 0.50),
+          // 顺滑过渡到底色
+          glassFill,
         ],
       ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.08),
+          blurRadius: 22,
+          offset: const Offset(0, 8),
+          spreadRadius: -2,
+        ),
+      ],
     );
 
-    final inner = Container(decoration: decoration, child: child);
-
-    return Container(
-      margin: margin,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: shadowColor.withValues(alpha: 0.18),
-            blurRadius: shadowBlur,
-            offset: Offset(0, shadowOffset),
-          ),
-          BoxShadow(
-            color: tintColor.withValues(alpha: 0.08),
-            blurRadius: shadowBlur * 0.72,
-            spreadRadius: -8,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        clipBehavior: clipBehavior,
-        child: applyBlur
-            ? BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                child: inner,
-              )
-            : inner,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: widget.clipBehavior,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+        child: Container(
+          decoration: decoration,
+          child: content,
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -54,15 +55,18 @@ class SortMethodComboBox<T> extends StatelessWidget {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
       ),
-      menuChildren: List.generate(
-        sortMethods.length,
-        (i) => MenuItemButton(
-          style: const ButtonStyle(
-            padding: WidgetStatePropertyAll(EdgeInsets.all(12)),
+      menuChildren: animatedMenuChildren(
+        context,
+        List.generate(
+          sortMethods.length,
+          (i) => MenuItemButton(
+            style: const ButtonStyle(
+              padding: WidgetStatePropertyAll(EdgeInsets.all(12)),
+            ),
+            leadingIcon: Icon(sortMethods[i].icon),
+            child: Text(sortMethods[i].name),
+            onPressed: () => setSortMethod(sortMethods[i]),
           ),
-          leadingIcon: Icon(sortMethods[i].icon),
-          child: Text(sortMethods[i].name),
-          onPressed: () => setSortMethod(sortMethods[i]),
         ),
       ),
       builder: (context, menuController, _) {

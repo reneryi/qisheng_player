@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -54,11 +54,6 @@ Widget _buildAppRouteTransition(
     curve: motion.emphasized,
     reverseCurve: motion.fast,
   );
-  final backdropReveal = CurvedAnimation(
-    parent: animation,
-    curve: const Interval(0.0, 0.42, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.26, curve: Curves.easeInCubic),
-  );
   final contentReveal = CurvedAnimation(
     parent: animation,
     curve: const Interval(0.08, 0.92, curve: Curves.easeOutCubic),
@@ -79,117 +74,93 @@ Widget _buildAppRouteTransition(
       : child;
 
   return FadeTransition(
-    opacity: Tween<double>(begin: 0.72, end: 1).animate(backdropReveal),
+    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(contentReveal),
     child: SlideTransition(
       position: Tween<Offset>(
-        begin: const Offset(0, 0.05), // 极简空间感：增加进入滑行距离到 0.05
+        begin: const Offset(0, 0.02), // 极细腻的 2% 垂直微位移，保证桌面端文字清晰与沉稳
         end: Offset.zero,
       ).animate(contentReveal),
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1)
-            .animate(contentReveal), // 极简空间感：页面从 0.96 微缩放展开，空间感更强
-        child: FadeTransition(
-          opacity: Tween<double>(begin: 0.8, end: 1).animate(contentReveal),
-          child: ListenableBuilder(
-            listenable: AppNavigationState.instance,
-            builder: (context, _) {
-              final isNowPlayingAbove =
-                  AppNavigationState.instance.nowPlayingPageActive;
-              return AnimatedBuilder(
-                animation: secondaryCurvedAnim,
-                child: transitionedChild,
-                builder: (context, child) {
-                  final progress = secondaryCurvedAnim.value;
-                  final outgoingProgress = outgoingContent.value;
+        scale: Tween<double>(begin: 0.99, end: 1.0).animate(contentReveal), // 0.99 微缩放展开
+        child: ListenableBuilder(
+          listenable: AppNavigationState.instance,
+          builder: (context, _) {
+            final isNowPlayingAbove =
+                AppNavigationState.instance.nowPlayingPageActive;
+            return AnimatedBuilder(
+              animation: secondaryCurvedAnim,
+              child: transitionedChild,
+              builder: (context, child) {
+                final progress = secondaryCurvedAnim.value;
+                final outgoingProgress = outgoingContent.value;
 
-                  if (isNowPlayingAbove) {
-                    // 当播放详情页覆盖在上方时，对底层主界面仅进行变暗蒙版处理。
-                    // 绝不进行 Scale 缩放与 Translate 位移，以确保底部控制栏小封面的物理屏幕坐标绝对静止，
-                    // 从而使退场时大封面 Hero 弧度飞越能够百分之百精准落入控制栏的原本槽位，彻底消除闪烁与路径偏差 Bug。
-                    return Stack(
-                      children: [
-                        child!,
-                        // 黑色半透明遮罩，产生沉浸式蒙版变暗效果
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: ColoredBox(
-                              color: Colors.black.withValues(
-                                alpha: 0.42 * progress,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  } else {
-                    // 普通的二级跳转折叠退场效果：高斯模糊 + 平滑沉降
-                    return ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: 8.0 * progress, // 适当减小模糊至 8.0，使淡出过程轮廓变化更平柔
-                        sigmaY: 8.0 * progress,
-                      ),
+                if (isNowPlayingAbove) {
+                  final underlayOpacity = 1.0 -
+                      const Interval(
+                        0.0,
+                        0.48,
+                        curve: Curves.easeOutCubic,
+                      ).transform(secondaryAnimation.value);
+                  return IgnorePointer(
+                    key: const ValueKey('now-playing-underlay-pointer'),
+                    ignoring: progress > 0.001,
+                    child: TickerMode(
+                      enabled: underlayOpacity > 0.001,
                       child: Opacity(
-                        // 关键修复：将不透明度从 1 - 0.42 改为直接平滑淡出归零 (1.0 - outgoingProgress)，
-                        // 确保旧页面在完全被覆盖前已彻底透明，避免因突然被路由剔除渲染而产生生硬闪现。
-                        opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
-                        child: Transform.translate(
-                          offset: Offset(0,
-                              18.0 * outgoingProgress), // 下沉距离调整为更舒缓温和的 18.0 像素
-                          child: Transform.scale(
-                            scale: 1.0 - 0.012 * outgoingProgress,
-                            child: child,
-                          ),
-                        ),
+                        key: const ValueKey('now-playing-underlay-opacity'),
+                        opacity: underlayOpacity.clamp(0.0, 1.0),
+                        child: child,
                       ),
-                    );
-                  }
-                },
-              );
-            },
-          ),
+                    ),
+                  );
+                } else {
+                  // 普通的二级跳转折叠退场效果：移除高开销的 ImageFiltered 高斯模糊，采用纯粹平滑的淡出与微量沉降
+                  return Opacity(
+                    // 直接平滑淡出归零 (1.0 - outgoingProgress)，确保旧页面在完全被覆盖前已彻底透明
+                    opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset(0, 8.0 * outgoingProgress), // 轻柔自然的 8.0 像素下沉位移
+                      child: Transform.scale(
+                        scale: 1.0 - 0.008 * outgoingProgress,
+                        child: child,
+                      ),
+                    ),
+                  );
+                }
+              },
+            );
+          },
         ),
       ),
     ),
   );
 }
 
-// 专为播放详情页拉起设计的卡片拉起转场构建函数（iOS Modal Card Presentation）
+// 专为播放详情页设计的全屏沉浸渐显转场：
+// 页面背景与文字控件原地丝滑淡入 + 极微量中心展开 (0.985 -> 1.0)，
+// 将核心运动焦点完全交给封面 Hero 元素无缝过渡，彻底消除双重位移加速度冲突。
 Widget _buildNowPlayingRouteTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
   Widget child,
 ) {
-  // 从底部完全滑入卡片动画
-  final slideAnim = CurvedAnimation(
+  final curvedAnim = CurvedAnimation(
     parent: animation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
 
-  final slideTween = Tween<Offset>(
-    begin: const Offset(0, 1.0),
-    end: Offset.zero,
-  ).animate(slideAnim);
-
   // 包裹 NowPlayingRouteTransitionScope，以便让播放详情页中的渐显元素（如歌词、AppBar 等）能获取到入场动画进度并联动
   final transitionedChild = NowPlayingRouteTransitionScope(
-    animation: slideAnim,
+    animation: curvedAnim,
     child: child,
   );
 
-  return SlideTransition(
-    position: slideTween,
-    child: DecoratedBox(
-      decoration: const BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 24,
-            spreadRadius: -2,
-          ),
-        ],
-      ),
+  return FadeTransition(
+    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnim),
+    child: ScaleTransition(
+      scale: Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnim),
       child: transitionedChild,
     ),
   );
@@ -216,6 +187,73 @@ Widget _buildDetailRouteTransition(
       child: child,
     ),
   );
+}
+
+class NowPlayingShellUnderlay extends StatefulWidget {
+  const NowPlayingShellUnderlay({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  State<NowPlayingShellUnderlay> createState() =>
+      _NowPlayingShellUnderlayState();
+}
+
+class _NowPlayingShellUnderlayState extends State<NowPlayingShellUnderlay> {
+  static const _fadeDuration = Duration(milliseconds: 220);
+  static const _exitRevealDelay = Duration(milliseconds: 120);
+
+  Timer? _revealTimer;
+  late bool _hidden;
+
+  @override
+  void initState() {
+    super.initState();
+    final navigation = AppNavigationState.instance;
+    _hidden = navigation.nowPlayingPageActive;
+    navigation.addListener(_handleNavigationChange);
+  }
+
+  void _handleNavigationChange() {
+    final active = AppNavigationState.instance.nowPlayingPageActive;
+    _revealTimer?.cancel();
+    if (active) {
+      if (!_hidden && mounted) setState(() => _hidden = true);
+      return;
+    }
+    _revealTimer = Timer(_exitRevealDelay, () {
+      if (!mounted || !_hidden) return;
+      setState(() => _hidden = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    AppNavigationState.instance.removeListener(_handleNavigationChange);
+    _revealTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      key: const ValueKey('now-playing-shell-underlay-pointer'),
+      ignoring: _hidden,
+      child: AnimatedOpacity(
+        key: const ValueKey('now-playing-shell-underlay-opacity'),
+        opacity: _hidden ? 0 : 1,
+        duration: _fadeDuration,
+        curve: _hidden ? Curves.easeOutCubic : Curves.easeInOutCubic,
+        child: TickerMode(
+          enabled: !_hidden,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
 }
 
 class DetailTransitionPage<T> extends CustomTransitionPage<T> {
@@ -341,14 +379,14 @@ class Entry extends StatelessWidget {
             colorScheme: theme.lightScheme,
             effectsLevel: theme.uiEffectsLevel,
             visualStyleMode: theme.visualStyleMode,
-            windowBackdropMode: theme.windowBackdropMode,
+            windowBackdropMode: theme.effectiveWindowBackdropMode,
           );
           final darkTheme = AppTheme.build(
             fontFamily: theme.fontFamily,
             colorScheme: theme.darkScheme,
             effectsLevel: theme.uiEffectsLevel,
             visualStyleMode: theme.visualStyleMode,
-            windowBackdropMode: theme.windowBackdropMode,
+            windowBackdropMode: theme.effectiveWindowBackdropMode,
           );
           return MaterialApp.router(
             scaffoldMessengerKey: SCAFFOLD_MESSAGER,
@@ -395,9 +433,11 @@ class Entry extends StatelessWidget {
             state.uri.toString(),
             extra: state.extra,
           );
-          return AppShell(
-            page: page,
-            pageIdentity: state.uri.toString(),
+          return NowPlayingShellUnderlay(
+            child: AppShell(
+              page: page,
+              pageIdentity: state.uri.toString(),
+            ),
           );
         },
         routes: [

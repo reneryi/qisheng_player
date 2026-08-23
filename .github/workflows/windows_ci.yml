@@ -30,9 +30,16 @@ jobs:
       - name: Analyze Dart code
         run: flutter analyze
 
+      - name: Test Dart code
+        run: flutter test
+
       - name: Rust check
         working-directory: rust
-        run: cargo check
+        run: cargo check --locked
+
+      - name: Rust tests
+        working-directory: rust
+        run: cargo test --locked
 
       - name: Sort smoke test
         run: flutter test tools/test/sort_smoke_test.dart
@@ -43,28 +50,36 @@ jobs:
       - name: Download BASS dlls
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path build\tmp -Force | Out-Null
+          $packages = @(
+            @{ File = "bass24.zip"; Url = "https://www.un4seen.com/files/bass24.zip"; Sha256 = "3a03ec9a33d0f4f9d167660da51c8bb1432e8977496995455ab137277d69636e" },
+            @{ File = "bassape24.zip"; Url = "https://www.un4seen.com/files/bassape24.zip"; Sha256 = "39aed2e9ac240253de0eca37d261715b85cc7937504447083e2ed6690256b770" },
+            @{ File = "bassdsd24.zip"; Url = "https://www.un4seen.com/files/bassdsd24.zip"; Sha256 = "480dab317518e819a573c2be40fd4cafa30b41a1d6dc0d27d4f1a3bcc654d8b6" },
+            @{ File = "bassflac24.zip"; Url = "https://www.un4seen.com/files/bassflac24.zip"; Sha256 = "147280210f62a80e52094e1822e73a16fd3b1a8c9c857c24dcca7dcfcb4ffa14" },
+            @{ File = "bassmidi24.zip"; Url = "https://www.un4seen.com/files/bassmidi24.zip"; Sha256 = "317ec770d71266b5294543d7c87cbbb39aba38bc8bc623af518a96c670392234" },
+            @{ File = "bassopus24.zip"; Url = "https://www.un4seen.com/files/bassopus24.zip"; Sha256 = "1fb6e033289ea968ca1fd02dea154a2e5d06bb9c2e33cdeda277e63084d9ad20" },
+            @{ File = "basswv24.zip"; Url = "https://www.un4seen.com/files/basswv24.zip"; Sha256 = "48e59f6136db90bde01e790273e3713ac6b0c6b1964174dc15f338f5180b9ecf" },
+            @{ File = "bass_aac24.zip"; Url = "https://www.un4seen.com/files/z/2/bass_aac24.zip"; Sha256 = "30439533789e2c6ab6084f81013ce9265b70581289c70e18dfc41023b7f6fde3" }
+          )
+          $downloadDir = "build\tmp\bass-downloads"
+          $extractDir = "build\tmp\bass-extracted"
+          New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
           New-Item -ItemType Directory -Path build\windows\x64\runner\Release\BASS -Force | Out-Null
 
-          curl.exe -L -o bass.zip https://www.un4seen.com/files/bass24.zip
-          curl.exe -L -o bassape24.zip https://www.un4seen.com/files/bassape24.zip
-          curl.exe -L -o bassdsd24.zip https://www.un4seen.com/files/bassdsd24.zip
-          curl.exe -L -o bassflac24.zip https://www.un4seen.com/files/bassflac24.zip
-          curl.exe -L -o bassmidi24.zip https://www.un4seen.com/files/bassmidi24.zip
-          curl.exe -L -o bassopus24.zip https://www.un4seen.com/files/bassopus24.zip
-          curl.exe -L -o basswv24.zip https://www.un4seen.com/files/basswv24.zip
-          curl.exe -L -o bassaac24.zip https://www.un4seen.com/files/bassaac24.zip
+          foreach ($package in $packages) {
+            $archivePath = Join-Path $downloadDir $package.File
+            curl.exe --fail --location --retry 3 --connect-timeout 20 --output $archivePath $package.Url
+            if ($LASTEXITCODE -ne 0) {
+              throw "BASS download failed: $($package.Url)"
+            }
+            $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $package.Sha256) {
+              throw "BASS hash mismatch for $($package.File): expected $($package.Sha256), got $actualHash"
+            }
+            Expand-Archive -LiteralPath $archivePath -DestinationPath $extractDir -Force
+          }
 
-          Expand-Archive -Path bass.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassape24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassdsd24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassflac24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassmidi24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassopus24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path basswv24.zip -DestinationPath build\tmp -Force
-          Expand-Archive -Path bassaac24.zip -DestinationPath build\tmp -Force
-
-          Copy-Item -Path build\tmp\x64\*.dll -Destination build\windows\x64\runner\Release\BASS -Force
+          Copy-Item -Path (Join-Path $extractDir "x64\*.dll") -Destination build\windows\x64\runner\Release\BASS -Force
 
       - name: Get desktop_lyric dependencies
         working-directory: third_party/desktop_lyric
@@ -114,6 +129,10 @@ jobs:
       - name: Analyze desktop_lyric
         working-directory: third_party/desktop_lyric
         run: flutter analyze --no-fatal-infos
+
+      - name: Test desktop_lyric
+        working-directory: third_party/desktop_lyric
+        run: flutter test
 
       - name: Build desktop_lyric release
         working-directory: third_party/desktop_lyric

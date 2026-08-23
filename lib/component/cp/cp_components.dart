@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 enum CpButtonVariant {
   primary,
@@ -79,6 +80,9 @@ class CpMotionPressable extends StatefulWidget {
     this.hoverShadowOpacity,
     this.selectedGlowOpacity,
     this.border = true, // 是否绘制外边边框，默认为 true。增加此参数以便实现无边框悬浮呼吸效果。
+    this.focusNode,
+    this.showFocusRing = true,
+    this.onFocusChanged,
   });
 
   final Widget child;
@@ -96,6 +100,9 @@ class CpMotionPressable extends StatefulWidget {
   final double? hoverShadowOpacity;
   final double? selectedGlowOpacity;
   final bool border; // 是否绘制边框标志
+  final FocusNode? focusNode;
+  final bool showFocusRing;
+  final ValueChanged<bool>? onFocusChanged;
 
   @override
   State<CpMotionPressable> createState() => _CpMotionPressableState();
@@ -104,8 +111,69 @@ class CpMotionPressable extends StatefulWidget {
 class _CpMotionPressableState extends State<CpMotionPressable> {
   bool _hovered = false;
   bool _pressed = false;
+  bool _focused = false;
+  FocusNode? _internalFocusNode;
+
+  FocusNode get _effectiveFocusNode =>
+      widget.focusNode ?? (_internalFocusNode ??= FocusNode());
 
   bool get _interactive => widget.enabled && widget.onTap != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _effectiveFocusNode.addListener(_handleFocusChange);
+    _focused = _effectiveFocusNode.hasFocus;
+  }
+
+  @override
+  void didUpdateWidget(covariant CpMotionPressable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode == widget.focusNode) return;
+
+    final oldFocusNode = oldWidget.focusNode ?? _internalFocusNode;
+    oldFocusNode?.removeListener(_handleFocusChange);
+    _effectiveFocusNode.addListener(_handleFocusChange);
+    _focused = _effectiveFocusNode.hasFocus;
+  }
+
+  void _handleFocusChange() {
+    if (!mounted) return;
+    final focused = _effectiveFocusNode.hasFocus;
+    if (_focused != focused) {
+      setState(() => _focused = focused);
+    }
+    widget.onFocusChanged?.call(focused);
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (!_interactive || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.space) {
+      widget.onTap?.call();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.contextMenu &&
+        widget.onSecondaryTapDown != null) {
+      widget.onSecondaryTapDown!(
+        TapDownDetails(
+          localPosition: const Offset(8, 8),
+          globalPosition: const Offset(8, 8),
+        ),
+      );
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  void dispose() {
+    _effectiveFocusNode.removeListener(_handleFocusChange);
+    _internalFocusNode?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +183,7 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
     final radius =
         widget.borderRadius ?? BorderRadius.circular(surfaces.radiusLg);
     final active = _hovered || widget.selected;
+    final showFocusRing = widget.showFocusRing && _focused && _interactive;
     final scale = _pressed
         ? widget.pressScale
         : _hovered
@@ -126,50 +195,60 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
             ? scheme.onSurface.withValues(alpha: 0.055)
             : Colors.transparent;
     final shadows = _buildShadows(context);
+    final borderColor = showFocusRing
+        ? scheme.primary
+        : active
+            ? widget.selected
+                ? scheme.primary.withValues(alpha: 0.34)
+                : scheme.outlineVariant.withValues(alpha: 0.52)
+            : Colors.transparent;
 
-    return MouseRegion(
-      cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _pressed = false;
-      }),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _interactive ? widget.onTap : null,
-        onTapDown: _interactive ? (_) => setState(() => _pressed = true) : null,
-        onTapUp: _interactive ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel:
-            _interactive ? () => setState(() => _pressed = false) : null,
-        onSecondaryTapDown: widget.onSecondaryTapDown,
-        child: Semantics(
-          button: widget.onTap != null,
-          selected: widget.selected,
-          label: widget.semanticLabel,
-          child: AnimatedScale(
-            scale: scale,
-            duration: motion.microInteractionDuration,
-            curve: motion.fast,
-            child: AnimatedContainer(
+    return Focus(
+      focusNode: _effectiveFocusNode,
+      canRequestFocus: _interactive,
+      onKeyEvent: _handleKeyEvent,
+      child: MouseRegion(
+        cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() {
+          _hovered = false;
+          _pressed = false;
+        }),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _interactive ? widget.onTap : null,
+          onTapDown:
+              _interactive ? (_) => setState(() => _pressed = true) : null,
+          onTapUp:
+              _interactive ? (_) => setState(() => _pressed = false) : null,
+          onTapCancel:
+              _interactive ? () => setState(() => _pressed = false) : null,
+          onSecondaryTapDown: widget.onSecondaryTapDown,
+          child: Semantics(
+            button: widget.onTap != null,
+            selected: widget.selected,
+            label: widget.semanticLabel,
+            child: AnimatedScale(
+              scale: scale,
               duration: motion.microInteractionDuration,
-              curve: motion.normal,
-              padding: widget.padding,
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: radius,
-                border: widget.border
-                    ? Border.all(
-                        color: active
-                            ? widget.selected
-                                ? scheme.primary.withValues(alpha: 0.34)
-                                : scheme.outlineVariant.withValues(alpha: 0.52)
-                            : Colors.transparent,
-                        width: 1,
-                      )
-                    : null,
-                boxShadow: shadows,
+              curve: motion.fast,
+              child: AnimatedContainer(
+                duration: motion.microInteractionDuration,
+                curve: motion.normal,
+                padding: widget.padding,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: radius,
+                  border: widget.border || showFocusRing
+                      ? Border.all(
+                          color: borderColor,
+                          width: showFocusRing ? 2 : 1,
+                        )
+                      : null,
+                  boxShadow: shadows,
+                ),
+                child: widget.child,
               ),
-              child: widget.child,
             ),
           ),
         ),
@@ -269,22 +348,22 @@ class CpSurface extends StatelessWidget {
 
     // 极简锐利模式下，强制面板颜色为原始底色，拒绝任何封面色强调色 (scheme.primary) 的混入导致底板变青/变灰
     final color = dynamicGradientColors == null
-        ? Color.alphaBlend(
-            scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
-            baseColor.withValues(alpha: resolvedOpacity),
-          )
-        : baseColor.withValues(alpha: resolvedOpacity);
+            ? Color.alphaBlend(
+                scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
+                baseColor.withValues(alpha: resolvedOpacity),
+              )
+            : baseColor.withValues(alpha: resolvedOpacity);
     final surfaceGradientColors =
         dynamicGradientColors == null || dynamicGradientColors!.isEmpty
             ? null
-            : dynamicGradientColors!
-                .map(
-                  (gradientColor) => Color.alphaBlend(
-                    gradientColor.withValues(alpha: isDark ? 0.34 : 0.16),
-                    color,
-                  ),
-                )
-                .toList(growable: false);
+        : dynamicGradientColors!
+            .map(
+              (gradientColor) => Color.alphaBlend(
+                gradientColor.withValues(alpha: isDark ? 0.34 : 0.16),
+                color,
+              ),
+            )
+            .toList(growable: false);
 
     final shadow = tone == CpSurfaceTone.floating
         ? [
@@ -349,14 +428,16 @@ class CpSurface extends StatelessWidget {
                     : Alignment.centerRight,
                 colors: surfaceGradientColors ??
                     [
-                      Color.alphaBlend(
-                        Colors.white.withValues(alpha: isDark ? 0.08 : 0.46),
-                        color,
-                      ),
-                      Color.alphaBlend(
-                        scheme.primary.withValues(alpha: isDark ? 0.08 : 0.04),
-                        color.withValues(alpha: isDark ? 0.78 : 0.68),
-                      ),
+                            Color.alphaBlend(
+                              Colors.white
+                                  .withValues(alpha: isDark ? 0.08 : 0.46),
+                              color,
+                            ),
+                            Color.alphaBlend(
+                              scheme.primary
+                                  .withValues(alpha: isDark ? 0.08 : 0.04),
+                              color.withValues(alpha: isDark ? 0.78 : 0.68),
+                            ),
                     ],
               ),
         border: border

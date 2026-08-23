@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/lyric_line_motion.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
@@ -19,6 +20,7 @@ class LyricViewTile extends StatelessWidget {
     required this.opacity,
     this.isCurrentLine = false,
     this.isPastLine = false,
+    this.distanceFromCurrent = 0,
     this.onTap,
   });
 
@@ -26,6 +28,7 @@ class LyricViewTile extends StatelessWidget {
   final double opacity;
   final bool isCurrentLine;
   final bool isPastLine;
+  final int distanceFromCurrent;
   final void Function()? onTap;
 
   @override
@@ -35,8 +38,8 @@ class LyricViewTile extends StatelessWidget {
     final isMainLine = isCurrentLine || opacity == 1.0;
 
     final settings = AppSettings.instance;
-    final applyDepthBlur = shouldApplyLyricDepthBlur(
-      isCurrentLine: isCurrentLine,
+    final depthBlurSigma = resolveLyricDepthBlurSigma(
+      distanceFromCurrent: distanceFromCurrent,
       enabled: settings.lyricDepthBlur,
       effectsLevel: settings.uiEffectsLevel,
     );
@@ -51,10 +54,9 @@ class LyricViewTile extends StatelessWidget {
         duration: motion.controlTransitionDuration,
         curve: motion.fast,
         opacity: opacity,
-        child: AnimatedScale(
-          duration: motion.controlTransitionDuration,
-          curve: motion.normal,
-          scale: isMainLine ? 1 : 0.985,
+        child: LyricLineMotion(
+          isCurrent: isCurrentLine,
+          distanceFromCurrent: distanceFromCurrent,
           alignment: switch (lyricViewController.lyricTextAlign) {
             LyricTextAlign.left => Alignment.centerLeft,
             LyricTextAlign.center => Alignment.center,
@@ -81,10 +83,9 @@ class LyricViewTile extends StatelessWidget {
                           isMainLine: isMainLine,
                           isPastLine: isPastLine,
                         );
-                  if (!applyDepthBlur) return content;
-                  // Keep all contextual lyric lines at one depth.
+                  if (depthBlurSigma <= 0) return content;
                   return ImageFiltered(
-                    imageFilter: createLyricDepthBlurFilter(),
+                    imageFilter: createLyricDepthBlurFilter(depthBlurSigma),
                     child: content,
                   );
                 },
@@ -156,59 +157,65 @@ class _SyncLineContent extends StatelessWidget {
       );
     }
 
+    final enableKaraoke = AppSettings.instance.showKaraokeAnimation &&
+        context.surfaces.effectsLevel != UiEffectsLevel.performance;
+
     final List<Widget> contents = [
-      StreamBuilder(
-        stream: PlayService.instance.playbackService.positionStream,
-        builder: (context, snapshot) {
-          final posInMs = (snapshot.data ?? 0) * 1000;
-          return RichText(
-            textAlign: switch (alignment) {
-              LyricTextAlign.left => TextAlign.left,
-              LyricTextAlign.center => TextAlign.center,
-              LyricTextAlign.right => TextAlign.right,
-            },
-            text: TextSpan(
-              children: List.generate(
-                syncLine.words.length,
-                (i) {
-                  final posFromWordStart = max(
-                    posInMs - syncLine.words[i].start.inMilliseconds,
-                    0,
-                  );
-                  final progress = min(
-                    posFromWordStart / syncLine.words[i].length.inMilliseconds,
-                    1.0,
-                  );
-                  return WidgetSpan(
-                    child: ShaderMask(
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (bounds) {
-                        return LinearGradient(
-                          colors: [
-                            scheme.primary,
-                            scheme.primary,
-                            scheme.primary.withValues(alpha: 0.10),
-                            scheme.primary.withValues(alpha: 0.10),
-                          ],
-                          stops: [0, progress, progress, 1],
-                        ).createShader(bounds);
-                      },
-                      child: Text(
-                        syncLine.words[i].content,
-                        style: _primaryStyle(
-                          scheme,
-                          lyricFontSize,
-                          isMainLine: true,
+      if (enableKaraoke)
+        StreamBuilder(
+          stream: PlayService.instance.playbackService.positionStream,
+          builder: (context, snapshot) {
+            final posInMs = (snapshot.data ?? 0) * 1000;
+            return RichText(
+              textAlign: switch (alignment) {
+                LyricTextAlign.left => TextAlign.left,
+                LyricTextAlign.center => TextAlign.center,
+                LyricTextAlign.right => TextAlign.right,
+              },
+              text: TextSpan(
+                children: List.generate(
+                  syncLine.words.length,
+                  (i) {
+                    final posFromWordStart = max(
+                      posInMs - syncLine.words[i].start.inMilliseconds,
+                      0,
+                    );
+                    final progress = min(
+                      posFromWordStart / syncLine.words[i].length.inMilliseconds,
+                      1.0,
+                    );
+                    return WidgetSpan(
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) {
+                          return LinearGradient(
+                            colors: [
+                              scheme.primary,
+                              scheme.primary,
+                              scheme.primary.withValues(alpha: 0.10),
+                              scheme.primary.withValues(alpha: 0.10),
+                            ],
+                            stops: [0, progress, progress, 1],
+                          ).createShader(bounds);
+                        },
+                        child: Text(
+                          syncLine.words[i].content,
+                          style: _primaryStyle(
+                            scheme,
+                            lyricFontSize,
+                            isMainLine: true,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          );
-        },
-      )
+            );
+          },
+        )
+      else
+        buildPrimaryText(syncLine.content, scheme, alignment, lyricFontSize),
     ];
     if (showTranslation && syncLine.translation != null) {
       contents.add(buildSecondaryText(

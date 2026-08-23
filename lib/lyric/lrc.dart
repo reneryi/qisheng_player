@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lyric.dart';

@@ -80,10 +80,15 @@ class AppNavigationState extends ChangeNotifier {
 
     // 检查当前页面与上一页面路径，判定横向滑动过渡方向
     final newIndex = _shellPagesOrder.indexWhere((p) => location.startsWith(p));
-    final oldIndex = _shellPagesOrder.indexWhere((p) => _lastShellLocation.startsWith(p));
+    final oldIndex =
+        _shellPagesOrder.indexWhere((p) => _lastShellLocation.startsWith(p));
 
-    final isNewDetail = location.contains('/detail') || location.contains('/result') || location.contains('/issue');
-    final isOldDetail = _lastShellLocation.contains('/detail') || _lastShellLocation.contains('/result') || _lastShellLocation.contains('/issue');
+    final isNewDetail = location.contains('/detail') ||
+        location.contains('/result') ||
+        location.contains('/issue');
+    final isOldDetail = _lastShellLocation.contains('/detail') ||
+        _lastShellLocation.contains('/result') ||
+        _lastShellLocation.contains('/issue');
 
     if (isNewDetail && !isOldDetail) {
       // 从主列表进入详情子页面：向左滑入
@@ -116,7 +121,7 @@ class AppNavigationState extends ChangeNotifier {
     }
     _history.add(AppNavigationEntry(location, extra: extra));
     _historyIndex = _history.length - 1;
-    
+
     // 避免在 widget 树 build 期间同步触发 notifyListeners 导致 markNeedsBuild 异常或卡死
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
@@ -170,11 +175,10 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   bool closeNowPlaying(BuildContext context, {String? fallback}) {
-    // 移除 setNowPlayingPageActive(false) 的提前调用。
-    // 我们必须让其在播放详情页正式 dispose（销毁）时才重置状态，
-    // 这样在整个退场转场的飞行期间，底层主界面会一直保持在 isNowPlayingAbove 静止分支中（仅淡出蒙版），
-    // 确保控制栏封面的屏幕物理坐标绝对不动，让大封面 Hero 能够精准重合降落，解决错位闪烁 Bug。
+    // 先启动 Shell 的延迟恢复；包装层仍保留原布局和 Hero 目标矩形，
+    // 只在反向转场后半段恢复绘制与命中。
     final previous = prepareNowPlayingClose();
+    setNowPlayingPageActive(false);
     if (context.canPop()) {
       context.pop();
       return true;
@@ -306,4 +310,3 @@ class AppNavigationState extends ChangeNotifier {
     notifyListeners();
   }
 }
-

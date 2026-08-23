@@ -4,10 +4,10 @@
 
 ## 根目录约定
 
-- 根目录只保留项目入口级文件、平台目录、源码目录、配置文件、许可证和基础文档。
+- 根目录只保留项目入口级文件、平台目录、源码目录、配置文件、许可证和基础入口文档。
 - 业务源码集中放在 `lib/`、`rust/`、`windows/` 和 `third_party/desktop_lyric/`。
 - 发布产物统一进入 `dist/`，自动构建缓存保留在 `build/`。
-- 本地依赖、个人笔记、调试输出和曲库数据不提交到 Git。
+- 本地依赖、调试输出和曲库数据不提交到 Git；临时笔记放在仓库外部。
 
 ## 源码目录
 
@@ -30,12 +30,11 @@
 
 ## 文档与发布
 
-- `docs/changelog.md`：版本更新日志。
+- `README.md`：项目介绍、功能概览、本地开发和文档入口。
+- `CONTRIBUTING.md`：Issue、PR 和本地检查约定。
 - `docs/release_workflow.md`：Windows 发布流程。
-- `docs/msix_install.md`：历史 MSIX 安装说明。
-- `docs/releases/`：版本发布说明和 GitHub Release payload。
+- `docs/releases/`：按版本保存发布说明和 GitHub Release payload；历史版本线位于 `docs/releases/archive/`。
 - `docs/screenshots/`：README 或发布说明可引用的截图。
-- `WORKLOG.md`：重要实现、验证结果与后续注意事项记录。
 
 ## 本地目录
 
@@ -44,4 +43,3 @@
 - `dist/windows/package/`：发布脚本整合后的完整可运行目录。
 - `dist/windows/artifacts/packages/`：最终 zip 和安装器输出目录。
 - `.dart_tool/`：Dart / Flutter 本地缓存。
-- `notes/`：本地协作笔记，不参与开源仓库提交。

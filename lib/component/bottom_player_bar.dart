@@ -1,12 +1,12 @@
-import 'dart:io' show Platform;
-import 'dart:math' as math;
-import 'package:flutter/scheduler.dart' show Ticker; // 引入 Ticker 用于旋转封面物理阻尼计算
+import 'package:flutter/gestures.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
-import 'package:qisheng_player/component/waveform_slider.dart';
+import 'package:qisheng_player/component/spectrum_progress_slider.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/now_playing_navigation.dart';
+import 'package:qisheng_player/component/ui/audio_format_badge.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/now_playing_page/component/current_playlist_view.dart';
@@ -52,19 +52,18 @@ class BottomPlayerBar extends StatelessWidget {
   const BottomPlayerBar({
     super.key,
     this.transparent = false,
-    this.disableHero = false, // 新增：是否禁用 Hero 共享元素动画，用于防止在播放详情页内部渲染底栏时与中间大封面产生冲突
+    this.disableHero = false,
   });
 
-  // 是否将背景透明化，用于在一体化卡片内嵌套或者在沉浸页中悬浮时隐藏边框
   final bool transparent;
   final bool disableHero;
 
   @override
   Widget build(BuildContext context) {
     const padding = EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical:
-            8); // 将 padding 变量设为 const 解决 analyzer 的 prefer_const_declarations 提示
+      horizontal: 24,
+      vertical: 6,
+    );
     final childWidget = LayoutBuilder(
       builder: (context, constraints) {
         final layout = resolveBottomPlayerBarLayout(constraints.maxWidth);
@@ -73,7 +72,7 @@ class BottomPlayerBar extends StatelessWidget {
             Expanded(
               child: _BottomBarTrackSection(
                 dense: layout.dense,
-                disableHero: disableHero, // 传递参数
+                disableHero: disableHero,
               ),
             ),
             const SizedBox(width: 24),
@@ -95,21 +94,35 @@ class BottomPlayerBar extends StatelessWidget {
         );
       },
     );
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return SizedBox(
+    // 全宽轻薄毛玻璃通栏：融入全局流体背景，并带微弱顶部高光分界线防止滚动内容视觉干扰
+    return Container(
       height: context.chrome.dockHeight,
-      child: transparent
-          ? Padding(
-              padding: padding,
-              child: childWidget,
-            )
-          : CpSurface(
-              tone: CpSurfaceTone.floating,
-              radius: 28,
-              border: false,
-              padding: padding,
-              child: childWidget,
+      decoration: transparent
+          ? null
+          : BoxDecoration(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.22)
+                  : Colors.white.withValues(alpha: 0.35),
+              border: Border(
+                top: BorderSide(
+                  color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
+                  width: 1.0,
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                  spreadRadius: 0,
+                ),
+              ],
             ),
+      padding: padding,
+      child: childWidget,
     );
   }
 }
@@ -117,7 +130,7 @@ class BottomPlayerBar extends StatelessWidget {
 class _BottomBarTrackSection extends StatelessWidget {
   const _BottomBarTrackSection({
     required this.dense,
-    required this.disableHero, // 新增
+    required this.disableHero,
   });
 
   final bool dense;
@@ -149,7 +162,7 @@ class _BottomBarTrackSection extends StatelessWidget {
               _TrackCover(
                 size: dense ? 52 : 58,
                 audio: audio,
-                disableHero: disableHero, // 传递参数
+                disableHero: disableHero,
               ),
               SizedBox(width: dense ? 12 : 16),
               Expanded(
@@ -167,15 +180,29 @@ class _BottomBarTrackSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      audio?.displayArtist ?? '暂无播放',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.6),
-                        fontSize: dense ? 12 : 13,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            audio?.displayArtist ?? '暂无播放',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.6),
+                              fontSize: dense ? 12 : 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (audio != null && !dense) ...[
+                          const SizedBox(width: 8),
+                          AudioFormatBadge(
+                            audio: audio,
+                            compact: true,
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -192,7 +219,7 @@ class _TrackCover extends StatelessWidget {
   const _TrackCover({
     required this.size,
     required this.audio,
-    required this.disableHero, // 新增：是否禁用 Hero 动效
+    required this.disableHero,
   });
 
   final double size;
@@ -282,7 +309,7 @@ class _TrackCover extends StatelessWidget {
           );
 
           if (disableHero) {
-            // 如果禁用 Hero，直接返回旋转动画子树，避免多 Hero 重复 Tag 冲突
+            // 如果禁用 Hero，直接返回微呼吸动画子树，避免多 Hero 重复 Tag 冲突
             return SpinningArtwork(
               spinning: spinning,
               child: framedArtwork,
@@ -293,9 +320,8 @@ class _TrackCover extends StatelessWidget {
             spinning: spinning,
             child: Hero(
               tag: nowPlayingArtworkHeroTag,
-              // 使用统一的自定义高抛弧线插值器，在退场时呈完美弧度飞回控制栏
               createRectTween: (begin, end) =>
-                  CustomIntenseArcTween(begin: begin, end: end),
+                  NowPlayingArtworkRectTween(begin: begin, end: end),
               flightShuttleBuilder: nowPlayingArtworkFlightShuttleBuilder,
               child: framedArtwork,
             ),
@@ -306,7 +332,7 @@ class _TrackCover extends StatelessWidget {
   }
 }
 
-class SpinningArtwork extends StatefulWidget {
+class SpinningArtwork extends StatelessWidget {
   const SpinningArtwork({
     super.key,
     required this.spinning,
@@ -317,125 +343,48 @@ class SpinningArtwork extends StatefulWidget {
   final Widget child;
 
   @override
-  State<SpinningArtwork> createState() => _SpinningArtworkState();
-}
-
-class _SpinningArtworkState extends State<SpinningArtwork>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker; // 手动物理引擎轮询计时器
-  double _angle = 0.0; // 累计旋转角度（以弧度为单位）
-  double _speed = 0.0; // 当前角速度（以弧度/秒为单位）
-
-  // 目标速度 (设定每 18 秒转完一整圈)
-  static const double _targetSpeed = 2.0 * math.pi / 18.0;
-  // 加速度 (从零静止到满速大约需 1.5 秒，实现顺滑起步)
-  static const double _acceleration = _targetSpeed / 1.5;
-  // 阻尼减速度 (暂停时由摩擦阻尼惯性滑行，到完全静止大约需 1.8 秒)
-  static const double _deceleration = _targetSpeed / 1.8;
-
-  bool _isAligning = false; // 是否处于暂停后的“回正归位”动画中
-  double _alignStartAngle = 0.0; // 回正起始角度
-  double _alignEndAngle = 0.0; // 回正目标角度
-  double _alignProgress = 0.0; // 回正动画进度 (0.0 -> 1.0)
-  static const double _alignDuration = 0.8; // 回正回正过渡所需秒数 (0.8秒)
-
-  Duration _lastElapsed = Duration.zero; // 记录上一次 Tick 触发的时间
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onTick);
-    _ticker.start();
-  }
-
-  @override
-  void didUpdateWidget(covariant SpinningArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.spinning && !oldWidget.spinning && !_ticker.isActive) {
-      _lastElapsed = Duration.zero;
-      _ticker.start();
-    }
-  }
-
-  // 物理模拟核心：逐帧计算角度与角速度
-  void _onTick(Duration elapsed) {
-    if (_lastElapsed == Duration.zero) {
-      _lastElapsed = elapsed;
-      return;
-    }
-    // 计算两帧之间的时间差 dt（秒），加 clamp 做时间突变安全防线
-    final double dt =
-        ((elapsed.inMicroseconds - _lastElapsed.inMicroseconds) / 1000000.0)
-            .clamp(0.0, 0.1);
-    _lastElapsed = elapsed;
-
-    if (!mounted) return;
-
-    if (widget.spinning) {
-      // 处于播放状态：终止任何可能正在进行的回正，且以恒定加速度平滑提速
-      _isAligning = false;
-      if (_speed < _targetSpeed) {
-        _speed = math.min(_speed + _acceleration * dt, _targetSpeed);
-      }
-      _angle += _speed * dt;
-      setState(() {});
-    } else {
-      // 处于暂停状态：
-      if (_isAligning) {
-        // 若处于回正状态，使用 easeOutCubic 曲线进行平滑插值过渡
-        _alignProgress += dt / _alignDuration;
-        if (_alignProgress >= 1.0) {
-          _alignProgress = 1.0;
-          _isAligning = false;
-          _angle = _alignEndAngle;
-          _ticker.stop();
-        } else {
-          final curve = Curves.easeOutCubic.transform(_alignProgress);
-          _angle =
-              _alignStartAngle + (_alignEndAngle - _alignStartAngle) * curve;
-        }
-        setState(() {});
-      } else {
-        // 若不处于回正状态，则应用物理阻尼减速
-        if (_speed > 0.0) {
-          _speed = math.max(_speed - _deceleration * dt, 0.0);
-          _angle += _speed * dt;
-          setState(() {});
-        } else {
-          // 速度完全降为 0 后，计算最近的下一个 0 度位置 (即 2*pi 的完整倍数)
-          final double fullRotations =
-              (_angle / (2.0 * math.pi)).ceilToDouble();
-          _alignStartAngle = _angle;
-          _alignEndAngle = fullRotations * 2.0 * math.pi;
-
-          // 若偏移小于临界值直接归零，否则启动 0.8s 的平滑回正动画
-          if ((_alignEndAngle - _alignStartAngle).abs() < 0.01) {
-            _angle = _alignEndAngle;
-            _ticker.stop();
-          } else {
-            _isAligning = true;
-            _alignProgress = 0.0;
-          }
-          setState(() {});
-        }
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // RotationTransition 接受的 turns 比例范围为 0.0 到 1.0 (表示一整圈)
-    final double turns = _angle / (2.0 * math.pi);
-    return RotationTransition(
-      turns: AlwaysStoppedAnimation(turns),
-      child: widget.child,
-    );
-  }
+    final motion = context.motion;
+    final accents = context.accents;
 
-  @override
-  void dispose() {
-    _ticker.dispose(); // 销毁 Ticker 防止泄漏
-    super.dispose();
+    // 现代画册模式：用优雅的微呼吸缩放与多层弥散外发光替代生硬旋转，营造通透生动的视听氛围
+    return AnimatedScale(
+      scale: spinning ? 1.03 : 1.0,
+      duration: motion.controlTransitionDuration,
+      curve: motion.emphasized,
+      child: AnimatedContainer(
+        duration: motion.controlTransitionDuration,
+        curve: motion.normal,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(nowPlayingArtworkHeroRadius),
+          boxShadow: [
+            if (spinning) ...[
+              // 关键高亮光晕
+              BoxShadow(
+                color: accents.accentGlow.withValues(alpha: 0.36),
+                blurRadius: 20,
+                spreadRadius: -1,
+                offset: const Offset(0, 4),
+              ),
+              // 环境漫反射柔光
+              BoxShadow(
+                color: accents.accent.withValues(alpha: 0.2),
+                blurRadius: 10,
+                spreadRadius: -4,
+              ),
+            ] else ...[
+              // 静止时的自然轻微投影
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ],
+        ),
+        child: child,
+      ),
+    );
   }
 }
 
@@ -452,9 +401,7 @@ class _BottomBarCenterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 在测试状态下为了和测试用例的原定高度和边界一致使用 16.0，普通状态下 dense 为 14.0，非 dense 为 20.0 防溢出
-        final isTesting = Platform.environment.containsKey('FLUTTER_TEST');
-        final progressHeight = isTesting ? 16.0 : (dense ? 14.0 : 20.0);
+        final progressHeight = dense ? 14.0 : 20.0;
         final controlsHeight = dense ? 52.0 : 56.0;
         final preferredGap = dense ? 2.0 : 2.0;
         final availableGap = constraints.hasBoundedHeight
@@ -490,7 +437,6 @@ class _ProgressStrip extends StatefulWidget {
 }
 
 class _ProgressStripState extends State<_ProgressStrip> {
-  bool _hovering = false; // 追踪鼠标悬停状态以适配测试用例的 hover thumb 判定
   bool _dragging = false;
   double _dragValue = 0;
 
@@ -524,119 +470,6 @@ class _ProgressStripState extends State<_ProgressStrip> {
             return LayoutBuilder(
               builder: (context, constraints) {
                 final showLabels = constraints.maxWidth >= 360 && !widget.dense;
-                final isTesting =
-                    Platform.environment.containsKey('FLUTTER_TEST');
-
-                // 1. 若处于测试状态，直接渲染原本的原生 Slider 以确保 117 项测试用例能正确找到 Slider 组件运行
-                if (isTesting) {
-                  final motion = context.motion;
-                  final thumbRadius = resolveSliderThumbRadius(
-                    hovering: _hovering,
-                    dragging: _dragging,
-                  );
-
-                  return MouseRegion(
-                    onEnter: (_) => setState(() => _hovering = true),
-                    onExit: (_) => setState(() => _hovering = false),
-                    child: Row(
-                      children: [
-                        if (showLabels)
-                          SizedBox(
-                            width: 48,
-                            child: Text(
-                              Duration(
-                                milliseconds: (clampedValue * 1000).round(),
-                              ).toStringHMMSS(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: scheme.onSurface.withValues(alpha: 0.58),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, sliderConstraints) {
-                              if (!canPaintSliderAtWidth(
-                                sliderConstraints.maxWidth,
-                              )) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween<double>(end: thumbRadius),
-                                duration: motion.microInteractionDuration,
-                                curve: motion.fast,
-                                builder: (context, animatedThumbRadius, _) {
-                                  return SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 2,
-                                      activeTrackColor:
-                                          context.accents.progressActive,
-                                      inactiveTrackColor:
-                                          context.accents.progressInactive,
-                                      thumbColor: context.accents.accent,
-                                      overlayShape:
-                                          SliderComponentShape.noOverlay,
-                                      thumbShape: _GlowSliderThumbShape(
-                                        radius: animatedThumbRadius,
-                                        color: context.accents.accent,
-                                      ),
-                                    ),
-                                    child: Slider(
-                                      min: 0,
-                                      max: clampedDuration,
-                                      value: clampedValue,
-                                      onChangeStart: hasTrack
-                                          ? (value) {
-                                              setState(() {
-                                                _dragging = true;
-                                                _dragValue = value;
-                                              });
-                                            }
-                                          : null,
-                                      onChanged: hasTrack
-                                          ? (value) =>
-                                              setState(() => _dragValue = value)
-                                          : null,
-                                      onChangeEnd: hasTrack
-                                          ? (value) {
-                                              setState(() => _dragging = false);
-                                              playback.seek(value);
-                                            }
-                                          : null,
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                        if (showLabels)
-                          SizedBox(
-                            width: 48,
-                            child: Text(
-                              Duration(
-                                milliseconds: (duration * 1000).round(),
-                              ).toStringHMMSS(),
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: scheme.onSurface.withValues(alpha: 0.58),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                }
-
-                // 2. 若处于普通运行状态，则渲染精致的、具有灵动触感的自定义果冻波形进度条
                 return Row(
                   children: [
                     if (showLabels)
@@ -657,26 +490,35 @@ class _ProgressStripState extends State<_ProgressStrip> {
                         ),
                       ),
                     Expanded(
-                      // 使用自定义仿真果冻波形进度条组件，高度自适应适配 dense 状态，完全杜绝溢出报错
-                      child: WaveformSlider(
-                        value: clampedValue,
-                        max: clampedDuration,
-                        height: widget.dense ? 14.0 : 20.0, // 设定密集与普通排版的高度
-                        isPlaying: isPlaying && hasTrack,
-                        onChanged: hasTrack
-                            ? (value) {
-                                setState(() {
-                                  _dragging = true;
-                                  _dragValue = value;
-                                });
-                              }
-                            : null,
-                        onChangeEnd: hasTrack
-                            ? (value) {
-                                setState(() => _dragging = false);
-                                playback.seek(value);
-                              }
-                            : null,
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: playback.volumeDspNotifier,
+                        builder: (context, volume, _) {
+                          return SpectrumProgressSlider(
+                            spectrum: playback.audioSpectrum,
+                            value: clampedValue,
+                            max: clampedDuration,
+                            height: widget.dense ? 14.0 : 20.0,
+                            spectrumActive: isPlaying &&
+                                hasTrack &&
+                                volume > 0 &&
+                                context.surfaces.effectsLevel !=
+                                    UiEffectsLevel.performance,
+                            onChanged: hasTrack
+                                ? (value) {
+                                    setState(() {
+                                      _dragging = true;
+                                      _dragValue = value;
+                                    });
+                                  }
+                                : null,
+                            onChangeEnd: hasTrack
+                                ? (value) {
+                                    setState(() => _dragging = false);
+                                    playback.seek(value);
+                                  }
+                                : null,
+                          );
+                        },
                       ),
                     ),
                     if (showLabels)
@@ -758,9 +600,9 @@ class _PlaybackControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = context.read<PlaybackController>();
-    final primaryButtonSize = dense ? 52.0 : 56.0;
-    final outerGap = dense ? 16.0 : 22.0;
-    final innerGap = dense ? 18.0 : 28.0;
+    final primaryButtonSize = dense ? 50.0 : 56.0;
+    final outerGap = dense ? 10.0 : 20.0;
+    final innerGap = dense ? 12.0 : 26.0;
     final clusterWidth = dense ? 264.0 : 336.0;
 
     return LayoutBuilder(
@@ -925,7 +767,8 @@ class _TransportIconButtonState extends State<_TransportIconButton> {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
     final motion = context.motion;
-    final hitSize = widget.dense ? 34.0 : 40.0;
+    // 视觉圆形尺寸：根据 dense 模式在 34dp 与 40dp 间切换
+    final visualSize = widget.dense ? 34.0 : 40.0;
     final radius = BorderRadius.circular(999);
     final iconColor = !_enabled
         ? scheme.onSurface.withValues(alpha: 0.34)
@@ -940,46 +783,54 @@ class _TransportIconButtonState extends State<_TransportIconButton> {
         _hovered = false;
         _pressed = false;
       }),
-      child: GestureDetector(
-        onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
-        child: AnimatedScale(
-          scale: _pressed ? 0.95 : (_hovered ? 1.06 : 1),
-          duration: motion.microInteractionDuration,
-          curve: motion.fast,
-          child: AnimatedContainer(
-            duration: motion.controlTransitionDuration,
-            curve: motion.normal,
-            width: hitSize,
-            height: hitSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.selected
-                  ? accents.accent.withValues(alpha: 0.13)
-                  : _hovered
-                      ? Colors.white.withValues(alpha: 0.045)
-                      : Colors.transparent,
-              boxShadow: [
-                if (widget.selected)
-                  BoxShadow(
-                    color: accents.accentGlow.withValues(alpha: 0.18),
-                    blurRadius: 12,
-                    spreadRadius: -8,
-                  ),
-              ],
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                enableFeedback: false,
-                borderRadius: radius,
-                onTap: widget.onPressed,
-                child: Center(
-                  child: Icon(
-                    widget.icon,
-                    size: widget.dense ? 18 : 22,
-                    color: iconColor,
+      // 扩展外层透明点击热区，在常规模式下 >= 44x44 dp，dense 紧凑模式下为 36x36 dp
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: widget.dense ? 36.0 : 44.0,
+          minHeight: widget.dense ? 36.0 : 44.0,
+        ),
+        child: Center(
+          child: AnimatedScale(
+            scale: _pressed ? 0.95 : (_hovered ? 1.06 : 1),
+            duration: motion.microInteractionDuration,
+            curve: motion.fast,
+            child: AnimatedContainer(
+              duration: motion.controlTransitionDuration,
+              curve: motion.normal,
+              width: visualSize,
+              height: visualSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.selected
+                    ? accents.accent.withValues(alpha: 0.13)
+                    : _hovered
+                        ? Colors.white.withValues(alpha: 0.045)
+                        : Colors.transparent,
+                boxShadow: [
+                  if (widget.selected)
+                    BoxShadow(
+                      color: accents.accentGlow.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      spreadRadius: -8,
+                    ),
+                ],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  enableFeedback: false,
+                  borderRadius: radius,
+                  onTap: widget.onPressed,
+                  // 统一由 InkWell 响应按压高亮状态，移除外层手势竞争
+                  onHighlightChanged: _enabled
+                      ? (highlighted) => setState(() => _pressed = highlighted)
+                      : null,
+                  child: Center(
+                    child: Icon(
+                      widget.icon,
+                      size: widget.dense ? 18 : 22,
+                      color: iconColor,
+                    ),
                   ),
                 ),
               ),
@@ -1163,7 +1014,7 @@ class _ExclusiveModeControl extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: playback.wasapiExclusive,
       builder: (context, exclusive, _) => CpIconButton(
-        variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
+        variant: CpButtonVariant.immersive,
         tooltip: "独占模式：${exclusive ? '已启用' : '已禁用'}",
         onPressed: () => playback.useExclusiveMode(!exclusive),
         icon: Center(
@@ -1203,6 +1054,13 @@ class _VolumeControlState extends State<_VolumeControl> {
     playback.setVolumeDsp(normalized);
   }
 
+  void _handleScroll(PointerScrollEvent event, PlaybackController playback, double current) {
+    // 鼠标滚轮向上滚动增加音量，向下滚动减小音量
+    final delta = event.scrollDelta.dy < 0 ? 0.04 : -0.04;
+    final next = (current + delta).clamp(0.0, 1.0).toDouble();
+    _setVolume(playback, next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = context.read<PlaybackController>();
@@ -1226,110 +1084,116 @@ class _VolumeControlState extends State<_VolumeControl> {
           _ => Symbols.volume_up,
         };
 
-        return MouseRegion(
-          onEnter: (_) => setState(() => _hovering = true),
-          onExit: (_) => setState(() => _hovering = false),
-          child: SizedBox(
-            height: 42,
-            child: Padding(
-              padding: EdgeInsets.only(right: showSlider ? 8 : 0),
-              // 重构：移除外层 Container 的彩色背景底色与描边边框，令音量滑块与图标干净地浮动在底部控制栏
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CpIconButton(
-                    variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
-                    tooltip: '音量',
-                    onPressed: () {
-                      if (current > 0.0001) {
-                        _lastNonZeroVolume = current;
-                      }
-                      final next = current <= 0.0001 ? _lastNonZeroVolume : 0.0;
-                      _setVolume(playback, next);
-                    },
-                    icon: AnimatedSwitcher(
-                      duration: motion.microInteractionDuration,
-                      switchInCurve: motion.emphasized,
-                      switchOutCurve: motion.fast,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.82, end: 1)
-                                .animate(animation),
-                            child: child,
-                          ),
-                        );
+        return Listener(
+          onPointerSignal: (signal) {
+            if (signal is PointerScrollEvent) {
+              _handleScroll(signal, playback, current);
+            }
+          },
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovering = true),
+            onExit: (_) => setState(() => _hovering = false),
+            child: SizedBox(
+              height: 42,
+              child: Padding(
+                padding: EdgeInsets.only(right: showSlider ? 8 : 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CpIconButton(
+                      variant: CpButtonVariant.immersive,
+                      tooltip: '音量（支持鼠标滚轮无级调节）: ${(current * 100).round()}%',
+                      onPressed: () {
+                        if (current > 0.0001) {
+                          _lastNonZeroVolume = current;
+                        }
+                        final next = current <= 0.0001 ? _lastNonZeroVolume : 0.0;
+                        _setVolume(playback, next);
                       },
-                      child: Icon(icon, key: ValueKey(icon)),
-                    ),
-                  ),
-                  ClipRect(
-                    child: AnimatedContainer(
-                      duration: motion.controlTransitionDuration,
-                      curve: motion.normal,
-                      width: effectiveWidth,
-                      child: !showSlider
-                          ? const SizedBox.shrink()
-                          : LayoutBuilder(
-                              builder: (context, sliderConstraints) {
-                                if (!canPaintSliderAtWidth(
-                                  sliderConstraints.maxWidth,
-                                )) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return TweenAnimationBuilder<double>(
-                                  tween: Tween<double>(
-                                    end: resolveSliderThumbRadius(
-                                      hovering: _hovering,
-                                      dragging: _dragging,
-                                      visibleRadius: 5,
-                                    ),
-                                  ),
-                                  duration: motion.microInteractionDuration,
-                                  curve: motion.fast,
-                                  builder: (context, animatedThumbRadius, _) {
-                                    return SliderTheme(
-                                      data: SliderTheme.of(context).copyWith(
-                                        trackHeight: 2,
-                                        activeTrackColor:
-                                            accents.progressActive,
-                                        inactiveTrackColor:
-                                            accents.progressInactive,
-                                        thumbColor: accents.accent,
-                                        overlayShape:
-                                            SliderComponentShape.noOverlay,
-                                        thumbShape: _GlowSliderThumbShape(
-                                          radius: animatedThumbRadius,
-                                          color: accents.accent,
-                                        ),
-                                      ),
-                                      child: Slider(
-                                        min: 0,
-                                        max: 1,
-                                        value: current,
-                                        onChangeStart: (next) {
-                                          setState(() {
-                                            _dragging = true;
-                                            _dragValue = next;
-                                          });
-                                        },
-                                        onChanged: (next) {
-                                          setState(() => _dragValue = next);
-                                          _setVolume(playback, next);
-                                        },
-                                        onChangeEnd: (_) =>
-                                            setState(() => _dragging = false),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
+                      icon: AnimatedSwitcher(
+                        duration: motion.microInteractionDuration,
+                        switchInCurve: motion.emphasized,
+                        switchOutCurve: motion.fast,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: 0.82, end: 1)
+                                  .animate(animation),
+                              child: child,
                             ),
+                          );
+                        },
+                        child: Icon(icon, key: ValueKey(icon)),
+                      ),
                     ),
-                  ),
-                ],
+                    ClipRect(
+                      child: AnimatedContainer(
+                        duration: motion.controlTransitionDuration,
+                        curve: motion.normal,
+                        width: effectiveWidth,
+                        child: !showSlider
+                            ? const SizedBox.shrink()
+                            : LayoutBuilder(
+                                builder: (context, sliderConstraints) {
+                                  if (!canPaintSliderAtWidth(
+                                    sliderConstraints.maxWidth,
+                                  )) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(
+                                      end: resolveSliderThumbRadius(
+                                        hovering: _hovering,
+                                        dragging: _dragging,
+                                        visibleRadius: 5,
+                                      ),
+                                    ),
+                                    duration: motion.microInteractionDuration,
+                                    curve: motion.fast,
+                                    builder: (context, animatedThumbRadius, _) {
+                                      return SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          trackHeight: 2,
+                                          activeTrackColor:
+                                              accents.progressActive,
+                                          inactiveTrackColor:
+                                              accents.progressInactive,
+                                          thumbColor: accents.accent,
+                                          overlayShape:
+                                              SliderComponentShape.noOverlay,
+                                          thumbShape: _GlowSliderThumbShape(
+                                            radius: animatedThumbRadius,
+                                            color: accents.accent,
+                                          ),
+                                        ),
+                                        child: Slider(
+                                          min: 0,
+                                          max: 1,
+                                          value: current,
+                                          onChangeStart: (next) {
+                                            setState(() {
+                                              _dragging = true;
+                                              _dragValue = next;
+                                            });
+                                          },
+                                          onChanged: (next) {
+                                            setState(() => _dragValue = next);
+                                            _setVolume(playback, next);
+                                          },
+                                          onChangeEnd: (_) =>
+                                              setState(() => _dragging = false),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1353,7 +1217,7 @@ class _DesktopLyricControl extends StatelessWidget {
                 snapshot.connectionState == ConnectionState.done;
             final enabled = snapshot.data != null;
             return CpIconButton(
-              variant: CpButtonVariant.immersive, // 重构：使用沉浸式按钮变体
+              variant: CpButtonVariant.immersive,
               tooltip: '桌面歌词${enabled ? "已开启" : "已关闭"}',
               onPressed: ready
                   ? enabled
@@ -1387,60 +1251,85 @@ class _QueueEntryButton extends StatelessWidget {
 
   final bool dense;
 
-  Future<void> _openQueueDialog(BuildContext context) {
+  // 优化：右侧滑出的半透明抽屉式浮层，不阻断全屏主流程，点击空白区域即可退出
+  Future<void> _openQueueDrawer(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final width = (size.width * 0.42).clamp(420.0, 620.0).toDouble();
-    final height = (size.height * 0.68).clamp(400.0, 640.0).toDouble();
+    final width = (size.width * 0.36).clamp(380.0, 520.0).toDouble();
 
-    return showDialog<void>(
+    return showGeneralDialog<void>(
       context: context,
-      builder: (context) {
+      barrierDismissible: true,
+      barrierLabel: '播放队列',
+      barrierColor: Colors.black26,
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (context, anim1, anim2) {
         final scheme = Theme.of(context).colorScheme;
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
-          child: CpSurface(
-            tone: CpSurfaceTone.floating,
-            radius: 28,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            child: SizedBox(
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
               width: width,
-              height: height,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '播放队列',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
+              height: double.infinity,
+              margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+              child: CpSurface(
+                tone: CpSurfaceTone.floating,
+                radius: 24,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '播放队列',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      CpIconButton(
-                        tooltip: '关闭',
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Symbols.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  const Expanded(
-                    child: CurrentPlaylistView(
-                      showHeader: false,
-                      dense: true,
-                      enableReorder: true,
+                        CpIconButton(
+                          variant: CpButtonVariant.immersive,
+                          tooltip: '关闭',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Symbols.close),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    const Expanded(
+                      child: CurrentPlaylistView(
+                        showHeader: false,
+                        dense: true,
+                        enableReorder: true,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1.0, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
           ),
         );
       },
@@ -1456,11 +1345,10 @@ class _QueueEntryButton extends StatelessWidget {
       builder: (context, playlist, _) {
         final canOpenQueue = playlist.isNotEmpty || playback.nowPlaying != null;
 
-        // 重构：根据用户设计决议，无论宽窄屏均完全移除边框胶囊 OutlinedButton 和“队列”文本，统一简化为只带 Badge 的沉浸式图标按钮
         return CpIconButton(
           variant: CpButtonVariant.immersive,
           tooltip: canOpenQueue ? '打开播放队列' : '暂无播放队列',
-          onPressed: canOpenQueue ? () => _openQueueDialog(context) : null,
+          onPressed: canOpenQueue ? () => _openQueueDrawer(context) : null,
           icon: Badge(
             label: Text('${playlist.length}'),
             child: const Icon(Symbols.queue_music),

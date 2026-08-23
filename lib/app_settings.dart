@@ -11,23 +11,44 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 enum WindowBackdropMode {
-  /// 自动系统决策模式
-  auto,
+  /// 原生默认对角渐变背景（日间 135° 哑光柔和纸白，夜间 135° 深邃午夜蓝黑）
+  defaultGradient,
 
-  /// Windows 11 原生云母材质
-  mica,
+  /// Windows 11 原生增强型云母材质 (Mica Alt / Tabbed Window)
+  micaAlt,
 
-  /// 极光流体漂移背景材质（Flutter 软件渲染）
-  fluid,
+  /// Windows 11 原生实时背景亚克力材质 (Real-time Background Acrylic)
+  acrylic,
 
-  /// 关闭所有窗口特效
-  none;
+  /// 仿 Apple Music 沉浸式弥散流彩光斑 (Mesh Flow / Fluid Chroma)
+  meshFlow,
+
+  /// 交互水波纹背景（鼠标轨迹波澜 + 点击激荡 + 低音节拍共振涟漪）
+  waterRipple,
+
+  /// 琉璃透镜背景（SDF 凸透镜几何折射 + 动态流动高光）
+  prismaticGlass;
 
   static WindowBackdropMode? fromName(String? value) {
     if (value == null) return null;
     final normalized = value.toLowerCase();
-    if (normalized == 'micaalt' || normalized == 'acrylic') {
-      return WindowBackdropMode.auto;
+    if (normalized == 'auto' || normalized == 'none' || normalized == 'defaultgradient') {
+      return WindowBackdropMode.defaultGradient;
+    }
+    if (normalized == 'mica' || normalized == 'micaalt' || normalized == 'tabbed') {
+      return WindowBackdropMode.micaAlt;
+    }
+    if (normalized == 'acrylic') {
+      return WindowBackdropMode.acrylic;
+    }
+    if (normalized == 'fluid' || normalized == 'meshflow' || normalized == 'mesh_flow') {
+      return WindowBackdropMode.meshFlow;
+    }
+    if (normalized == 'waterripple' || normalized == 'water_ripple' || normalized == 'ripple') {
+      return WindowBackdropMode.waterRipple;
+    }
+    if (normalized == 'prismaticglass' || normalized == 'prismatic_glass' || normalized == 'glass') {
+      return WindowBackdropMode.prismaticGlass;
     }
     for (final item in values) {
       if (item.name.toLowerCase() == normalized) return item;
@@ -52,14 +73,29 @@ enum UiEffectsLevel {
 }
 
 enum UiVisualStyleMode {
-  glass;
+  /// 纯净实体卡片风格（现代扁平精致色阶、0.5px 精细边界、低冗余、高可读性）
+  solidCard,
+
+  /// 无界极简悬浮风格（去底色与硬边框、呼吸微光胶囊、+1.5px 悬浮提升、文字智能微阴影）
+  borderless,
+
+  /// 液态玻璃空间风格（连续曲率 Squircle、内边缘 1.2px 高光描边、次表面微光跟随）
+  liquidGlass;
 
   static UiVisualStyleMode? fromName(String? value) {
-    if (value == 'contrast' || value == 'sharpCard') {
-      return UiVisualStyleMode.glass;
+    if (value == null) return null;
+    final normalized = value.toLowerCase();
+    if (normalized == 'contrast' || normalized == 'sharpcard' || normalized == 'solidcard') {
+      return UiVisualStyleMode.solidCard;
+    }
+    if (normalized == 'borderless' || normalized == 'floating') {
+      return UiVisualStyleMode.borderless;
+    }
+    if (normalized == 'glass' || normalized == 'liquidglass' || normalized == 'liquid_glass') {
+      return UiVisualStyleMode.liquidGlass;
     }
     for (final item in values) {
-      if (item.name == value) return item;
+      if (item.name.toLowerCase() == normalized) return item;
     }
     return null;
   }
@@ -107,8 +143,8 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，更新为 1.3.2
-  static const String version = "1.3.2";
+  // 当前播放器的全局静态版本号，保留四项桌面与列表体验改进。
+  static const String version = "1.4.0";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
   static const Size defaultWindowSize = Size(1461, 898);
@@ -124,6 +160,11 @@ class AppSettings {
 
   /// 跟随歌曲封面的动态主题
   bool dynamicTheme = true;
+
+  /// 是否让主题色（手动选择或动态取色）微弱浸润默认渐变背景
+  /// true = 背景渐变带有极淡的主题色调倾向
+  /// false = 背景为纯净中性渐变（夜间午夜蓝 / 日间哑光纸白）
+  bool themeColorTintBackground = true;
 
   /// 璺熼殢绯荤粺涓婚鑹?
   bool useSystemTheme = true;
@@ -142,10 +183,27 @@ class AppSettings {
   String? fontPath;
   String? backgroundImagePath;
   double backgroundImageOpacity = 0.18;
-  WindowBackdropMode windowBackdropMode = WindowBackdropMode.auto;
+  WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient;
   UiEffectsLevel uiEffectsLevel = UiEffectsLevel.balanced;
   bool lyricDepthBlur = false;
-  UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.glass;
+  UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.solidCard;
+
+  /// 播放页沉浸模块化设置
+  /// 是否显示黑胶唱盘与旋转唱针
+  bool showVinylRecord = false;
+
+  /// 是否显示实时音频频谱动效
+  bool showSpectrumVisualizer = true;
+
+  /// 是否显示逐字平滑卡拉OK动效
+  bool showKaraokeAnimation = true;
+
+  /// 是否开启封面节拍呼吸律动
+  bool coverBreathEffect = true;
+
+  /// 全屏/沉浸播放时鼠标静止是否自动隐藏播控栏
+  bool autoHideControls = false;
+
   final ValueNotifier<int> backgroundVersion = ValueNotifier(0);
 
   late String artistSplitPattern = artistSeparator.join("|");
@@ -186,9 +244,16 @@ class AppSettings {
 
   static UiVisualStyleMode parseUiVisualStyleMode(Object? value) {
     if (value is String) {
-      return UiVisualStyleMode.fromName(value) ?? UiVisualStyleMode.glass;
+      return UiVisualStyleMode.fromName(value) ?? UiVisualStyleMode.solidCard;
     }
-    return UiVisualStyleMode.glass;
+    return UiVisualStyleMode.solidCard;
+  }
+
+  static WindowBackdropMode parseWindowBackdropMode(Object? value) {
+    if (value is String) {
+      return WindowBackdropMode.fromName(value) ?? WindowBackdropMode.defaultGradient;
+    }
+    return WindowBackdropMode.defaultGradient;
   }
 
   static Size parseWindowSize(Object? value) {
@@ -288,6 +353,11 @@ class AppSettings {
         _instance.dynamicTheme = dt;
       }
 
+      final tctb = settingsMap["ThemeColorTintBackground"];
+      if (tctb != null) {
+        _instance.themeColorTintBackground = tctb;
+      }
+
       final as = settingsMap["ArtistSeparator"];
       if (as != null) {
         _instance.artistSeparator = as;
@@ -325,7 +395,7 @@ class AppSettings {
       if (windowBackdropMode is String) {
         _instance.windowBackdropMode =
             WindowBackdropMode.fromName(windowBackdropMode) ??
-                WindowBackdropMode.auto;
+                WindowBackdropMode.defaultGradient;
       }
       final uiEffectsLevel = settingsMap["UiEffectsLevel"];
       if (uiEffectsLevel is String) {
@@ -336,6 +406,13 @@ class AppSettings {
       _instance.uiVisualStyleMode = parseUiVisualStyleMode(
         settingsMap["UiVisualStyleMode"],
       );
+      _instance.showVinylRecord = settingsMap["ShowVinylRecord"] ?? true;
+      _instance.showSpectrumVisualizer =
+          settingsMap["ShowSpectrumVisualizer"] ?? true;
+      _instance.showKaraokeAnimation =
+          settingsMap["ShowKaraokeAnimation"] ?? true;
+      _instance.coverBreathEffect = settingsMap["CoverBreathEffect"] ?? true;
+      _instance.autoHideControls = settingsMap["AutoHideControls"] ?? false;
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -351,6 +428,7 @@ class AppSettings {
         "Version": version,
         "ThemeMode": themeMode == ThemeMode.dark,
         "DynamicTheme": dynamicTheme,
+        "ThemeColorTintBackground": themeColorTintBackground,
         "UseSystemTheme": useSystemTheme,
         "UseSystemThemeMode": useSystemThemeMode,
         "DefaultTheme": defaultTheme,
@@ -365,6 +443,11 @@ class AppSettings {
         "UiEffectsLevel": uiEffectsLevel.name,
         "LyricDepthBlur": lyricDepthBlur,
         "UiVisualStyleMode": uiVisualStyleMode.name,
+        "ShowVinylRecord": showVinylRecord,
+        "ShowSpectrumVisualizer": showSpectrumVisualizer,
+        "ShowKaraokeAnimation": showKaraokeAnimation,
+        "CoverBreathEffect": coverBreathEffect,
+        "AutoHideControls": autoHideControls,
       };
 
       // 鍙湁鍦ㄧ獥鍙ｄ笉鏄渶澶у寲涓斾笉鏄叏灞忔椂鎵嶄繚瀛樼獥鍙ｅ昂瀵搞€?

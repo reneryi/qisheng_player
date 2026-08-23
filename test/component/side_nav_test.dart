@@ -18,6 +18,7 @@ ThemeData _buildTheme() {
 Widget _buildApp({
   required bool collapsed,
   required String initialLocation,
+  double? expansionProgress,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -29,6 +30,7 @@ Widget _buildApp({
             alignment: Alignment.topLeft,
             child: SideNav(
               collapsed: collapsed,
+              expansionProgress: expansionProgress,
               onToggleCollapsed: (_) {},
             ),
           ),
@@ -101,5 +103,66 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('音乐'), findsOneWidget);
+  });
+
+  testWidgets('SideNav keeps destination icons fixed during expansion', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    Future<Map<String, Offset>> pumpAt(double progress) async {
+      await tester.pumpWidget(
+        _buildApp(
+          collapsed: progress == 0,
+          expansionProgress: progress,
+          initialLocation: app_paths.AUDIOS_PAGE,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return {
+        for (final destination in destinations)
+          destination.desPath: tester.getCenter(
+            find.byKey(
+              ValueKey('side-nav-icon-${destination.desPath}'),
+            ),
+          ),
+      };
+    }
+
+    final collapsedPositions = await pumpAt(0);
+    final halfwayPositions = await pumpAt(0.5);
+    final expandedPositions = await pumpAt(1);
+
+    for (final destination in destinations) {
+      final key = destination.desPath;
+      expect(halfwayPositions[key]!.dx,
+          closeTo(collapsedPositions[key]!.dx, 0.01));
+      expect(halfwayPositions[key]!.dy,
+          closeTo(collapsedPositions[key]!.dy, 0.01));
+      expect(expandedPositions[key]!.dx,
+          closeTo(collapsedPositions[key]!.dx, 0.01));
+      expect(expandedPositions[key]!.dy,
+          closeTo(collapsedPositions[key]!.dy, 0.01));
+    }
+
+    await pumpAt(0);
+    final collapsedOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('side-nav-label-${app_paths.AUDIOS_PAGE}')),
+    );
+    await pumpAt(0.5);
+    final halfwayOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('side-nav-label-${app_paths.AUDIOS_PAGE}')),
+    );
+    await pumpAt(1);
+    final expandedOpacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('side-nav-label-${app_paths.AUDIOS_PAGE}')),
+    );
+
+    expect(collapsedOpacity.opacity, 0);
+    expect(halfwayOpacity.opacity, closeTo(0.5, 0.01));
+    expect(expandedOpacity.opacity, 1);
+    expect(tester.takeException(), isNull);
   });
 }

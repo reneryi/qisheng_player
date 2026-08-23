@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
@@ -7,6 +8,52 @@ import 'package:qisheng_player/music_matcher.dart';
 import '../test_helpers/media_test_harness.dart';
 
 void main() {
+  test('online cover cache keys stay fixed length for long Windows paths', () {
+    final longPath = r'E:\音乐\' + ('很长的目录名' * 80) + r'\封面歌曲.flac';
+    final key = onlineCoverCacheKey(longPath);
+
+    expect(key, hasLength(64));
+    expect(key, matches(RegExp(r'^[0-9a-f]{64}$')));
+    expect(
+      onlineCoverCacheKey(r'E:/MUSIC/Song.flac'),
+      onlineCoverCacheKey(r'e:\music\song.flac'),
+    );
+  });
+
+  test('online cover responses require an image MIME type', () {
+    expect(
+        isSupportedOnlineCoverContentType(ContentType('image', 'png')), true);
+    expect(isSupportedOnlineCoverContentType(ContentType.text), false);
+    expect(isSupportedOnlineCoverContentType(null), false);
+  });
+
+  test('online cover response reader rejects oversized bodies', () async {
+    final response = Stream<List<int>>.fromIterable([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+
+    await expectLater(
+      readBoundedCoverBytes(response, maxBytes: 5),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('online cover response reader enforces a total timeout', () async {
+    final response = Stream<List<int>>.periodic(
+      const Duration(milliseconds: 5),
+      (_) => const [1],
+    ).take(20);
+
+    await expectLater(
+      readBoundedCoverBytes(
+        response,
+        timeout: const Duration(milliseconds: 20),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
   test('OnlineCoverStore deduplicates concurrent searches for one path',
       () async {
     final searchCompleter = Completer<List<SongSearchResult>>();

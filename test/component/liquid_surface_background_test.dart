@@ -340,6 +340,28 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets('hidden lifecycle pauses and resumes the fluid ticker', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _testSurface(effectsLevel: UiEffectsLevel.visual),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    final paused = _painter(tester);
+    await tester.pump(const Duration(seconds: 1));
+    final stillPaused = _painter(tester);
+    expect(stillPaused.phase, paused.phase);
+    expect(stillPaused.positions, paused.positions);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(_painter(tester).phase, greaterThan(stillPaused.phase));
+  });
 }
 
 Widget _testSurface({required UiEffectsLevel effectsLevel}) {

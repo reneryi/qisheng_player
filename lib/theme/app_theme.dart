@@ -11,8 +11,8 @@ class AppTheme {
     required ColorScheme colorScheme,
     String? fontFamily,
     UiEffectsLevel effectsLevel = UiEffectsLevel.balanced,
-    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.glass,
-    WindowBackdropMode windowBackdropMode = WindowBackdropMode.auto,
+    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.solidCard,
+    WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient,
   }) {
     GoogleFonts.config.allowRuntimeFetching = false;
     final surfaces = _surfaceTokens(
@@ -143,56 +143,79 @@ class AppTheme {
     );
   }
 
+  // 优化全局排版体系：注入等宽数字与现代字阶层级，避免播放进度、时间跳动时文字晃动
   static TextTheme _refineTextTheme(
     TextTheme textTheme,
     ColorScheme scheme,
     UiVisualStyleMode visualStyleMode,
   ) {
+    const tabularFeatures = [FontFeature.tabularFigures()];
+
     return textTheme.copyWith(
       displaySmall: textTheme.displaySmall?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w700,
         height: 1.04,
-        letterSpacing: 0,
+        letterSpacing: -0.5,
+        fontFeatures: tabularFeatures,
       ),
       headlineMedium: textTheme.headlineMedium?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w700,
         height: 1.06,
-        letterSpacing: 0,
+        letterSpacing: -0.3,
+        fontFeatures: tabularFeatures,
       ),
       titleLarge: textTheme.titleLarge?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w700,
         height: 1.08,
-        letterSpacing: 0,
+        letterSpacing: -0.2,
+        fontFeatures: tabularFeatures,
       ),
       titleMedium: textTheme.titleMedium?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
+        fontFeatures: tabularFeatures,
       ),
       bodyLarge: textTheme.bodyLarge?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w500,
+        fontFeatures: tabularFeatures,
       ),
       bodyMedium: textTheme.bodyMedium?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.82),
+        color: scheme.onSurface.withValues(alpha: 0.84),
         fontWeight: FontWeight.w400,
+        fontFeatures: tabularFeatures,
       ),
       bodySmall: textTheme.bodySmall?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.6),
+        color: scheme.onSurface.withValues(alpha: 0.62),
         fontWeight: FontWeight.w400,
+        fontFeatures: tabularFeatures,
       ),
       labelLarge: textTheme.labelLarge?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w600,
+        fontFeatures: tabularFeatures,
+      ),
+      labelMedium: textTheme.labelMedium?.copyWith(
+        color: scheme.onSurface.withValues(alpha: 0.75),
+        fontWeight: FontWeight.w500,
+        fontFeatures: tabularFeatures,
+      ),
+      labelSmall: textTheme.labelSmall?.copyWith(
+        color: scheme.onSurface.withValues(alpha: 0.6),
+        fontWeight: FontWeight.w500,
+        letterSpacing: 0.2,
+        fontFeatures: tabularFeatures,
       ),
     );
   }
 
   static ColorScheme applyChromeSurfaces(
     ColorScheme scheme, {
-    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.glass,
+    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.solidCard,
   }) {
     final isDark = scheme.brightness == Brightness.dark;
     final onSurface =
@@ -339,8 +362,8 @@ class AppTheme {
     );
 
     return switch (visualStyleMode) {
-      // 鍏嬪埗鐜荤拑椋庢牸锛氳交琛ㄩ潰銆佹煍鍜屾弿杈广€佷綆寮哄害闃村奖銆?
-      UiVisualStyleMode.glass => AppSurfaceTokens(
+      // 液态玻璃风格：轻表面、柔和描边、低强度阴影与通透感
+      UiVisualStyleMode.liquidGlass => AppSurfaceTokens(
           radiusSm: 14,
           radiusMd: 18,
           radiusLg: 24,
@@ -374,6 +397,67 @@ class AppTheme {
           backdropStrategy: resolvedBackdropStrategy,
           pressedDepth: 2,
         ),
+      // 纯净实体卡片风格：清晰色阶、实体触感、去模糊、极佳可读性
+      UiVisualStyleMode.solidCard => AppSurfaceTokens(
+          radiusSm: 12,
+          radiusMd: 16,
+          radiusLg: 20,
+          radiusXl: 24,
+          radiusXxl: 28,
+          surfaceBase: scheme.surface,
+          surfaceRaised: scheme.surfaceContainerLow,
+          surfaceFloating: scheme.surfaceContainer,
+          surfaceInset: scheme.surfaceContainerLowest,
+          strokeSubtle:
+              scheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.45),
+          strokeStrong: scheme.outline.withValues(alpha: isDark ? 0.6 : 0.75),
+          highlightColor: isDark
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.white.withValues(alpha: 0.7),
+          shadowColor: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+          innerShadowLight: Colors.transparent,
+          innerShadowDark: Colors.transparent,
+          shadowBlurSm: 16,
+          shadowBlurLg: 32,
+          shadowOffsetSm: 2,
+          shadowOffsetLg: 6,
+          panelAlpha: 0.96,
+          glassAlpha: 0.0,
+          glassSigma: 0.0,
+          shadowDepthScale: shadowDepthScale * 0.8,
+          effectsLevel: effectsLevel,
+          backdropStrategy: AppBackdropStrategy.solid,
+          pressedDepth: 1.5,
+        ),
+      // 无界极简悬浮风格：去底色、空间留白、依靠呼吸光与间距组织视觉
+      UiVisualStyleMode.borderless => AppSurfaceTokens(
+          radiusSm: 16,
+          radiusMd: 20,
+          radiusLg: 26,
+          radiusXl: 32,
+          radiusXxl: 36,
+          surfaceBase: Colors.transparent,
+          surfaceRaised: Colors.transparent,
+          surfaceFloating: scheme.surfaceContainer.withValues(alpha: 0.35),
+          surfaceInset: Colors.transparent,
+          strokeSubtle: Colors.transparent,
+          strokeStrong: scheme.outlineVariant.withValues(alpha: 0.25),
+          highlightColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          innerShadowLight: Colors.transparent,
+          innerShadowDark: Colors.transparent,
+          shadowBlurSm: 0,
+          shadowBlurLg: 0,
+          shadowOffsetSm: 0,
+          shadowOffsetLg: 0,
+          panelAlpha: 0.0,
+          glassAlpha: 0.0,
+          glassSigma: 0.0,
+          shadowDepthScale: 0.0,
+          effectsLevel: effectsLevel,
+          backdropStrategy: AppBackdropStrategy.solid,
+          pressedDepth: 1,
+        ),
     };
   }
 
@@ -381,10 +465,12 @@ class AppTheme {
     WindowBackdropMode mode,
   ) {
     return switch (mode) {
-      WindowBackdropMode.none => (0.02, 0.01, 1.25, 0.0),
-      WindowBackdropMode.fluid => (0.04, 0.03, 0.92, 1.0), // 流体背景沿用默认偏置
-      WindowBackdropMode.auto => (0.04, 0.03, 0.92, 1.0),
-      WindowBackdropMode.mica => (0.05, 0.04, 0.82, 1.08),
+      WindowBackdropMode.defaultGradient => (0.02, 0.01, 1.25, 0.0),
+      WindowBackdropMode.meshFlow => (0.04, 0.03, 0.92, 1.0),
+      WindowBackdropMode.waterRipple => (0.04, 0.03, 0.95, 1.0),
+      WindowBackdropMode.prismaticGlass => (0.06, 0.05, 0.85, 1.1),
+      WindowBackdropMode.micaAlt => (0.05, 0.04, 0.82, 1.08),
+      WindowBackdropMode.acrylic => (0.06, 0.05, 0.80, 1.15),
     };
   }
 
@@ -394,34 +480,47 @@ class AppTheme {
     AppBackdropStrategy fallbackStrategy,
   ) {
     return switch (mode) {
-      WindowBackdropMode.none => (
-          0.22,
-          -0.36,
+      WindowBackdropMode.defaultGradient => (
+          0.34,
+          0.34,
           0.0,
           0.72,
           AppBackdropStrategy.solid,
         ),
-      WindowBackdropMode.fluid => (
+      WindowBackdropMode.meshFlow => (
           0.0,
           0.0,
           1.0,
+          1.0,
+          AppBackdropStrategy.solid,
+        ),
+      WindowBackdropMode.waterRipple => (
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          AppBackdropStrategy.solid,
+        ),
+      WindowBackdropMode.prismaticGlass => (
+          0.04,
+          0.04,
+          0.9,
           1.0,
           fallbackStrategy,
         ),
-      WindowBackdropMode.auto => (
-          0.0,
-          0.0,
-          1.0,
-          1.0,
-          fallbackStrategy,
-        ),
-      // 优化原生云母材质透明度，大幅度降低不透明度（之前是 -0.02, -0.04）以体现通透感
-      WindowBackdropMode.mica => (
-          -0.18,
-          -0.12,
+      WindowBackdropMode.micaAlt => (
+          0.08,
+          0.08,
           0.88,
           0.9,
-          AppBackdropStrategy.adaptive,
+          fallbackStrategy,
+        ),
+      WindowBackdropMode.acrylic => (
+          0.06,
+          0.06,
+          0.92,
+          0.95,
+          fallbackStrategy,
         ),
     };
   }
@@ -442,7 +541,7 @@ class AppTheme {
   ) {
     final accent = scheme.primary;
     return switch (visualStyleMode) {
-      UiVisualStyleMode.glass => AppAccentTokens(
+      UiVisualStyleMode.liquidGlass => AppAccentTokens(
           accent: accent,
           onAccent: scheme.onPrimary,
           accentSoft: accent.withValues(alpha: 0.22),
@@ -455,13 +554,37 @@ class AppTheme {
           selectionTint: accent.withValues(alpha: 0.2),
           hoverTint: scheme.onSurface.withValues(alpha: 0.08),
         ),
+      UiVisualStyleMode.solidCard => AppAccentTokens(
+          accent: accent,
+          onAccent: scheme.onPrimary,
+          accentSoft: accent.withValues(alpha: 0.16),
+          accentContainer: Color.lerp(accent, scheme.surfaceContainer, 0.22)!,
+          accentGlow: accent.withValues(alpha: 0.18),
+          accentFocusRing: accent.withValues(alpha: 0.44),
+          progressActive: accent,
+          progressInactive: accent.withValues(alpha: 0.14),
+          selectionTint: accent.withValues(alpha: 0.16),
+          hoverTint: scheme.onSurface.withValues(alpha: 0.05),
+        ),
+      UiVisualStyleMode.borderless => AppAccentTokens(
+          accent: accent,
+          onAccent: scheme.onPrimary,
+          accentSoft: accent.withValues(alpha: 0.28),
+          accentContainer: Color.lerp(accent, scheme.surface, 0.35)!,
+          accentGlow: accent.withValues(alpha: 0.48),
+          accentFocusRing: accent.withValues(alpha: 0.6),
+          progressActive: accent,
+          progressInactive: accent.withValues(alpha: 0.22),
+          selectionTint: accent.withValues(alpha: 0.24),
+          hoverTint: scheme.onSurface.withValues(alpha: 0.1),
+        ),
     };
   }
 
   static AppVisualTokens _visualTokens(UiVisualStyleMode visualStyleMode) {
     return switch (visualStyleMode) {
-      UiVisualStyleMode.glass => const AppVisualTokens(
-          styleMode: UiVisualStyleMode.glass,
+      UiVisualStyleMode.liquidGlass => const AppVisualTokens(
+          styleMode: UiVisualStyleMode.liquidGlass,
           buttonGlowBlur: 24,
           buttonGlowSpread: 0.8,
           buttonGlowOpacity: 0.28,
@@ -470,6 +593,28 @@ class AppTheme {
           buttonPressOffset: 1.5,
           buttonFocusRingOpacity: 0.86,
           contentHeaderGap: 14,
+        ),
+      UiVisualStyleMode.solidCard => const AppVisualTokens(
+          styleMode: UiVisualStyleMode.solidCard,
+          buttonGlowBlur: 14,
+          buttonGlowSpread: 0.2,
+          buttonGlowOpacity: 0.14,
+          buttonHoverGlowScale: 1.15,
+          buttonPressedGlowScale: 0.3,
+          buttonPressOffset: 1.0,
+          buttonFocusRingOpacity: 0.65,
+          contentHeaderGap: 14,
+        ),
+      UiVisualStyleMode.borderless => const AppVisualTokens(
+          styleMode: UiVisualStyleMode.borderless,
+          buttonGlowBlur: 28,
+          buttonGlowSpread: 1.2,
+          buttonGlowOpacity: 0.38,
+          buttonHoverGlowScale: 1.6,
+          buttonPressedGlowScale: 0.65,
+          buttonPressOffset: 2.0,
+          buttonFocusRingOpacity: 0.92,
+          contentHeaderGap: 16,
         ),
     };
   }
@@ -481,6 +626,7 @@ class AppTheme {
       slow: Cubic(0.2, 0.9, 0.2, 1),
       emphasized: Cubic(0.2, 0.8, 0.2, 1),
       standard: Cubic(0.2, 0, 0, 1),
+      elastic: Curves.elasticOut,
       microInteractionDuration: Duration(milliseconds: 140),
       controlTransitionDuration: Duration(milliseconds: 220),
       pageTransitionDuration: Duration(milliseconds: 360),
@@ -490,12 +636,13 @@ class AppTheme {
       navCollapseDuration: Duration(milliseconds: 280),
       searchExpandDuration: Duration(milliseconds: 220),
       panelTransitionDuration: Duration(milliseconds: 260),
+      elasticTransitionDuration: Duration(milliseconds: 420),
     );
   }
 
   static PlayerTokens _playerTokens(UiVisualStyleMode visualStyleMode) {
     return switch (visualStyleMode) {
-      UiVisualStyleMode.glass => const PlayerTokens(
+      UiVisualStyleMode.liquidGlass => const PlayerTokens(
           coverRadius: 18,
           coverGlowBlur: 28,
           coverGlowOpacity: 0.24,
@@ -505,6 +652,28 @@ class AppTheme {
           immersiveBackdropSigma: 36,
           studioPanelGap: 24,
           modeSwitchDuration: Duration(milliseconds: 320),
+        ),
+      UiVisualStyleMode.solidCard => const PlayerTokens(
+          coverRadius: 14,
+          coverGlowBlur: 16,
+          coverGlowOpacity: 0.12,
+          controlClusterRadius: 20,
+          lyricPanelOpacity: 0.95,
+          queuePanelOpacity: 0.92,
+          immersiveBackdropSigma: 0,
+          studioPanelGap: 20,
+          modeSwitchDuration: Duration(milliseconds: 260),
+        ),
+      UiVisualStyleMode.borderless => const PlayerTokens(
+          coverRadius: 22,
+          coverGlowBlur: 36,
+          coverGlowOpacity: 0.36,
+          controlClusterRadius: 32,
+          lyricPanelOpacity: 0.5,
+          queuePanelOpacity: 0.5,
+          immersiveBackdropSigma: 44,
+          studioPanelGap: 28,
+          modeSwitchDuration: Duration(milliseconds: 360),
         ),
     };
   }

@@ -1,14 +1,17 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Widget buildHost({
     bool selected = false,
     bool selectedGlow = false,
+    VoidCallback? onTap,
+    GestureTapDownCallback? onSecondaryTapDown,
   }) {
     return MaterialApp(
       theme: AppTheme.build(
@@ -19,7 +22,8 @@ void main() {
       home: Scaffold(
         body: Center(
           child: CpMotionPressable(
-            onTap: () {},
+            onTap: onTap ?? () {},
+            onSecondaryTapDown: onSecondaryTapDown,
             selected: selected,
             selectedGlow: selectedGlow,
             hoverScale: 1.02,
@@ -146,6 +150,90 @@ void main() {
     expect(darkColor, isNotNull);
     expect(lightColor!.computeLuminance(), lessThan(0.2));
     expect(darkColor!.computeLuminance(), greaterThan(0.7));
+  });
+
+  testWidgets('keyboard Enter activates onTap (1.4)', (tester) async {
+    var tapped = 0;
+    await tester.pumpWidget(buildHost(onTap: () => tapped++));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(tapped, 1);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(tapped, 2);
+  });
+
+  testWidgets('keyboard context menu key triggers secondary tap (1.4)', (
+    tester,
+  ) async {
+    TapDownDetails? received;
+    await tester.pumpWidget(
+      buildHost(onSecondaryTapDown: (details) => received = details),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pump();
+    expect(received, isNotNull);
+  });
+
+  testWidgets('focused pressable shows focus ring border (1.4)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildHost());
+
+    final containerFinder = pressableContainerFinder();
+    BoxDecoration? decoration() =>
+        tester.widget<AnimatedContainer>(containerFinder).decoration!
+            as BoxDecoration?;
+
+    // 未聚焦：边框为透明色（widget.border 默认 true 时始终有 border 对象）
+    expect(decoration()?.border?.top.color, Colors.transparent);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    // 聚焦：出现品牌色描边（focus ring）
+    final focusedBorder = decoration()?.border;
+    expect(focusedBorder, isNotNull);
+    expect(focusedBorder!.top.color, isNot(Colors.transparent));
+  });
+
+  testWidgets('non-interactive pressable cannot receive focus (1.4)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.build(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF4F8DFF),
+          ),
+        ),
+        home: const Scaffold(
+          body: Center(
+            child: CpMotionPressable(
+              onTap: null,
+              child: SizedBox(width: 120, height: 48),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // onTap 为 null 时内部 Focus 不可请求焦点
+    final focus = tester.widget<Focus>(find.descendant(
+      of: find.byType(CpMotionPressable),
+      matching: find.byType(Focus),
+    ));
+    expect(focus.canRequestFocus, isFalse);
   });
 }
 

@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:qisheng_player/app_preference.dart';
-import 'package:qisheng_player/app_settings.dart';
-import 'package:qisheng_player/library/play_count_store.dart';
-import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/app_shutdown.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
@@ -122,12 +120,7 @@ class HotkeysHelper {
       AppNavigationState.instance.navigateForward(routerContext);
     },
     HotkeyAction.quit: (_) async {
-      await Future.wait([
-        AppSettings.instance.saveSettings(),
-        AppPreference.instance.save(),
-        PlayCountStore.instance.save(),
-        savePlaylists(),
-      ]);
+      await appShutdownCoordinator.shutdown();
       exit(0);
     },
   };

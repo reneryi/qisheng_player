@@ -42,15 +42,20 @@ class LiquidSurfaceBackground extends StatefulWidget {
 }
 
 class _LiquidSurfaceBackgroundState extends State<LiquidSurfaceBackground>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller;
   late math.Random _random;
   late List<LiquidFlowTrack> _tracks;
   Timer? _paletteSeedTimer;
   ui.FragmentProgram? _shaderProgram;
   double _elapsedShaderSeconds = 0;
+  bool _appVisible = true;
+  bool _animationsAllowed = true;
 
-  bool get _animated => widget.effectsLevel == UiEffectsLevel.visual;
+  bool get _animated =>
+      widget.effectsLevel == UiEffectsLevel.visual &&
+      _appVisible &&
+      _animationsAllowed;
 
   @override
   void initState() {
@@ -61,10 +66,31 @@ class _LiquidSurfaceBackgroundState extends State<LiquidSurfaceBackground>
       vsync: this,
       duration: _nextSegmentDuration(),
     )..addStatusListener(_handleSegmentStatus);
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_loadLiquidSurfaceProgram().then((program) {
       if (!mounted || program == null) return;
       setState(() => _shaderProgram = program);
     }));
+    _syncAnimation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextAnimationsAllowed = !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled;
+    if (_animationsAllowed == nextAnimationsAllowed) return;
+    _animationsAllowed = nextAnimationsAllowed;
+    _syncAnimation();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final nextVisible =
+        state != AppLifecycleState.hidden && state != AppLifecycleState.paused;
+    if (_appVisible == nextVisible) return;
+    _appVisible = nextVisible;
+    if (!nextVisible) _paletteSeedTimer?.cancel();
     _syncAnimation();
   }
 
@@ -146,6 +172,7 @@ class _LiquidSurfaceBackgroundState extends State<LiquidSurfaceBackground>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _paletteSeedTimer?.cancel();
     _controller.dispose();
     super.dispose();
@@ -163,7 +190,7 @@ class _LiquidSurfaceBackgroundState extends State<LiquidSurfaceBackground>
         child: TweenAnimationBuilder<LiquidSurfacePalette>(
           tween: _LiquidSurfacePaletteTween(end: palette),
           duration: widget.transitionDuration,
-          curve: Curves.easeOutCubic,
+          curve: Curves.easeInOutCubic,
           builder: (context, animatedPalette, child) {
             return AnimatedBuilder(
               animation: _controller,
@@ -445,7 +472,7 @@ class LiquidSurfacePainter extends CustomPainter {
       (UiEffectsLevel.visual, Brightness.light) => (outer: 0.34, inner: 0.42),
     };
     final program = fragmentProgram;
-    if (program != null) {
+    if (program != null && effectsLevel != UiEffectsLevel.performance) {
       _paintShader(canvas, size, program, profile);
       return;
     }
@@ -512,6 +539,13 @@ class LiquidSurfacePainter extends CustomPainter {
         size.height * normalized.dy,
       );
       final shapeSeed = seed * 0.000001 + index * 1.93;
+      final outerColor = colors[index].withValues(
+        alpha: profile.outer * opacityScales[index],
+      );
+      final outerBounds = Rect.fromCircle(
+        center: center,
+        radius: size.shortestSide * outerScales[index],
+      );
       canvas.drawPath(
         buildLiquidBlobPath(
           size: size,
@@ -521,13 +555,22 @@ class LiquidSurfacePainter extends CustomPainter {
           time: shaderTime,
         ),
         Paint()
-          ..color = colors[index].withValues(
-            alpha: profile.outer * opacityScales[index],
-          )
-          ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal,
-            size.shortestSide * 0.055,
-          ),
+          ..shader = RadialGradient(
+            colors: [
+              outerColor,
+              outerColor.withValues(alpha: outerColor.a * 0.46),
+              Colors.transparent,
+            ],
+            stops: const [0, 0.62, 1],
+          ).createShader(outerBounds),
+      );
+      final coreColor = resolveDyeCoreColor(
+        colors[index],
+        lightnessScale: index == 2 ? 0.88 : 0.78,
+      ).withValues(alpha: profile.inner * opacityScales[index]);
+      final innerBounds = Rect.fromCircle(
+        center: center,
+        radius: size.shortestSide * innerScales[index],
       );
       canvas.drawPath(
         buildLiquidBlobPath(
@@ -538,14 +581,14 @@ class LiquidSurfacePainter extends CustomPainter {
           time: shaderTime * 1.13,
         ),
         Paint()
-          ..color = resolveDyeCoreColor(
-            colors[index],
-            lightnessScale: index == 2 ? 0.88 : 0.78,
-          ).withValues(alpha: profile.inner * opacityScales[index])
-          ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal,
-            size.shortestSide * 0.018,
-          ),
+          ..shader = RadialGradient(
+            colors: [
+              coreColor,
+              coreColor.withValues(alpha: coreColor.a * 0.55),
+              Colors.transparent,
+            ],
+            stops: const [0, 0.68, 1],
+          ).createShader(innerBounds),
       );
     }
   }

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// Displays a single line of text and scrolls it only when it does not fit.
+/// 单行文本跑马灯组件：仅在文字超出容器约束宽度时启动平滑呼吸式滚动
 class MarqueeText extends StatefulWidget {
   const MarqueeText({
     super.key,
     required this.text,
     required this.style,
     this.textAlign = TextAlign.left,
-    this.gap = 56,
-    this.minDuration = const Duration(milliseconds: 4200),
+    this.gap = 48,
+    this.minDuration = const Duration(milliseconds: 4000),
   });
 
   final String text;
@@ -40,21 +40,24 @@ class _MarqueeTextState extends State<MarqueeText>
       maxLines: 1,
       textDirection: Directionality.of(context),
     )..layout();
+
+    // 纯粹依据几何宽度判断是否需要滚动，彻底移除字符串长度硬编码限制
     final shouldScroll = constraints.hasBoundedWidth &&
         constraints.maxWidth > 0 &&
-        _text.length > 18 &&
-        painter.width > constraints.maxWidth + 0.5;
+        painter.width > (constraints.maxWidth + 1.0);
+
     _textWidth = painter.width;
     if (shouldScroll != _scrolling) {
       _scrolling = shouldScroll;
       if (_scrolling) {
         final distance = _textWidth + widget.gap;
-        final duration = Duration(
-          milliseconds: (distance * 45).round(),
+        // 每滚动 1 像素约需 32ms，加上首尾停留 3000ms
+        final scrollMs = (distance * 32).round();
+        final totalDuration = Duration(
+          milliseconds: (scrollMs + 3000).clamp(widget.minDuration.inMilliseconds, 30000),
         );
         _controller
-          ..duration =
-              duration > widget.minDuration ? duration : widget.minDuration
+          ..duration = totalDuration
           ..repeat();
       } else {
         _controller
@@ -87,7 +90,8 @@ class _MarqueeTextState extends State<MarqueeText>
         _measure(constraints);
         final height = _lineHeight();
         final canFit = constraints.hasBoundedWidth &&
-            _textWidth <= constraints.maxWidth + 0.5;
+            _textWidth <= constraints.maxWidth + 1.0;
+
         if (!_scrolling || canFit) {
           return SizedBox(
             height: height,
@@ -113,8 +117,23 @@ class _MarqueeTextState extends State<MarqueeText>
               animation: _controller,
               builder: (context, _) {
                 final distance = _textWidth + widget.gap;
+                final t = _controller.value;
+
+                // 呼吸式停顿曲线：
+                // 0.0 ~ 0.20 (前 20% 时间)：停留在起点，方便阅读歌名开头
+                // 0.20 ~ 0.80 (中间 60% 时间)：平滑匀速滚动到末尾
+                // 0.80 ~ 1.00 (后 20% 时间)：停留在循环接合点
+                double scrollProgress;
+                if (t < 0.20) {
+                  scrollProgress = 0.0;
+                } else if (t < 0.80) {
+                  scrollProgress = (t - 0.20) / 0.60;
+                } else {
+                  scrollProgress = 1.0;
+                }
+
                 return Transform.translate(
-                  offset: Offset(-distance * _controller.value, 0),
+                  offset: Offset(-distance * scrollProgress, 0),
                   child: OverflowBox(
                     alignment: Alignment.centerLeft,
                     minWidth: distance * 2,
