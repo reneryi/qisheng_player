@@ -2,6 +2,7 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/build_index_state_view.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/library_reload_service.dart';
@@ -66,7 +67,7 @@ class AudioLibraryEditor extends StatelessWidget {
         icon: const Icon(Symbols.folder),
         label: const Text("文件夹管理"),
         onPressed: () {
-          showDialog(
+          showModernDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => const AudioLibraryEditorDialog(),
@@ -99,31 +100,55 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
+    return ModernDialogFrame(
+      maxWidth: 480.0,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       child: SizedBox(
         height: 450.0,
-        width: 450.0,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  "管理文件夹",
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.bold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Symbols.folder,
+                    size: 20,
+                    color: scheme.primary,
                   ),
                 ),
-              ),
-              Expanded(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "管理文件夹",
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 18.0,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: "关闭",
+                  icon: Icon(
+                    Symbols.close_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14.0),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 150),
                   child: editing
@@ -180,42 +205,42 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                         ),
                 ),
               ),
-              const SizedBox(height: 16.0),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () async {
-                      final dirPicker = DirectoryPicker();
-                      dirPicker.title = "选择文件夹";
+            ),
+            const SizedBox(height: 14.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    final dirPicker = DirectoryPicker();
+                    dirPicker.title = "选择文件夹";
 
-                      final dir = dirPicker.getDirectory();
-                      if (dir == null) return;
+                    final dir = dirPicker.getDirectory();
+                    if (dir == null) return;
 
-                      setState(() {
-                        folders.add(dir.path);
-                      });
-                    },
-                    child: const Text("添加"),
-                  ),
-                  const SizedBox(width: 8.0),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("取消"),
-                  ),
-                  const SizedBox(width: 8.0),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        editing = false;
-                      });
-                    },
-                    child: const Text("确定"),
-                  ),
-                ],
-              )
-            ],
-          ),
+                    setState(() {
+                      folders.add(dir.path);
+                    });
+                  },
+                  child: const Text("添加"),
+                ),
+                const SizedBox(width: 8.0),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("取消"),
+                ),
+                const SizedBox(width: 8.0),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      editing = false;
+                    });
+                  },
+                  child: const Text("确定"),
+                ),
+              ],
+            )
+          ],
         ),
       ),
     );
@@ -295,7 +320,7 @@ class HotkeySettingsTile extends StatelessWidget {
       description: "快捷键设置",
       action: FilledButton.icon(
         onPressed: () async {
-          await showDialog(
+          await showModernDialog(
             context: context,
             builder: (context) => const _HotkeySettingsDialog(),
           );
@@ -318,34 +343,63 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
+    return ModernDialogFrame(
+      maxWidth: 640,
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
       child: SizedBox(
-        width: 640,
         height: 520,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "快捷键设置",
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Symbols.keyboard,
+                    size: 20,
+                    color: scheme.primary,
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "快捷键设置",
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: "关闭",
+                  icon: Icon(
+                    Symbols.close_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "提示：支持后台快捷键（系统级），但后台不响应播放/暂停、桌面歌词开关、返回、前进、退出程序。",
+              style: TextStyle(
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                fontSize: 12.5,
               ),
-              const SizedBox(height: 8),
-              Text(
-                "提示：支持后台快捷键（系统级），但后台不响应播放/暂停、桌面歌词开关、返回、前进、退出程序。",
-                style: TextStyle(color: scheme.onSurface),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
                 child: ListView.builder(
                   itemCount: HotkeyAction.values.length,
                   itemBuilder: (context, i) {
@@ -361,7 +415,7 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                             tooltip: "录制快捷键",
                             onPressed: () async {
                               final captured =
-                                  await showDialog<HotkeyBindingPreference>(
+                                  await showModernDialog<HotkeyBindingPreference>(
                                 context: context,
                                 builder: (context) =>
                                     _HotkeyCaptureDialog(action: action),
@@ -387,28 +441,28 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                   },
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () async {
-                      for (final action in HotkeyAction.values) {
-                        await HotkeysHelper.resetToDefault(action);
-                      }
-                      if (mounted) setState(() {});
-                    },
-                    child: const Text("全部恢复默认"),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("完成"),
-                  ),
-                ],
-              )
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    for (final action in HotkeyAction.values) {
+                      await HotkeysHelper.resetToDefault(action);
+                    }
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text("全部恢复默认"),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("完成"),
+                ),
+              ],
+            )
+          ],
         ),
       ),
     );
@@ -459,95 +513,118 @@ class _HotkeyCaptureDialogState extends State<_HotkeyCaptureDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-      child: SizedBox(
-        width: 460,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return ModernDialogFrame(
+      maxWidth: 460,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                "录制快捷键：${widget.action.label}",
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Symbols.keyboard,
+                  size: 20,
+                  color: scheme.primary,
                 ),
               ),
-              const SizedBox(height: 12),
-              KeyboardListener(
-                autofocus: true,
-                focusNode: _focusNode,
-                onKeyEvent: (event) {
-                  if (event is! KeyDownEvent) return;
-                  if (_isModifier(event.physicalKey)) {
-                    setState(() {
-                      _hint = "已按下修饰键，请继续按主键";
-                    });
-                    return;
-                  }
-                  Navigator.pop(context, _fromEvent(event));
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: scheme.surfaceContainer,
-                  ),
-                  child: Text(
-                    _hint,
-                    style: TextStyle(color: scheme.onSurface),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "录制快捷键：${widget.action.label}",
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: [
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(
-                        context,
-                        HotkeyBindingPreference(
-                          PhysicalKeyboardKey.browserBack.usbHidUsage,
-                          const [],
-                        ),
-                      );
-                    },
-                    child: const Text("鼠标侧键后退"),
-                  ),
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(
-                        context,
-                        HotkeyBindingPreference(
-                          PhysicalKeyboardKey.browserForward.usbHidUsage,
-                          const [],
-                        ),
-                      );
-                    },
-                    child: const Text("鼠标侧键前进"),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("取消"),
-                  ),
-                ],
+              IconButton(
+                tooltip: "关闭",
+                icon: Icon(
+                  Symbols.close_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+          KeyboardListener(
+            autofocus: true,
+            focusNode: _focusNode,
+            onKeyEvent: (event) {
+              if (event is! KeyDownEvent) return;
+              if (_isModifier(event.physicalKey)) {
+                setState(() {
+                  _hint = "已按下修饰键，请继续按主键";
+                });
+                return;
+              }
+              Navigator.pop(context, _fromEvent(event));
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: scheme.surfaceContainer,
+              ),
+              child: Text(
+                _hint,
+                style: TextStyle(color: scheme.onSurface),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    HotkeyBindingPreference(
+                      PhysicalKeyboardKey.browserBack.usbHidUsage,
+                      const [],
+                    ),
+                  );
+                },
+                child: const Text("鼠标侧键后退"),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    HotkeyBindingPreference(
+                      PhysicalKeyboardKey.browserForward.usbHidUsage,
+                      const [],
+                    ),
+                  );
+                },
+                child: const Text("鼠标侧键前进"),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("取消"),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

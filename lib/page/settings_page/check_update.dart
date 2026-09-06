@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/src/rust/api/utils.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -204,7 +205,7 @@ class _StartupUpdatePromptState extends State<StartupUpdatePrompt> {
     }
     final dialogContext = _dialogContext;
     if (dialogContext == null || !dialogContext.mounted) return;
-    await showDialog(
+    await showModernDialog(
       context: dialogContext,
       builder: (context) => NewestUpdateView(
         release: release,
@@ -263,7 +264,7 @@ class _CheckForUpdateState extends State<CheckForUpdate> {
                   final newest = await checkForNewRelease();
                   if (newest != null) {
                     if (context.mounted) {
-                      showDialog(
+                      showModernDialog(
                         context: context,
                         builder: (context) => NewestUpdateView(release: newest),
                       );
@@ -321,83 +322,115 @@ class NewestUpdateView extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
+    return ModernDialogFrame(
+      maxWidth: 520,
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      child: SizedBox(
+        height: 460,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    release.name ?? "新版本",
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 18.0,
-                      fontWeight: FontWeight.bold,
-                    ),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 16.0),
-                  Text(
-                    "${release.tagName}\n${release.publishedAt}",
-                    style: TextStyle(color: scheme.onSurface),
+                  child: Icon(
+                    Symbols.update,
+                    size: 20,
+                    color: scheme.primary,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        release.name ?? "新版本",
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 18.0,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "${release.tagName} · ${release.publishedAt?.toString().split('T').first ?? ''}",
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          fontSize: 12.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: "关闭",
+                  icon: Icon(
+                    Symbols.close_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
             ),
+            const SizedBox(height: 14.0),
             Expanded(
-              child: Markdown(
-                data: release.body ?? "",
-                onTapLink: (text, href, title) {
-                  if (href != null) {
-                    launchInBrowser(uri: href);
-                  }
-                },
-                padding: EdgeInsets.zero,
-                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Markdown(
+                  data: release.body ?? "",
+                  onTapLink: (text, href, title) {
+                    if (href != null) {
+                      launchInBrowser(uri: href);
+                    }
+                  },
+                  padding: EdgeInsets.zero,
+                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(top: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+            const SizedBox(height: 14.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text("取消"),
+                ),
+                if (showIgnoreAction) ...[
+                  const SizedBox(width: 8.0),
                   TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text("取消"),
-                  ),
-                  if (showIgnoreAction) ...[
-                    const SizedBox(width: 16.0),
-                    TextButton(
-                      onPressed: () async {
-                        await onIgnore?.call();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: const Text("不再提示此版本"),
-                    ),
-                  ],
-                  const SizedBox(width: 16.0),
-                  TextButton.icon(
-                    onPressed: () {
-                      if (release.htmlUrl != null) {
-                        launchInBrowser(uri: release.htmlUrl!);
+                    onPressed: () async {
+                      await onIgnore?.call();
+                      if (context.mounted) {
+                        Navigator.pop(context);
                       }
-
-                      Navigator.pop(context);
                     },
-                    icon: const Icon(Symbols.arrow_outward),
-                    label: const Text("获取更新"),
+                    child: const Text("不再提示此版本"),
                   ),
                 ],
-              ),
+                const SizedBox(width: 8.0),
+                FilledButton.icon(
+                  onPressed: () {
+                    if (release.htmlUrl != null) {
+                      launchInBrowser(uri: release.htmlUrl!);
+                    }
+
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Symbols.arrow_outward, size: 18),
+                  label: const Text("获取更新"),
+                ),
+              ],
             ),
           ],
         ),

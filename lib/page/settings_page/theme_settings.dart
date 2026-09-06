@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/page/settings_page/theme_picker_dialog.dart';
 import 'package:qisheng_player/src/rust/api/installed_font.dart';
 import 'package:qisheng_player/theme_provider.dart';
@@ -77,7 +78,7 @@ class ThemeSelector extends StatelessWidget {
             showTextOnSnackBar("弥散流彩模式由当前歌曲封面色彩实时驱动");
             return;
           }
-          final seedColor = await showDialog<Color>(
+          final seedColor = await showModernDialog<Color>(
             context: context,
             builder: (context) => const ThemePickerDialog(),
           );
@@ -203,7 +204,7 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
 
   String _modeLabel(String mode) {
     return switch (WindowBackdropMode.fromName(mode)) {
-      WindowBackdropMode.defaultGradient => "默认渐变",
+      WindowBackdropMode.defaultGradient => "默认",
       WindowBackdropMode.micaAlt => "增强云母",
       WindowBackdropMode.acrylic => "亚克力",
       WindowBackdropMode.meshFlow => "弥散流彩",
@@ -245,14 +246,12 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
     final fallbackHint = fallbackText.isEmpty ? '' : '，回退原因：$fallbackText';
     return SettingsTile(
       description: "窗口底座材质",
-      hint: "包含原生云母/亚克力及着色器流体。当前实际模式：$effectiveModeLabel$fallbackHint",
+      hint: "包含默认、弥散流彩、水波纹与极光漫染。当前实际模式：$effectiveModeLabel$fallbackHint",
       action: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          _buildBackdropChip(WindowBackdropMode.defaultGradient, "默认渐变"),
-          _buildBackdropChip(WindowBackdropMode.micaAlt, "增强云母"),
-          _buildBackdropChip(WindowBackdropMode.acrylic, "亚克力"),
+          _buildBackdropChip(WindowBackdropMode.defaultGradient, "默认"),
           _buildBackdropChip(WindowBackdropMode.meshFlow, "弥散流彩"),
           _buildBackdropChip(WindowBackdropMode.waterRipple, "水波纹"),
           _buildBackdropChip(WindowBackdropMode.prismaticGlass, "极光漫染"),
@@ -330,7 +329,7 @@ class _UseSystemThemeModeSwitchState extends State<UseSystemThemeModeSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "启动时使用系统明暗模式",
-      hint: "跟随系统明暗模式设置　",
+      hint: "跟随系统明暗模式设置。",
       action: Switch(
         value: settings.useSystemThemeMode,
         onChanged: (_) async {
@@ -370,7 +369,7 @@ class SelectFontCombobox extends StatelessWidget {
     }
 
     if (!context.mounted) return;
-    final selectedFont = await showDialog<InstalledFont>(
+    final selectedFont = await showModernDialog<InstalledFont>(
       context: context,
       builder: (context) => _FontSelector(installedFont: installedFont),
     );
@@ -487,34 +486,69 @@ class _FontSelector extends StatelessWidget {
     final theme = Provider.of<ThemeProvider>(context);
     final scheme = Theme.of(context).colorScheme;
     _FontPreviewRegistry.markLoaded(theme.fontFamily);
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
+    return ModernDialogFrame(
+      maxWidth: 420.0,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       child: SizedBox(
-        width: 350.0,
-        height: 400,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  "选择字体",
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.bold,
+        height: 480,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Symbols.text_fields,
+                    size: 20,
+                    color: scheme.primary,
                   ),
                 ),
-              ),
-              Text('当前字体：${theme.fontFamily ?? "默认"}'),
-              const SizedBox(height: 8.0),
-              Expanded(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "选择字体",
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 18.0,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '当前字体：${theme.fontFamily ?? "默认"}',
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          fontSize: 12.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: "关闭",
+                  icon: Icon(
+                    Symbols.close_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14.0),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
                 child: Material(
                   type: MaterialType.transparency,
                   child: ListView.builder(
@@ -563,18 +597,18 @@ class _FontSelector extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 16.0),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("取消"),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("取消"),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -42,9 +42,10 @@ void main() {
     expect(find.text('液态玻璃'), findsNothing);
 
     expect(find.text('窗口底座材质'), findsOneWidget);
-    expect(find.text('默认渐变'), findsOneWidget);
-    expect(find.text('增强云母'), findsOneWidget);
-    expect(find.text('亚克力'), findsOneWidget);
+    expect(find.text('默认'), findsOneWidget);
+    expect(find.text('默认渐变'), findsNothing);
+    expect(find.text('增强云母'), findsNothing);
+    expect(find.text('亚克力'), findsNothing);
     expect(find.text('弥散流彩'), findsOneWidget);
     expect(find.text('水波纹'), findsOneWidget);
     expect(find.text('极光漫染'), findsOneWidget);

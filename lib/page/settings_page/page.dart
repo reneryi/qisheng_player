@@ -72,12 +72,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   selected: selected,
                   border: false,
                   hoverScale: 1.0,
-                  pressScale: 0.98,
+                  pressScale: 0.985,
                   hoverShadow: false,
                   selectedGlow: false,
                   onTap: () => setState(() => _selectedCategory = category),
                   child: AnimatedContainer(
-                    duration: motion.controlTransitionDuration,
+                    duration: motion.panelTransitionDuration,
                     curve: motion.normal,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -182,7 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return const [
           AppSection(
             title: '窗口底座材质',
-            description: '控制物理画布材质（Windows 11 Mica / 亚克力 / 弥散流彩 / 水波纹 / 极光漫染）与自定义壁纸。',
+            description: '控制物理画布材质（默认 / 弥散流彩 / 水波纹 / 极光漫染）与自定义壁纸。',
             children: [
               WindowBackdropModeControl(),
               BackgroundImageSettings(),
