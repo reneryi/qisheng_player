@@ -203,20 +203,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
           AppSection(
-            title: '播放页沉浸模块化',
-            description: '自由勾选拼装正在播放界面的视觉组件与动效元素。',
-            children: [
-              ShowSpectrumVisualizerSwitch(),
-              ShowKaraokeAnimationSwitch(),
-              CoverBreathEffectSwitch(),
-              AutoHideControlsSwitch(),
-            ],
-          ),
-          AppSection(
             title: '动效档位与交互反馈',
             description: '120Hz 高帧率动画、弹簧物理微交互与歌词景深模糊。',
             children: [
-              UiEffectsLevelControl(),
               LyricDepthBlurSwitch(),
             ],
           ),

@@ -334,31 +334,40 @@ class _NowPlayingAppBar extends StatelessWidget {
       end: 0.48,
       beginOffset: const Offset(0, -0.035),
       beginScale: 0.985,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
-        child: SizedBox(
-          height: chrome.titleBarHeight,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return const Row(
-                children: [
-                  _NowPlayingBackBtn(),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: WindowDragRegion(
-                      child: SizedBox.expand(),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  NowPlayingMoreMenuAction(),
-                  SizedBox(width: 8),
-                  WindowControlls(),
-                ],
-              );
-            },
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: AbsorbPointer(
+              child: SizedBox.expand(),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
+            child: SizedBox(
+              height: chrome.titleBarHeight,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return const Row(
+                    children: [
+                      _NowPlayingBackBtn(),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: WindowDragRegion(
+                          child: SizedBox.expand(),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      NowPlayingMoreMenuAction(),
+                      SizedBox(width: 8),
+                      WindowControlls(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

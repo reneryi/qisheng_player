@@ -250,56 +250,6 @@ class _ThemeColorTintBackgroundSwitchState
   }
 }
 
-class UiEffectsLevelControl extends StatefulWidget {
-  const UiEffectsLevelControl({super.key});
-
-  @override
-  State<UiEffectsLevelControl> createState() => _UiEffectsLevelControlState();
-}
-
-class _UiEffectsLevelControlState extends State<UiEffectsLevelControl> {
-  final settings = AppSettings.instance;
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsTile(
-      description: "UI 效果强度",
-      hint: "平衡、视觉和性能模式会影响模糊强度与阴影深度。",
-      action: SegmentedButton<UiEffectsLevel>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment<UiEffectsLevel>(
-            value: UiEffectsLevel.balanced,
-            icon: Icon(Symbols.tune),
-            label: Text("平衡"),
-          ),
-          ButtonSegment<UiEffectsLevel>(
-            value: UiEffectsLevel.visual,
-            icon: Icon(Symbols.auto_awesome),
-            label: Text("视觉"),
-          ),
-          ButtonSegment<UiEffectsLevel>(
-            value: UiEffectsLevel.performance,
-            icon: Icon(Symbols.speed),
-            label: Text("性能"),
-          ),
-        ],
-        selected: {settings.uiEffectsLevel},
-        onSelectionChanged: (selection) async {
-          final nextLevel = selection.first;
-          if (nextLevel == settings.uiEffectsLevel) return;
-
-          setState(() {
-            settings.uiEffectsLevel = nextLevel;
-          });
-          ThemeProvider.instance.applyUiEffectsLevel(nextLevel);
-          await settings.saveSettings();
-        },
-      ),
-    );
-  }
-}
-
 class LyricDepthBlurSwitch extends StatefulWidget {
   const LyricDepthBlurSwitch({super.key});
 
@@ -314,7 +264,7 @@ class _LyricDepthBlurSwitchState extends State<LyricDepthBlurSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "歌词景深模糊",
-      hint: "仅在视觉效果档位中模糊非当前歌词行。",
+      hint: "模糊非当前歌词行，聚焦当前演唱内容。",
       action: Switch(
         value: settings.lyricDepthBlur,
         onChanged: (value) async {
@@ -322,90 +272,6 @@ class _LyricDepthBlurSwitchState extends State<LyricDepthBlurSwitch> {
           await settings.saveSettings();
         },
       ),
-    );
-  }
-}
-
-/// 播放页沉浸模块的布尔设置开关。
-///
-/// 这些设置目前保存在 [AppSettings] 中，但没有单独的通知器，因此使用
-/// [StatefulBuilder] 在修改后刷新当前设置项，同时将结果持久化到磁盘。
-Widget _buildPlaybackImmersiveSwitch({
-  required String description,
-  required String hint,
-  required bool Function(AppSettings settings) readValue,
-  required void Function(AppSettings settings, bool value) writeValue,
-}) {
-  return StatefulBuilder(
-    builder: (context, setState) {
-      final settings = AppSettings.instance;
-      return SettingsTile(
-        description: description,
-        hint: hint,
-        action: Switch(
-          value: readValue(settings),
-          onChanged: (value) async {
-            setState(() => writeValue(settings, value));
-            await settings.saveSettings();
-          },
-        ),
-      );
-    },
-  );
-}
-
-class ShowSpectrumVisualizerSwitch extends StatelessWidget {
-  const ShowSpectrumVisualizerSwitch({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildPlaybackImmersiveSwitch(
-      description: "显示频谱可视化",
-      hint: "在播放页显示实时音频频谱动效。",
-      readValue: (settings) => settings.showSpectrumVisualizer,
-      writeValue: (settings, value) => settings.showSpectrumVisualizer = value,
-    );
-  }
-}
-
-class ShowKaraokeAnimationSwitch extends StatelessWidget {
-  const ShowKaraokeAnimationSwitch({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildPlaybackImmersiveSwitch(
-      description: "卡拉 OK 逐字动效",
-      hint: "让当前歌词按演唱进度平滑高亮。",
-      readValue: (settings) => settings.showKaraokeAnimation,
-      writeValue: (settings, value) => settings.showKaraokeAnimation = value,
-    );
-  }
-}
-
-class CoverBreathEffectSwitch extends StatelessWidget {
-  const CoverBreathEffectSwitch({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildPlaybackImmersiveSwitch(
-      description: "封面呼吸律动",
-      hint: "根据播放节拍让播放页封面产生轻微呼吸缩放。",
-      readValue: (settings) => settings.coverBreathEffect,
-      writeValue: (settings, value) => settings.coverBreathEffect = value,
-    );
-  }
-}
-
-class AutoHideControlsSwitch extends StatelessWidget {
-  const AutoHideControlsSwitch({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildPlaybackImmersiveSwitch(
-      description: "自动隐藏播放控件",
-      hint: "鼠标静止时自动隐藏沉浸播放页的控件栏。",
-      readValue: (settings) => settings.autoHideControls,
-      writeValue: (settings, value) => settings.autoHideControls = value,
     );
   }
 }

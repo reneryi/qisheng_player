@@ -184,7 +184,7 @@ class AppSettings {
   String? backgroundImagePath;
   double backgroundImageOpacity = 0.18;
   WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient;
-  UiEffectsLevel uiEffectsLevel = UiEffectsLevel.balanced;
+  UiEffectsLevel uiEffectsLevel = UiEffectsLevel.visual;
   bool lyricDepthBlur = false;
   UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.solidCard;
 
@@ -395,11 +395,7 @@ class AppSettings {
             WindowBackdropMode.fromName(windowBackdropMode) ??
                 WindowBackdropMode.defaultGradient;
       }
-      final uiEffectsLevel = settingsMap["UiEffectsLevel"];
-      if (uiEffectsLevel is String) {
-        _instance.uiEffectsLevel =
-            UiEffectsLevel.fromName(uiEffectsLevel) ?? UiEffectsLevel.balanced;
-      }
+      _instance.uiEffectsLevel = UiEffectsLevel.visual;
       _instance.lyricDepthBlur = settingsMap["LyricDepthBlur"] == true;
       _instance.uiVisualStyleMode = parseUiVisualStyleMode(
         settingsMap["UiVisualStyleMode"],

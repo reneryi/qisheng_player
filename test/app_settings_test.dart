@@ -53,4 +53,19 @@ void main() {
       }
     });
   });
+
+  group('AppSettings visual effects settings', () {
+    test('defaults to visual effects level as the primary mode', () {
+      final settings = AppSettings.instance;
+      expect(settings.uiEffectsLevel, equals(UiEffectsLevel.visual));
+    });
+
+    test('contains pure visual effects settings without vinyl record options', () {
+      final settings = AppSettings.instance;
+      expect(settings.showSpectrumVisualizer, isTrue);
+      expect(settings.showKaraokeAnimation, isTrue);
+      expect(settings.coverBreathEffect, isTrue);
+      expect(settings.autoHideControls, isFalse);
+    });
+  });
 }
