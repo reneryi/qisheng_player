@@ -38,9 +38,18 @@ class TitleBar extends StatelessWidget {
         );
 
         // 沉浸式单层背景模式：直接去除外部的独立胶囊卡片框，让顶栏元素自然悬浮在流体背景顶部
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: childWidget,
+        return Stack(
+          children: [
+            const Positioned.fill(
+              child: AbsorbPointer(
+                child: SizedBox.expand(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: childWidget,
+            ),
+          ],
         );
       },
     );
@@ -127,6 +136,7 @@ class _TitleLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WindowDragRegion(
+      onDoubleTap: WindowControls.toggleMaximized,
       // 重构：移除原本 Container 的彩色背景与外发光阴影，将应用图标以极简纯粹的形式浮动显示
       child: SizedBox(
         width: 34,
@@ -268,6 +278,7 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
         ),
         Expanded(
           child: WindowDragRegion(
+            onDoubleTap: WindowControls.toggleMaximized,
             child: AnimatedOpacity(
               duration: motion.controlTransitionDuration,
               curve: motion.normal,
@@ -357,22 +368,65 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
   bool _isFullScreen = false;
   bool _isMaximized = false;
   bool _isProcessing = false;
+  final GlobalKey _maximizeButtonKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    WindowControls.layoutMode.addListener(_onLayoutModeChanged);
     _updateWindowStates();
   }
 
+  void _onLayoutModeChanged() {
+    if (!mounted) return;
+    final mode = WindowControls.layoutMode.value;
+    setState(() {
+      _isFullScreen = mode == WindowLayoutMode.fullscreen;
+      _isMaximized = mode == WindowLayoutMode.maximized;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reportMaximizeButtonRect();
+    });
+  }
+
+  void _reportMaximizeButtonRect() {
+    if (!mounted) return;
+    final renderBox =
+        _maximizeButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize) {
+      final offset = renderBox.localToGlobal(Offset.zero);
+      final size = renderBox.size;
+      final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+      unawaited(WindowControls.setMaximizeButtonRect(
+        left: offset.dx,
+        top: offset.dy,
+        width: size.width,
+        height: size.height,
+        devicePixelRatio: dpr,
+      ));
+    } else {
+      unawaited(WindowControls.setMaximizeButtonRect(
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        devicePixelRatio: 1.0,
+      ));
+    }
+  }
+
   Future<void> _updateWindowStates() async {
-    final isFullScreen = await windowManager.isFullScreen();
-    final isMaximized = await windowManager.isMaximized();
+    final isFullScreen = await WindowControls.isFullScreen();
+    final isMaximized = await WindowControls.isMaximized();
     if (mounted) {
       setState(() {
         _isFullScreen = isFullScreen;
         _isMaximized = isMaximized;
         _isProcessing = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _reportMaximizeButtonRect();
       });
     }
   }
@@ -385,7 +439,7 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
     });
 
     try {
-      await windowManager.setFullScreen(!_isFullScreen);
+      await WindowControls.toggleFullscreen();
     } finally {
       if (mounted) {
         await _updateWindowStates();
@@ -401,11 +455,7 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
     });
 
     try {
-      if (_isMaximized) {
-        await windowManager.unmaximize();
-      } else {
-        await windowManager.maximize();
-      }
+      await WindowControls.toggleMaximized();
     } finally {
       if (mounted) {
         await _updateWindowStates();
@@ -415,7 +465,15 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
 
   @override
   void dispose() {
+    WindowControls.layoutMode.removeListener(_onLayoutModeChanged);
     windowManager.removeListener(this);
+    unawaited(WindowControls.setMaximizeButtonRect(
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+      devicePixelRatio: 1.0,
+    ));
     super.dispose();
   }
 
@@ -454,6 +512,9 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reportMaximizeButtonRect();
+    });
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -462,12 +523,13 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
           onPressed: _isProcessing ? null : _toggleFullScreen,
           icon: _isFullScreen ? Symbols.close_fullscreen : Symbols.open_in_full,
         ),
-        _WindowButton(
+        const _WindowButton(
           tooltip: '最小化',
-          onPressed: windowManager.minimize,
+          onPressed: WindowControls.minimize,
           icon: Symbols.remove,
         ),
         _WindowButton(
+          key: _maximizeButtonKey,
           tooltip: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
           onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
           icon: _isMaximized ? Symbols.fullscreen_exit : Symbols.fullscreen,
@@ -486,6 +548,7 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
 
 class _WindowButton extends StatelessWidget {
   const _WindowButton({
+    super.key,
     required this.tooltip,
     required this.onPressed,
     required this.icon,

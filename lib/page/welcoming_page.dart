@@ -15,7 +15,6 @@ import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:window_manager/window_manager.dart';
 
 class WelcomingPage extends StatelessWidget {
   const WelcomingPage({super.key});
@@ -205,12 +204,13 @@ class _TitleBar extends StatelessWidget {
         variant: AppSurfaceVariant.glass,
         radius: 24,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: WindowDragRegion(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: WindowDragRegion(
+                onDoubleTap: () => unawaited(WindowControls.toggleMaximized()),
                 child: Row(
                   children: [
                     Padding(
@@ -224,84 +224,49 @@ class _TitleBar extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8.0),
-              const _WindowControlls(),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8.0),
+            const _WindowControlls(),
+          ],
         ),
       ),
     );
   }
 }
 
-class _WindowControlls extends StatefulWidget {
+class _WindowControlls extends StatelessWidget {
   const _WindowControlls();
 
   @override
-  State<_WindowControlls> createState() => __WindowControllsState();
-}
-
-class __WindowControllsState extends State<_WindowControlls>
-    with WindowListener {
-  @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  @override
-  void onWindowMaximize() {
-    setState(() {});
-  }
-
-  @override
-  void onWindowUnmaximize() {
-    setState(() {});
-  }
-
-  @override
-  void onWindowRestore() {
-    setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8.0,
-      children: [
-        IconButton(
-          tooltip: "最小化",
-          onPressed: windowManager.minimize,
-          icon: const Icon(Symbols.remove),
-        ),
-        FutureBuilder(
-          future: windowManager.isMaximized(),
-          builder: (context, snapshot) {
-            final isMaximized = snapshot.data ?? false;
-            return IconButton(
+    return ValueListenableBuilder<WindowLayoutMode>(
+      valueListenable: WindowControls.layoutMode,
+      builder: (context, mode, _) {
+        final isMaximized = mode == WindowLayoutMode.maximized;
+        return Wrap(
+          spacing: 8.0,
+          children: [
+            IconButton(
+              tooltip: "最小化",
+              onPressed: () => unawaited(WindowControls.minimize()),
+              icon: const Icon(Symbols.remove),
+            ),
+            IconButton(
               tooltip: isMaximized ? "还原" : "最大化",
-              onPressed: isMaximized
-                  ? windowManager.unmaximize
-                  : windowManager.maximize,
+              onPressed: () => unawaited(WindowControls.toggleMaximized()),
               icon: Icon(
                 isMaximized ? Symbols.fullscreen_exit : Symbols.fullscreen,
               ),
-            );
-          },
-        ),
-        IconButton(
-          tooltip: "退出",
-          // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
-          onPressed: () => unawaited(WindowControls.exitApp()),
-          icon: const Icon(Symbols.close),
-        ),
-      ],
+            ),
+            IconButton(
+              tooltip: "退出",
+              // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
+              onPressed: () => unawaited(WindowControls.exitApp()),
+              icon: const Icon(Symbols.close),
+            ),
+          ],
+        );
+      },
     );
   }
 }

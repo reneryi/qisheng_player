@@ -340,4 +340,51 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'AudiosPage lyric preview executes smooth exit animation when toggled off', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Exit Test Song',
+      artist: 'Artist',
+      album: 'Album',
+      path: r'E:\Music\exit.flac',
+    );
+    AudioLibrary.instance.audioCollection.add(audio);
+    AppPreference.instance.audiosPagePref.showLyricPreview = true;
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController:
+            FakePlaybackController(audio: audio, queue: [audio]),
+        lyricController: FakeLyricController(Lrc([], LrcSource.local)),
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const AudiosPage(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 初始处于打开状态
+    expect(find.byKey(const ValueKey('audio-lyric-preview-panel')),
+        findsOneWidget);
+
+    // 点击关闭按钮
+    await tester.tap(find.byKey(const ValueKey('toggle-lyric-preview')));
+
+    // 推进 100ms（动画执行中）：面板仍然保活在 Widget 树中执行淡出与收缩动画
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('audio-lyric-preview-panel')),
+        findsOneWidget);
+
+    // 推进至动画完全结束
+    await tester.pumpAndSettle();
+    // 面板完全卸载
+    expect(find.byKey(const ValueKey('audio-lyric-preview-panel')),
+        findsNothing);
+  });
 }

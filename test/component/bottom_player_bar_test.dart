@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/component/bottom_player_bar.dart';
+import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

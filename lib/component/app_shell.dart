@@ -6,7 +6,6 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 
 import 'package:qisheng_player/component/main_layout_frame.dart';
-import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
@@ -23,6 +22,9 @@ class AppShell extends StatefulWidget {
   });
 
   final Widget page;
+
+  /// 保留该参数以兼容需要标识当前 Shell 路由的调用方。
+  /// 现在由路由页面自身负责转场，不再围绕嵌套 Navigator 驱动第二套动画。
   final String pageIdentity;
 
   @override
@@ -107,16 +109,9 @@ class _AppShellState extends State<AppShell>
               child: switch (screenType) {
                 ScreenType.small => _ShellPagePanel(
                     page: widget.page,
-                    pageIdentity: widget.pageIdentity,
                   ),
-                ScreenType.medium => _ShellWideContent(
+                ScreenType.medium || ScreenType.large => _ShellWideContent(
                     page: widget.page,
-                    pageIdentity: widget.pageIdentity,
-                    sideNav: const SideNav(),
-                  ),
-                ScreenType.large => _ShellWideContent(
-                    page: widget.page,
-                    pageIdentity: widget.pageIdentity,
                     sideNavAnimation: _largeSidebarController,
                     sideNavCollapsed: largeSidebarCollapsed,
                     onToggleCollapsed: _toggleLargeSidebar,
@@ -133,20 +128,63 @@ class _AppShellState extends State<AppShell>
 class _ShellPagePanel extends StatelessWidget {
   const _ShellPagePanel({
     required this.page,
-    required this.pageIdentity,
   });
 
   final Widget page;
-  final String pageIdentity;
 
   @override
   Widget build(BuildContext context) {
-    // 窄屏模式下直接呈现页面内容，去除多层卡片背景包裹
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: _ShellPageTransition(
-        pageIdentity: pageIdentity,
-        child: page,
+    final surfaces = context.surfaces;
+    final motion = context.motion;
+    final isCardMode = surfaces.pagePanelAlpha > 0.0;
+    final isDark = Theme.of(context).colorScheme.brightness == Brightness.dark;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          final focus = FocusManager.instance.primaryFocus;
+          if (focus != null && focus.hasFocus) {
+            focus.unfocus();
+          }
+        },
+        child: AnimatedContainer(
+          duration: motion.controlTransitionDuration,
+          curve: motion.emphasized,
+          decoration: BoxDecoration(
+            color: isCardMode
+                ? surfaces.surfaceRaised.withValues(alpha: surfaces.panelAlpha)
+                : Colors.transparent,
+            borderRadius:
+                BorderRadius.circular(isCardMode ? surfaces.radiusXl : 0),
+            border: isCardMode
+                ? Border.all(
+                    color: surfaces.strokeSubtle
+                        .withValues(alpha: isDark ? 0.35 : 0.45),
+                    width: 0.5,
+                  )
+                : null,
+            boxShadow: isCardMode
+                ? [
+                    BoxShadow(
+                      color:
+                          Colors.black.withValues(alpha: isDark ? 0.22 : 0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: ClipRRect(
+            borderRadius:
+                BorderRadius.circular(isCardMode ? surfaces.radiusXl : 0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: page,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -155,104 +193,66 @@ class _ShellPagePanel extends StatelessWidget {
 class _ShellWideContent extends StatelessWidget {
   const _ShellWideContent({
     required this.page,
-    required this.pageIdentity,
-    this.sideNav,
-    this.sideNavAnimation,
-    this.sideNavCollapsed,
-    this.onToggleCollapsed,
+    required this.sideNavAnimation,
+    required this.sideNavCollapsed,
+    required this.onToggleCollapsed,
   });
 
   final Widget page;
-  final String pageIdentity;
-  final Widget? sideNav;
-  final Animation<double>? sideNavAnimation;
-  final bool? sideNavCollapsed;
-  final ValueChanged<bool>? onToggleCollapsed;
+  final Animation<double> sideNavAnimation;
+  final bool sideNavCollapsed;
+  final ValueChanged<bool> onToggleCollapsed;
 
   @override
   Widget build(BuildContext context) {
-    final isAnimated = sideNavAnimation != null;
-    final widthDelta = isAnimated
-        ? context.chrome.sideNavExpandedWidth -
-            context.chrome.sideNavCollapsedWidth
-        : 0.0;
-    // 宽屏模式下主页面内容直接平铺在底层单层背景上，彻底消除多层胶囊框与背景割裂
+    final widthDelta = context.chrome.sideNavExpandedWidth -
+        context.chrome.sideNavCollapsedWidth;
+    // 页面主内容区域保持 100% 通透悬浮
     final pageContent = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: _ShellPageTransition(
-        pageIdentity: pageIdentity,
-        child: page,
-      ),
+      child: page,
     );
 
-    return ValueListenableBuilder<WindowLayoutMode>(
-      valueListenable: WindowControls.layoutMode,
-      builder: (context, _, __) => AnimatedBuilder(
-        animation: sideNavAnimation ?? kAlwaysCompleteAnimation,
-        child: pageContent,
-        builder: (context, child) {
-          final progress = isAnimated ? sideNavAnimation!.value : 0.0;
-          final resolvedSideNav = isAnimated
-              ? SideNav(
-                  collapsed: sideNavCollapsed!,
-                  expansionProgress: progress,
-                  onToggleCollapsed: onToggleCollapsed,
-                )
-              : sideNav!;
-          final resolvedPanel = isAnimated
-              ? SideNavTransitionScope(
-                  expansionProgress: progress,
-                  widthDelta: widthDelta,
-                  collapsing: sideNavCollapsed!,
-                  child: child!,
-                )
-              : child!;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              resolvedSideNav,
-              const SizedBox(width: 8.0),
-              Expanded(child: resolvedPanel),
-            ],
-          );
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          final focus = FocusManager.instance.primaryFocus;
+          if (focus != null && focus.hasFocus) {
+            focus.unfocus();
+          }
         },
-      ),
-    );
-  }
-}
-
-class _ShellPageTransition extends StatelessWidget {
-  const _ShellPageTransition({
-    required this.pageIdentity,
-    required this.child,
-  });
-
-  final String pageIdentity;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final motion = context.motion;
-    return TweenAnimationBuilder<double>(
-      key: ValueKey(pageIdentity),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: motion.pageTransitionDuration,
-      curve: motion.emphasized,
-      child: child,
-      builder: (context, value, transitionedChild) {
-        final fade = value.clamp(0.0, 1.0);
-        // 获取当前的横向滑入滑动方向（1 为自右向左，-1 为自左向右）
-        final direction = AppNavigationState.instance.slideDirection;
-        final offsetX = (1 - fade) * 20.0 * direction;
-        return Opacity(
-          opacity: fade,
-          child: Transform.translate(
-            // 将原有的垂直位移变更为配合方向判定的水平横向滑入淡出
-            offset: Offset(offsetX, 0),
-            child: transitionedChild,
+        child: ValueListenableBuilder<WindowLayoutMode>(
+          valueListenable: WindowControls.layoutMode,
+          builder: (context, _, __) => AnimatedBuilder(
+            animation: sideNavAnimation,
+            child: pageContent,
+            builder: (context, child) {
+              final progress = sideNavAnimation.value;
+              final resolvedSideNav = SideNav(
+                collapsed: sideNavCollapsed,
+                expansionProgress: progress,
+                onToggleCollapsed: onToggleCollapsed,
+              );
+              final resolvedPanel = SideNavTransitionScope(
+                expansionProgress: progress,
+                widthDelta: widthDelta,
+                collapsing: sideNavCollapsed,
+                child: child!,
+              );
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  resolvedSideNav,
+                  const SizedBox(width: 8.0),
+                  Expanded(child: resolvedPanel),
+                ],
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

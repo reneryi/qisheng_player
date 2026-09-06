@@ -16,7 +16,6 @@ import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/ui/audio_format_badge.dart';
-import 'package:qisheng_player/component/ui/vinyl_record_player_view.dart';
 import 'package:qisheng_player/component/ui/spring_scale_feedback.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -169,17 +168,24 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   Widget build(BuildContext context) {
     NOW_PLAYING_VIEW_MODE.value =
         AppPreference.instance.nowPlayingPagePref.nowPlayingViewMode;
-    return MainLayoutFrame(
-      titleBar: const _NowPlayingAppBar(),
-      overlay: const _AutoHideBottomPlayerBar(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 1040 ||
-              MediaQuery.sizeOf(context).height < 760;
-          return compact
-              ? const _NowPlayingPage_Small()
-              : const _NowPlayingPage_Large();
-        },
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          AppNavigationState.instance.setNowPlayingPageActive(false);
+        }
+      },
+      child: MainLayoutFrame(
+        titleBar: const _NowPlayingAppBar(),
+        overlay: const _AutoHideBottomPlayerBar(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 1040 ||
+                MediaQuery.sizeOf(context).height < 760;
+            return compact
+                ? const _NowPlayingPage_Small()
+                : const _NowPlayingPage_Large();
+          },
+        ),
       ),
     );
   }
@@ -195,7 +201,7 @@ class _AutoHideBottomPlayerBar extends StatefulWidget {
 
 class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
   static const _hideDelay = Duration(seconds: 5);
-  static const _entranceRevealThreshold = 0.82;
+  static const _entranceRevealThreshold = 0.45;
 
   Timer? _hideTimer;
   Animation<double>? _routeAnimation;
@@ -224,8 +230,15 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
   }
 
   void _handleRouteAnimationTick() {
-    final shouldReveal = _routeAnimation == null ||
-        _routeAnimation!.value >= _entranceRevealThreshold;
+    if (_routeAnimation == null) return;
+
+    // 退场阶段（reverse）：控制栏随整页自然滑出，不触发突兀的提前隐匿或跳动
+    if (_routeAnimation!.status == AnimationStatus.reverse) {
+      _hideTimer?.cancel();
+      return;
+    }
+
+    final shouldReveal = _routeAnimation!.value >= _entranceRevealThreshold;
     if (shouldReveal == _entranceCompleted) return;
 
     _entranceCompleted = shouldReveal;
@@ -262,6 +275,7 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
   @override
   Widget build(BuildContext context) {
     final motion = context.motion;
+
     return SizedBox(
       height: context.chrome.dockHeight,
       child: Stack(
@@ -287,16 +301,17 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
                 child: AnimatedSlide(
                   duration: motion.panelTransitionDuration,
                   curve: motion.normal,
-                  offset: _visible ? Offset.zero : const Offset(0, 0.24),
+                  offset: (!_visible && _entranceCompleted)
+                      ? const Offset(0, 0.24)
+                      : Offset.zero,
                   child: AnimatedOpacity(
                     duration: motion.controlTransitionDuration,
                     curve: motion.fast,
-                    opacity: _visible ? 1 : 0,
+                    opacity: _visible ? 1.0 : 0.0,
                     child: const BottomPlayerBar(
                       transparent: true,
-                      disableHero:
-                          true, // 在播放详情页内的控制栏禁用 Hero 动画，防止与中央大封面产生重复 Hero 标签冲突
-                    ), // 传入 transparent: true，隐藏底栏毛玻璃背景
+                      disableHero: true,
+                    ),
                   ),
                 ),
               ),

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
@@ -92,131 +92,135 @@ class _ExpandableSearchActionState extends State<ExpandableSearchAction> {
           duration: motion.searchExpandDuration,
           curve: motion.emphasized,
           width: targetWidth,
-          child: AppSurface(
-            variant:
-                expanded ? AppSurfaceVariant.inset : AppSurfaceVariant.raised,
-            radius: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Shortcuts(
-              shortcuts: const {
-                SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-              },
-              child: Actions(
-                actions: {
-                  DismissIntent: CallbackAction<DismissIntent>(
-                    onInvoke: (_) {
-                      _clearAndCollapse();
-                      return null;
+          height: 48.0,
+          child: expanded
+              ? AppSurface(
+                  variant: AppSurfaceVariant.inset,
+                  radius: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Shortcuts(
+                    shortcuts: const {
+                      SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
                     },
-                  ),
-                },
-                child: AnimatedSwitcher(
-                  duration: motion.searchExpandDuration,
-                  switchInCurve: motion.emphasized,
-                  switchOutCurve: motion.fast,
-                  child: expanded
-                      ? LayoutBuilder(
-                          key: const ValueKey('expanded-search'),
-                          builder: (context, constraints) {
-                            if (constraints.maxWidth < 80) {
-                              return Align(
-                                alignment: Alignment.center,
-                                child: IconButton(
-                                  tooltip: '关闭搜索',
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 32,
-                                    height: 32,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: controller.text.isEmpty
-                                      ? () => _toggleExpanded(false)
-                                      : _clearAndCollapse,
-                                  icon: Icon(
-                                    controller.text.isEmpty
-                                        ? Symbols.close
-                                        : Symbols.close_small,
-                                    size: 18,
-                                    color: scheme.onSurface
-                                        .withValues(alpha: 0.72),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final compact = constraints.maxWidth < 120;
-
-                            return Row(
-                              children: [
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    left: compact ? 4 : 8,
-                                    right: compact ? 4 : 10,
-                                  ),
-                                  child: const Icon(Symbols.search),
-                                ),
-                                Expanded(
-                                  child: TextField(
-                                    controller: controller,
-                                    focusNode: focusNode,
-                                    autofocus: true,
-                                    decoration: InputDecoration(
-                                      hintText:
-                                          compact ? null : widget.hintText,
-                                      border: InputBorder.none,
-                                      filled: false,
-                                      isDense: compact,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                    onTapOutside: (_) {
-                                      if (controller.text.isEmpty) {
-                                        _toggleExpanded(false);
-                                      }
-                                    },
-                                    onChanged: (value) {
-                                      setState(() {});
-                                      widget.onChanged(value);
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: '清空搜索',
-                                  padding: EdgeInsets.zero,
-                                  constraints: BoxConstraints.tightFor(
-                                    width: compact ? 36 : 44,
-                                    height: compact ? 36 : 44,
-                                  ),
-                                  visualDensity: compact
-                                      ? VisualDensity.compact
-                                      : VisualDensity.standard,
-                                  onPressed: controller.text.isEmpty
-                                      ? () => _toggleExpanded(false)
-                                      : _clearAndCollapse,
-                                  icon: Icon(
-                                    controller.text.isEmpty
-                                        ? Symbols.close
-                                        : Symbols.close_small,
-                                    size: compact ? 18 : 24,
-                                    color: scheme.onSurface
-                                        .withValues(alpha: 0.72),
-                                  ),
-                                ),
-                              ],
-                            );
+                    child: Actions(
+                      actions: {
+                        DismissIntent: CallbackAction<DismissIntent>(
+                          onInvoke: (_) {
+                            _clearAndCollapse();
+                            return null;
                           },
-                        )
-                      : Center(
-                          key: const ValueKey('collapsed-search'),
-                          child: IconButton(
-                            tooltip: '搜索当前页面',
-                            onPressed: () => _toggleExpanded(true),
-                            icon: const Icon(Symbols.search),
-                          ),
                         ),
+                      },
+                      child: LayoutBuilder(
+                        key: const ValueKey('expanded-search'),
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 80) {
+                            return Align(
+                              alignment: Alignment.center,
+                              child: IconButton(
+                                tooltip: '关闭搜索',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 32,
+                                  height: 32,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: controller.text.isEmpty
+                                    ? () => _toggleExpanded(false)
+                                    : _clearAndCollapse,
+                                icon: Icon(
+                                  controller.text.isEmpty
+                                      ? Symbols.close
+                                      : Symbols.close_small,
+                                  size: 18,
+                                  color: scheme.onSurface
+                                      .withValues(alpha: 0.72),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final compact = constraints.maxWidth < 120;
+
+                          return Row(
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  left: compact ? 4 : 8,
+                                  right: compact ? 4 : 10,
+                                ),
+                                child: Icon(
+                                  Symbols.search,
+                                  color: scheme.onSurface.withValues(alpha: 0.75),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: controller,
+                                  focusNode: focusNode,
+                                  autofocus: true,
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        compact ? null : widget.hintText,
+                                    border: InputBorder.none,
+                                    filled: false,
+                                    isDense: compact,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onTapOutside: (_) {
+                                    if (controller.text.isEmpty) {
+                                      _toggleExpanded(false);
+                                    }
+                                  },
+                                  onChanged: (value) {
+                                    setState(() {});
+                                    widget.onChanged(value);
+                                  },
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '清空搜索',
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints.tightFor(
+                                  width: compact ? 36 : 44,
+                                  height: compact ? 36 : 44,
+                                ),
+                                visualDensity: compact
+                                    ? VisualDensity.compact
+                                    : VisualDensity.standard,
+                                onPressed: controller.text.isEmpty
+                                    ? () => _toggleExpanded(false)
+                                    : _clearAndCollapse,
+                                icon: Icon(
+                                  controller.text.isEmpty
+                                      ? Symbols.close
+                                      : Symbols.close_small,
+                                  size: compact ? 18 : 24,
+                                  color: scheme.onSurface
+                                      .withValues(alpha: 0.72),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                )
+              : Center(
+                  key: const ValueKey('collapsed-search'),
+                  child: IconButton(
+                    tooltip: '搜索当前页面',
+                    onPressed: () => _toggleExpanded(true),
+                    icon: const Icon(Symbols.search),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      side: BorderSide.none,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
         );
       },
     );

@@ -98,100 +98,106 @@ List<Widget> buildAudioContextMenuChildren(
       child: const Text("追加到队列"),
     ),
     SubmenuButton(
-      menuChildren: [
-        MenuItemButton(
-          onPressed: () async {
-            final controller = TextEditingController();
-            final name = await showDialog<String>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text("新建歌单"),
-                content: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: "歌单名称",
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (value) {
-                    Navigator.pop(context, value);
-                  },
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("取消"),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context, controller.text);
+      menuChildren: animatedMenuChildren(
+        context,
+        [
+          MenuItemButton(
+            onPressed: () async {
+              final controller = TextEditingController();
+              final name = await showDialog<String>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("新建歌单"),
+                  content: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: "歌单名称",
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (value) {
+                      Navigator.pop(context, value);
                     },
-                    child: const Text("创建"),
                   ),
-                ],
-              ),
-            );
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("取消"),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(context, controller.text);
+                      },
+                      child: const Text("创建"),
+                    ),
+                  ],
+                ),
+              );
 
-            final trimmed = name?.trim();
-            if (trimmed == null || trimmed.isEmpty) return;
-            if (PLAYLISTS.any((item) => item.name == trimmed)) {
-              showTextOnSnackBar("歌单“$trimmed”已存在");
-              return;
-            }
+              final trimmed = name?.trim();
+              if (trimmed == null || trimmed.isEmpty) return;
+              if (PLAYLISTS.any((item) => item.name == trimmed)) {
+                showTextOnSnackBar("歌单“$trimmed”已存在");
+                return;
+              }
 
-            final targetPlaylist = Playlist(trimmed, {});
-            targetPlaylist.addAudio(audio);
-            PLAYLISTS.add(targetPlaylist);
-            scheduleSavePlaylists();
-            showTextOnSnackBar("已创建歌单“$trimmed”并添加当前歌曲");
-          },
-          leadingIcon: const Icon(Symbols.add),
-          child: const Text("新建歌单并添加"),
-        ),
-        if (PLAYLISTS.isEmpty)
-          const MenuItemButton(
-            onPressed: null,
-            child: Text("暂无歌单"),
-          )
-        else
-          ...List.generate(
-            PLAYLISTS.length,
-            (i) => MenuItemButton(
-              onPressed: () {
-                final added = PLAYLISTS[i].addAudio(audio);
-                if (!added) {
-                  showTextOnSnackBar("歌曲“${audio.title}”已在歌单中");
-                  return;
-                }
-
-                showTextOnSnackBar(
-                  "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
-                );
-              },
-              leadingIcon: const Icon(Symbols.queue_music),
-              child: Text(PLAYLISTS[i].name),
-            ),
+              final targetPlaylist = Playlist(trimmed, {});
+              targetPlaylist.addAudio(audio);
+              PLAYLISTS.add(targetPlaylist);
+              scheduleSavePlaylists();
+              showTextOnSnackBar("已创建歌单“$trimmed”并添加当前歌曲");
+            },
+            leadingIcon: const Icon(Symbols.add),
+            child: const Text("新建歌单并添加"),
           ),
-      ],
+          if (PLAYLISTS.isEmpty)
+            const MenuItemButton(
+              onPressed: null,
+              child: Text("暂无歌单"),
+            )
+          else
+            ...List.generate(
+              PLAYLISTS.length,
+              (i) => MenuItemButton(
+                onPressed: () {
+                  final added = PLAYLISTS[i].addAudio(audio);
+                  if (!added) {
+                    showTextOnSnackBar("歌曲“${audio.title}”已在歌单中");
+                    return;
+                  }
+
+                  showTextOnSnackBar(
+                    "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
+                  );
+                },
+                leadingIcon: const Icon(Symbols.queue_music),
+                child: Text(PLAYLISTS[i].name),
+              ),
+            ),
+        ],
+      ),
       child: const Text("添加到歌单"),
     ),
     if (audio.splitedArtists.isNotEmpty)
       SubmenuButton(
-        menuChildren: List.generate(
-          audio.splitedArtists.length,
-          (i) {
-            final artistName = audio.splitedArtists[i];
-            return MenuItemButton(
-              onPressed: () {
-                final artist =
-                    AudioLibrary.instance.artistCollection[artistName];
-                if (artist == null) return;
-                context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist);
-              },
-              leadingIcon: const Icon(Symbols.artist),
-              child: Text(artistName),
-            );
-          },
+        menuChildren: animatedMenuChildren(
+          context,
+          List.generate(
+            audio.splitedArtists.length,
+            (i) {
+              final artistName = audio.splitedArtists[i];
+              return MenuItemButton(
+                onPressed: () {
+                  final artist =
+                      AudioLibrary.instance.artistCollection[artistName];
+                  if (artist == null) return;
+                  context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist);
+                },
+                leadingIcon: const Icon(Symbols.artist),
+                child: Text(artistName),
+              );
+            },
+          ),
         ),
         child: const Text("艺术家"),
       ),

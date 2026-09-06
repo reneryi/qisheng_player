@@ -105,6 +105,17 @@ class WindowControls {
 
   static Future<void> syncWindowLayoutMode() async {
     try {
+      if (Platform.isWindows) {
+        final modeStr =
+            await _channel.invokeMethod<String>("get_window_layout_mode");
+        final next = switch (modeStr) {
+          'fullscreen' => WindowLayoutMode.fullscreen,
+          'maximized' => WindowLayoutMode.maximized,
+          _ => WindowLayoutMode.normal,
+        };
+        if (layoutMode.value != next) layoutMode.value = next;
+        return;
+      }
       final fullscreen = await windowManager.isFullScreen();
       final maximized = await windowManager.isMaximized();
       final next = fullscreen
@@ -113,6 +124,136 @@ class WindowControls {
               ? WindowLayoutMode.maximized
               : WindowLayoutMode.normal;
       if (layoutMode.value != next) layoutMode.value = next;
+    } catch (_) {}
+  }
+
+  static Future<bool> isMaximized() async {
+    try {
+      if (Platform.isWindows) {
+        return await _channel.invokeMethod<bool>("is_maximized") ?? false;
+      }
+      return await windowManager.isMaximized();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> isFullScreen() async {
+    try {
+      if (Platform.isWindows) {
+        return await _channel.invokeMethod<bool>("is_fullscreen") ?? false;
+      }
+      return await windowManager.isFullScreen();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> isMinimized() async {
+    try {
+      if (Platform.isWindows) {
+        return await _channel.invokeMethod<bool>("is_minimized") ?? false;
+      }
+      return await windowManager.isMinimized();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> toggleMaximized() async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("toggle_maximize");
+        await syncWindowLayoutMode();
+        return;
+      }
+      if (await windowManager.isMaximized()) {
+        await windowManager.unmaximize();
+      } else {
+        await windowManager.maximize();
+      }
+      await syncWindowLayoutMode();
+    } catch (_) {}
+  }
+
+  static Future<void> maximize() async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("maximize");
+        await syncWindowLayoutMode();
+        return;
+      }
+      await windowManager.maximize();
+      await syncWindowLayoutMode();
+    } catch (_) {}
+  }
+
+  static Future<void> unmaximize() async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("unmaximize");
+        await syncWindowLayoutMode();
+        return;
+      }
+      await windowManager.unmaximize();
+      await syncWindowLayoutMode();
+    } catch (_) {}
+  }
+
+  static Future<void> toggleFullscreen() async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("toggle_fullscreen");
+        await syncWindowLayoutMode();
+        return;
+      }
+      final isFull = await windowManager.isFullScreen();
+      await windowManager.setFullScreen(!isFull);
+      await syncWindowLayoutMode();
+    } catch (_) {}
+  }
+
+  static Future<void> setFullScreen(bool isFullScreen) async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod(
+          "set_fullscreen",
+          {"isFullScreen": isFullScreen},
+        );
+        await syncWindowLayoutMode();
+        return;
+      }
+      await windowManager.setFullScreen(isFullScreen);
+      await syncWindowLayoutMode();
+    } catch (_) {}
+  }
+
+  static Future<void> minimize() async {
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("minimize");
+        return;
+      }
+      await windowManager.minimize();
+    } catch (_) {}
+  }
+
+  static Future<void> setMaximizeButtonRect({
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+    required double devicePixelRatio,
+  }) async {
+    if (!Platform.isWindows) return;
+    try {
+      await _channel.invokeMethod("set_maximize_button_rect", {
+        "left": left,
+        "top": top,
+        "width": width,
+        "height": height,
+        "devicePixelRatio": devicePixelRatio,
+      });
     } catch (_) {}
   }
 
@@ -355,6 +496,20 @@ class WindowControls {
           return;
         case "window_restored_from_tray":
           resyncPlaybackAfterWindowActivated(reason: 'tray restore');
+          return;
+        case "on_window_layout_changed":
+          if (call.arguments is Map) {
+            final map = call.arguments as Map;
+            final modeStr = map['mode'] as String?;
+            final next = switch (modeStr) {
+              'fullscreen' => WindowLayoutMode.fullscreen,
+              'maximized' => WindowLayoutMode.maximized,
+              _ => WindowLayoutMode.normal,
+            };
+            if (layoutMode.value != next) {
+              layoutMode.value = next;
+            }
+          }
           return;
         case "exit_app":
           unawaited(exitApp());

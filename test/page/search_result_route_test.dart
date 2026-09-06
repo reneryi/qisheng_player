@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/page/search_page/search_page.dart';
 import 'package:qisheng_player/page/search_page/search_result_page.dart';
 import 'package:flutter/material.dart';

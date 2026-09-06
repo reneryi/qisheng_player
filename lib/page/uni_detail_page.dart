@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
@@ -316,51 +316,78 @@ class _UniDetailPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+
     return SizedBox(
       height: 220,
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // 统一的底层通透磨砂底色，保持恒定色调与质感
+          DecoratedBox(
+            key: const ValueKey('header-base-tint'),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  scheme.primary.withValues(alpha: isDark ? 0.16 : 0.12),
+                  scheme.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.55 : 0.65),
+                ],
+              ),
+            ),
+          ),
+          // 封面图片以单层图像级高斯模糊（ImageFiltered）平滑淡入，彻底消除外层 BackdropFilter 引起的二次模糊突变
           FutureBuilder<ImageProvider?>(
             future: backgroundPic,
             builder: (context, snapshot) {
               final image = snapshot.data;
-              if (image == null) {
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        scheme.primary.withValues(alpha: 0.18),
-                        scheme.surfaceContainerHighest.withValues(alpha: 0.72),
-                      ],
+              if (image == null) return const SizedBox.expand();
+
+              return TweenAnimationBuilder<double>(
+                key: ValueKey(image),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                builder: (context, opacity, _) {
+                  return Opacity(
+                    opacity: opacity,
+                    child: RepaintBoundary(
+                      child: ClipRect(
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(sigmaX: 38, sigmaY: 38),
+                          child: Transform.scale(
+                            scale: 1.25,
+                            child: Image(
+                              image: image,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              }
-              return Image(
-                image: image,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  );
+                },
               );
             },
           ),
+          // 统一的前景暗度与对比度遮罩
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.12),
-                  scheme.surface.withValues(alpha: 0.28),
+                  Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
+                  scheme.surface.withValues(alpha: isDark ? 0.42 : 0.25),
                 ],
               ),
             ),
-          ),
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-            child: const ColoredBox(color: Colors.transparent),
           ),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -449,68 +476,86 @@ class _HeaderArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final borderRadius =
+        BorderRadius.circular(picShape == PicShape.oval ? size / 2 : 22);
+
     return FutureBuilder<ImageProvider?>(
       future: pic,
       builder: (context, snapshot) {
         final placeholder = Container(
+          key: const ValueKey('artwork-placeholder'),
           width: size,
           height: size,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(
-                picShape == PicShape.oval ? size / 2 : 22),
+            borderRadius: borderRadius,
             color: Colors.white.withValues(alpha: 0.08),
           ),
           alignment: Alignment.center,
           child: Icon(
-            Symbols.broken_image,
+            picShape == PicShape.oval ? Symbols.person : Symbols.album,
             size: size * 0.42,
-            color: scheme.onSurface.withValues(alpha: 0.7),
+            color: scheme.onSurface.withValues(alpha: 0.35),
           ),
         );
-        if (snapshot.connectionState != ConnectionState.done) {
-          return placeholder;
-        }
 
         final imageProvider = snapshot.data;
-        if (imageProvider == null) return placeholder;
-
-        final artwork = switch (picShape) {
-          PicShape.oval => ClipOval(
-              child: Image(
-                image: imageProvider,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => placeholder,
+        Widget artworkWidget;
+        if (imageProvider == null) {
+          artworkWidget = placeholder;
+        } else {
+          artworkWidget = switch (picShape) {
+            PicShape.oval => ClipOval(
+                key: ValueKey(imageProvider),
+                child: Image(
+                  image: imageProvider,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => placeholder,
+                ),
               ),
-            ),
-          PicShape.rrect => ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: Image(
-                image: imageProvider,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => placeholder,
+            PicShape.rrect => ClipRRect(
+                key: ValueKey(imageProvider),
+                borderRadius: borderRadius,
+                child: Image(
+                  image: imageProvider,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => placeholder,
+                ),
               ),
-            ),
-        };
+          };
+        }
 
         final tag = heroTag;
-        if (tag == null) return artwork;
+        if (tag == null) return artworkWidget;
 
-        return ValueListenableBuilder<AlbumArtworkHeroTransition?>(
+        return ValueListenableBuilder<ArtworkHeroTransition?>(
           valueListenable:
-              AppNavigationState.instance.albumArtworkHeroTransition,
-          child: artwork,
+              AppNavigationState.instance.artworkHeroTransition,
+          child: artworkWidget,
           builder: (context, _, child) {
             final navigation = AppNavigationState.instance;
-            if (!navigation.canBuildAlbumArtworkHero(tag: tag)) {
+            if (!navigation.canBuildArtworkHero(tag: tag)) {
               return child!;
             }
             return Hero(
               tag: tag,
               transitionOnUserGestures: true,
+              flightShuttleBuilder: (
+                flightContext,
+                animation,
+                flightDirection,
+                fromHeroContext,
+                toHeroContext,
+              ) {
+                final toHero = toHeroContext.widget as Hero;
+                return Material(
+                  type: MaterialType.transparency,
+                  child: toHero.child,
+                );
+              },
               child: child!,
             );
           },

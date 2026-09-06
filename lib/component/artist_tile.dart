@@ -27,19 +27,17 @@ class _ArtistTileState extends State<ArtistTile> {
   Future<void> _openArtistDetail() async {
     final tag = widget.enableHero ? artistArtworkHeroTag(widget.artist) : null;
     final navigation = AppNavigationState.instance;
-    if (!navigation.beginArtworkHeroNavigation(
-      tag: tag,
-      sourceKey: _heroSourceKey,
-    )) {
-      return;
+    if (tag != null) {
+      navigation.beginArtworkHeroNavigation(
+        tag: tag,
+        sourceKey: _heroSourceKey,
+      );
     }
 
     try {
-      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       await context.push(app_paths.ARTIST_DETAIL_PAGE, extra: widget.artist);
     } finally {
-      await Future<void>.delayed(const Duration(milliseconds: 380));
       navigation.endArtworkHeroNavigation(_heroSourceKey);
     }
   }
@@ -58,8 +56,8 @@ class _ArtistTileState extends State<ArtistTile> {
         onTap: _openArtistDetail,
         borderRadius: BorderRadius.circular(14.0),
         padding: const EdgeInsets.all(8.0),
-        hoverScale: 1.018,
-        pressScale: 0.99,
+        hoverScale: 1.025,
+        pressScale: 0.96,
         hoverShadow: true,
         child: Row(
           children: [
@@ -105,6 +103,19 @@ class _ArtistTileState extends State<ArtistTile> {
                     return Hero(
                       tag: tag,
                       transitionOnUserGestures: true,
+                      flightShuttleBuilder: (
+                        flightContext,
+                        animation,
+                        flightDirection,
+                        fromHeroContext,
+                        toHeroContext,
+                      ) {
+                        final toHero = toHeroContext.widget as Hero;
+                        return Material(
+                          type: MaterialType.transparency,
+                          child: toHero.child,
+                        );
+                      },
                       child: child!,
                     );
                   },

@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/lyric/lrc.dart';
+import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/page/now_playing_page/component/current_playlist_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

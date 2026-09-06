@@ -39,7 +39,7 @@ class _SpringScaleFeedbackState extends State<SpringScaleFeedback>
   bool _isHovering = false;
   bool _isPressed = false;
 
-  // 弹簧物理参数配置：中等刚度、轻柔过冲与良好阻尼
+  // 弹簧物理参数配置：刚度 280, 阻尼 24.0 (阻尼比 ~0.82 黄金弹簧物理模型)
   static const SpringDescription _springDesc = SpringDescription(
     mass: 1.0,
     stiffness: 320.0,
@@ -82,7 +82,6 @@ class _SpringScaleFeedbackState extends State<SpringScaleFeedback>
     }
 
     if (effectsLevel == UiEffectsLevel.visual) {
-      // 视觉全开档位：使用 Spring 物理弹簧模拟真实物理质感
       final simulation = SpringSimulation(
         _springDesc,
         _controller.value,
@@ -91,7 +90,6 @@ class _SpringScaleFeedbackState extends State<SpringScaleFeedback>
       );
       _controller.animateWith(simulation);
     } else {
-      // 标准均衡档位：使用标准平滑曲线
       _controller.animateTo(
         target,
         duration: const Duration(milliseconds: 160),
@@ -110,32 +108,30 @@ class _SpringScaleFeedbackState extends State<SpringScaleFeedback>
           : MouseCursor.defer,
       onEnter: (_) {
         if (!mounted || !widget.enabled) return;
-        setState(() => _isHovering = true);
+        _isHovering = true;
         _animateToTarget(effectsLevel);
       },
       onExit: (_) {
         if (!mounted || !widget.enabled) return;
-        setState(() {
-          _isHovering = false;
-          _isPressed = false;
-        });
+        _isHovering = false;
+        _isPressed = false;
         _animateToTarget(effectsLevel);
       },
       child: GestureDetector(
         behavior: widget.behavior,
         onTapDown: (_) {
           if (!mounted || !widget.enabled) return;
-          setState(() => _isPressed = true);
+          _isPressed = true;
           _animateToTarget(effectsLevel);
         },
         onTapUp: (_) {
           if (!mounted || !widget.enabled) return;
-          setState(() => _isPressed = false);
+          _isPressed = false;
           _animateToTarget(effectsLevel);
         },
         onTapCancel: () {
           if (!mounted || !widget.enabled) return;
-          setState(() => _isPressed = false);
+          _isPressed = false;
           _animateToTarget(effectsLevel);
         },
         onTap: widget.enabled ? widget.onTap : null,

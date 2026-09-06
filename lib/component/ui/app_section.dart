@@ -1,4 +1,3 @@
-﻿import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:flutter/material.dart';
 
 class AppSection extends StatelessWidget {
@@ -16,53 +15,43 @@ class AppSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
+    final separatorColor = scheme.outlineVariant.withValues(alpha: 0.62);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 34),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (description != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              description!,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.62),
+                fontSize: 13,
               ),
-              if (description != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  description!,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.62),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        AppSurface(
-          padding: const EdgeInsets.all(16),
-          variant: AppSurfaceVariant.glass,
-          glassDensity: AppSurfaceGlassDensity.high,
-          backdropBehavior: AppSurfaceBackdropBehavior.preferStableGlass,
-          child: Column(
-            children: List.generate(children.length * 2 - 1, (index) {
-              if (index.isOdd) {
-                return Divider(
-                  height: 24,
-                  color: scheme.outlineVariant.withValues(alpha: 0.72),
-                );
-              }
-              return children[index ~/ 2];
-            }),
-          ),
-        ),
-      ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Divider(height: 1, color: separatorColor),
+          for (var index = 0; index < children.length; index++) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              child: children[index],
+            ),
+            if (index != children.length - 1)
+              Divider(height: 1, color: separatorColor),
+          ],
+        ],
+      ),
     );
   }
 }

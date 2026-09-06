@@ -1,31 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/component/album_artwork_hero.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/album_context_menu.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 
 class AlbumGridTile extends StatefulWidget {
   const AlbumGridTile({
     super.key,
     required this.album,
-    required this.onTap,
+    this.onTap,
+    this.enableHero = true,
   });
 
   final Album album;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool enableHero;
 
   @override
   State<AlbumGridTile> createState() => _AlbumGridTileState();
 }
 
 class _AlbumGridTileState extends State<AlbumGridTile> {
+  final Object _heroSourceKey = Object();
   bool _hovering = false;
+
+  Future<void> _handleTap() async {
+    final tag = widget.enableHero ? albumArtworkHeroTag(widget.album) : null;
+    final navigation = AppNavigationState.instance;
+    if (tag != null) {
+      navigation.beginArtworkHeroNavigation(
+        tag: tag,
+        sourceKey: _heroSourceKey,
+      );
+    }
+
+    try {
+      if (!mounted) return;
+      if (widget.onTap != null) {
+        widget.onTap!();
+      } else {
+        await context.push(app_paths.ALBUM_DETAIL_PAGE, extra: widget.album);
+      }
+    } finally {
+      navigation.endArtworkHeroNavigation(_heroSourceKey);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final motion = context.motion;
     final isDark = scheme.brightness == Brightness.dark;
 
     return AlbumContextMenu(
@@ -34,38 +62,37 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
         onEnter: (_) => setState(() => _hovering = true),
         onExit: (_) => setState(() => _hovering = false),
         child: CpMotionPressable(
-          onTap: widget.onTap,
+          onTap: _handleTap,
+          hoverScale: 1.025,
+          pressScale: 0.96,
+          border: false,
           onSecondaryTapDown: (details) =>
               controller.open(position: details.localPosition),
-          child: AnimatedScale(
-            scale: _hovering ? 1.035 : 1.0,
-            duration: motion.microInteractionDuration,
-            curve: motion.fast,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  // 悬停时多层弥散软阴影
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: _hovering
-                          ? (isDark ? 0.42 : 0.16)
-                          : (isDark ? 0.18 : 0.06),
-                    ),
-                    blurRadius: _hovering ? 24 : 12,
-                    offset: Offset(0, _hovering ? 8 : 4),
-                    spreadRadius: _hovering ? -2 : -4,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                // 悬停时多层弥散软阴影
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: _hovering
+                        ? (isDark ? 0.42 : 0.16)
+                        : (isDark ? 0.18 : 0.06),
                   ),
-                  if (_hovering)
-                    BoxShadow(
-                      color: context.accents.accentGlow.withValues(
-                        alpha: isDark ? 0.15 : 0.08,
-                      ),
-                      blurRadius: 16,
-                      spreadRadius: -4,
+                  blurRadius: _hovering ? 24 : 12,
+                  offset: Offset(0, _hovering ? 8 : 4),
+                  spreadRadius: _hovering ? -2 : -4,
+                ),
+                if (_hovering)
+                  BoxShadow(
+                    color: context.accents.accentGlow.withValues(
+                      alpha: isDark ? 0.15 : 0.08,
                     ),
-                ],
-              ),
+                    blurRadius: 16,
+                    spreadRadius: -4,
+                  ),
+              ],
+            ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,6 +102,8 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                     child: _AlbumCover(
                       album: widget.album,
                       hovering: _hovering,
+                      enableHero: widget.enableHero,
+                      heroSourceKey: _heroSourceKey,
                     ),
                   ),
                   Padding(
@@ -109,8 +138,7 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -118,10 +146,14 @@ class _AlbumCover extends StatelessWidget {
   const _AlbumCover({
     required this.album,
     required this.hovering,
+    required this.enableHero,
+    required this.heroSourceKey,
   });
 
   final Album album;
   final bool hovering;
+  final bool enableHero;
+  final Object heroSourceKey;
 
   @override
   Widget build(BuildContext context) {
@@ -156,16 +188,58 @@ class _AlbumCover extends StatelessWidget {
 
         if (provider == null) return placeholder;
 
+        final artworkImage = ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image(
+            image: provider,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => placeholder,
+          ),
+        );
+
+        final tag = albumArtworkHeroTag(album);
+        final heroArtwork = (!enableHero || tag == null)
+            ? artworkImage
+            : ValueListenableBuilder<ArtworkHeroTransition?>(
+                valueListenable:
+                    AppNavigationState.instance.artworkHeroTransition,
+                child: artworkImage,
+                builder: (context, _, child) {
+                  final navigation = AppNavigationState.instance;
+                  if (!navigation.canBuildArtworkHero(
+                    tag: tag,
+                    sourceKey: heroSourceKey,
+                  )) {
+                    return child!;
+                  }
+
+                  return Hero(
+                    tag: tag,
+                    transitionOnUserGestures: true,
+                    flightShuttleBuilder: (
+                      flightContext,
+                      animation,
+                      flightDirection,
+                      fromHeroContext,
+                      toHeroContext,
+                    ) {
+                      final toHero = toHeroContext.widget as Hero;
+                      return Material(
+                        type: MaterialType.transparency,
+                        child: toHero.child,
+                      );
+                    },
+                    child: child!,
+                  );
+                },
+              );
+
         return ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image(
-                image: provider,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => placeholder,
-              ),
+              heroArtwork,
               // 悬浮时的顶部到暗底渐变遮罩
               AnimatedOpacity(
                 opacity: hovering ? 1.0 : 0.0,

@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
@@ -157,33 +157,48 @@ class _PlaylistViewItem extends StatelessWidget {
     final playbackService = context.read<PlaybackController>();
     final item = playbackService.playlist.value[index];
     final scheme = Theme.of(context).colorScheme;
-    final accents = context.accents;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final motion = context.motion;
     final isPlaying = context.select<PlaybackController, bool>(
       (service) => service.playerState == PlayerState.playing,
     );
 
+    final isHighlight = isCurrent;
+    final Color targetBgColor = isHighlight
+        ? scheme.primary.withValues(alpha: isDark ? 0.16 : 0.10)
+        : Colors.transparent;
+    final Color targetBorderColor = isHighlight
+        ? scheme.primary.withValues(alpha: isDark ? 0.38 : 0.28)
+        : Colors.transparent;
+
     final itemTile = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: AnimatedContainer(
         duration: motion.listTransitionDuration,
         curve: motion.normal,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: isCurrent
-              ? accents.selectionTint.withValues(alpha: 0.95)
-              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          color: targetBgColor,
           border: Border.all(
-            color: isCurrent
-                ? accents.accent.withValues(alpha: 0.24)
-                : Colors.transparent,
+            color: targetBorderColor,
+            width: 1.0,
           ),
+          boxShadow: isHighlight
+              ? [
+                  BoxShadow(
+                    color:
+                        scheme.primary.withValues(alpha: isDark ? 0.12 : 0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
             enableFeedback: false,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             onTap: () => playbackService.playIndexOfPlaylist(index),
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -208,10 +223,11 @@ class _PlaylistViewItem extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: scheme.onSurface,
+                            color:
+                                isCurrent ? scheme.primary : scheme.onSurface,
                             fontSize: dense ? 13 : 14,
                             fontWeight:
-                                isCurrent ? FontWeight.w700 : FontWeight.w600,
+                                isCurrent ? FontWeight.w700 : FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -220,7 +236,9 @@ class _PlaylistViewItem extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.58),
+                            color: isCurrent
+                                ? scheme.primary.withValues(alpha: 0.80)
+                                : scheme.onSurface.withValues(alpha: 0.58),
                             fontSize: dense ? 11 : 12,
                             fontWeight: FontWeight.w400,
                           ),
@@ -236,7 +254,9 @@ class _PlaylistViewItem extends StatelessWidget {
                         child: Icon(
                           Icons.drag_indicator_rounded,
                           size: dense ? 18 : 20,
-                          color: scheme.onSurface.withValues(alpha: 0.42),
+                          color: isCurrent
+                              ? scheme.primary.withValues(alpha: 0.6)
+                              : scheme.onSurface.withValues(alpha: 0.42),
                         ),
                       ),
                     ),
@@ -342,26 +362,16 @@ class _PlaylistWaveformPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final heights = [
-      8.0 + (active ? 8.0 * (0.5 + 0.5 * progress) : 0.0),
-      12.0 + (active ? 10.0 * (0.5 + 0.5 * (1 - progress)) : 0.0),
-      7.0 +
-          (active
-              ? 9.0 *
-                  (0.5 +
-                      0.5 *
-                          (0.5 +
-                              0.5 *
-                                  (progress < 0.5
-                                      ? progress * 2
-                                      : (1 - progress) * 2)))
-              : 0.0),
+      active ? (6.0 + 8.0 * (0.5 + 0.5 * (1.0 + (0.5 * (1.0 + (progress * 2 % 1.0)))))) : 5.0,
+      active ? (8.0 + 12.0 * (0.5 + 0.5 * (1.0 - (progress > 0.5 ? 1.0 - progress : progress) * 2))) : 10.0,
+      active ? (6.0 + 9.0 * (0.5 + 0.5 * (progress < 0.5 ? progress * 2 : (1.0 - progress) * 2))) : 7.0,
     ];
-    const barWidth = 4.0;
+    const barWidth = 3.5;
     final gap = (size.width - barWidth * heights.length) / (heights.length - 1);
     final paint = Paint()..color = active ? activeColor : inactiveColor;
 
     for (var index = 0; index < heights.length; index++) {
-      final height = heights[index].clamp(0.0, size.height).toDouble();
+      final height = heights[index].clamp(4.0, size.height).toDouble();
       final left = index * (barWidth + gap);
       final rect = Rect.fromLTWH(left, size.height - height, barWidth, height);
       canvas.drawRRect(

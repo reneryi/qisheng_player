@@ -39,8 +39,8 @@ class SpectrumProgressSlider extends StatefulWidget {
 
 class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
   bool _dragging = false;
-  bool _hovering = false;
-  double _pointerPercent = 0;
+  late final ValueNotifier<double> _pointerNotifier;
+  late final ValueNotifier<bool> _hoverNotifier;
   // 声明 FocusNode 以支持桌面端全键盘导航与快捷寻道
   late final FocusNode _focusNode;
 
@@ -49,11 +49,15 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
   @override
   void initState() {
     super.initState();
+    _pointerNotifier = ValueNotifier<double>(0.0);
+    _hoverNotifier = ValueNotifier<bool>(false);
     _focusNode = FocusNode(debugLabel: 'spectrum-progress-slider');
   }
 
   @override
   void dispose() {
+    _pointerNotifier.dispose();
+    _hoverNotifier.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -92,7 +96,7 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
 
   void _updatePointer(double localX, double width, {bool notify = true}) {
     final percent = _percentAt(localX, width);
-    setState(() => _pointerPercent = percent);
+    _pointerNotifier.value = percent;
     if (notify) widget.onChanged?.call(percent * widget.max);
   }
 
@@ -109,7 +113,7 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
 
   void _handleDragEnd() {
     if (!_dragging) return;
-    final value = _pointerPercent * widget.max;
+    final value = _pointerNotifier.value * widget.max;
     setState(() => _dragging = false);
     widget.onChangeEnd?.call(value);
   }
@@ -117,7 +121,7 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
   void _handleTap(TapUpDetails details, double width) {
     if (!_enabled) return;
     final percent = _percentAt(details.localPosition.dx, width);
-    setState(() => _pointerPercent = percent);
+    _pointerNotifier.value = percent;
     final value = percent * widget.max;
     widget.onChanged?.call(value);
     widget.onChangeEnd?.call(value);
@@ -126,11 +130,7 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
   @override
   Widget build(BuildContext context) {
     final max = widget.max.isFinite && widget.max > 0 ? widget.max : 1.0;
-    final progress = _dragging
-        ? _pointerPercent
-        : (widget.value / max).clamp(0.0, 1.0).toDouble();
-    final showTooltip = (_hovering || _dragging) && widget.max > 0;
-    final tooltipValue = _pointerPercent * widget.max;
+    final progress = (widget.value / max).clamp(0.0, 1.0).toDouble();
     final scheme = Theme.of(context).colorScheme;
 
     return LayoutBuilder(
@@ -154,108 +154,130 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
                 onKeyEvent: _handleKeyEvent,
                 child: Stack(
                   clipBehavior: Clip.none,
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onHorizontalDragStart: _enabled
-                        ? (details) => _handleDragStart(details, width)
-                        : null,
-                    onHorizontalDragUpdate: _enabled
-                        ? (details) => _handleDragUpdate(details, width)
-                        : null,
-                    onHorizontalDragEnd:
-                        _enabled ? (_) => _handleDragEnd() : null,
-                    onHorizontalDragCancel: _enabled ? _handleDragEnd : null,
-                    onTapUp: _enabled
-                        ? (details) => _handleTap(details, width)
-                        : null,
-                    child: MouseRegion(
-                      cursor: _enabled
-                          ? SystemMouseCursors.click
-                          : MouseCursor.defer,
-                      onHover: (details) {
-                        final percent =
-                            _percentAt(details.localPosition.dx, width);
-                        if (!_hovering || percent != _pointerPercent) {
-                          setState(() {
-                            _hovering = true;
-                            _pointerPercent = percent;
-                          });
-                        }
-                      },
-                      onExit: (_) => setState(() => _hovering = false),
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          size: Size(width, widget.height),
-                          isComplex: true,
-                          willChange: widget.spectrumActive,
-                          painter: SpectrumProgressPainter(
-                            spectrum: widget.spectrum,
-                            progress: progress,
-                            spectrumActive: widget.spectrumActive &&
-                                !MediaQuery.disableAnimationsOf(context),
-                            pointerPercent: _pointerPercent,
-                            emphasizePointer: _dragging,
-                            activeColor: scheme.primary,
-                            inactiveColor:
-                                scheme.onSurface.withValues(alpha: 0.18),
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragStart: _enabled
+                          ? (details) => _handleDragStart(details, width)
+                          : null,
+                      onHorizontalDragUpdate: _enabled
+                          ? (details) => _handleDragUpdate(details, width)
+                          : null,
+                      onHorizontalDragEnd:
+                          _enabled ? (_) => _handleDragEnd() : null,
+                      onHorizontalDragCancel: _enabled ? _handleDragEnd : null,
+                      onTapUp: _enabled
+                          ? (details) => _handleTap(details, width)
+                          : null,
+                      child: MouseRegion(
+                        cursor: _enabled
+                            ? SystemMouseCursors.click
+                            : MouseCursor.defer,
+                        onHover: (details) {
+                          final percent =
+                              _percentAt(details.localPosition.dx, width);
+                          _hoverNotifier.value = true;
+                          _pointerNotifier.value = percent;
+                        },
+                        onExit: (_) => _hoverNotifier.value = false,
+                        child: RepaintBoundary(
+                          child: ListenableBuilder(
+                            listenable: Listenable.merge([
+                              _pointerNotifier,
+                              _hoverNotifier,
+                            ]),
+                            builder: (context, _) {
+                              return CustomPaint(
+                                size: Size(width, widget.height),
+                                isComplex: true,
+                                willChange: widget.spectrumActive,
+                                painter: SpectrumProgressPainter(
+                                  spectrum: widget.spectrum,
+                                  progress: _dragging
+                                      ? _pointerNotifier.value
+                                      : progress,
+                                  spectrumActive: widget.spectrumActive &&
+                                      !MediaQuery.disableAnimationsOf(context),
+                                  pointerPercent: _pointerNotifier.value,
+                                  emphasizePointer: _dragging,
+                                  activeColor: scheme.primary,
+                                  inactiveColor:
+                                      scheme.onSurface.withValues(alpha: 0.18),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  if (showTooltip)
-                    Positioned(
-                      left: (_pointerPercent * width - 32)
-                          .clamp(0.0, math.max(0.0, width - 64)),
-                      bottom: widget.height + 6,
-                      child: IgnorePointer(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: scheme.surfaceContainer.withValues(
-                                  alpha: 0.82,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: scheme.outlineVariant.withValues(
-                                    alpha: 0.5,
+                    ListenableBuilder(
+                      listenable: Listenable.merge([
+                        _hoverNotifier,
+                        _pointerNotifier,
+                      ]),
+                      builder: (context, _) {
+                        final showTooltip =
+                            (_hoverNotifier.value || _dragging) &&
+                                widget.max > 0;
+                        if (!showTooltip) return const SizedBox.shrink();
+
+                        final pointerPercent = _pointerNotifier.value;
+                        final tooltipValue = pointerPercent * widget.max;
+
+                        return Positioned(
+                          left: (pointerPercent * width - 32)
+                              .clamp(0.0, math.max(0.0, width - 64)),
+                          bottom: widget.height + 6,
+                          child: IgnorePointer(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: scheme.surfaceContainer.withValues(
+                                      alpha: 0.82,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: scheme.outlineVariant.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              child: SizedBox(
-                                width: 64,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                  child: Text(
-                                    Duration(
-                                      milliseconds:
-                                          (tooltipValue * 1000).round(),
-                                    ).toStringHMMSS(),
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: scheme.onSurface,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
+                                  child: SizedBox(
+                                    width: 64,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      child: Text(
+                                        Duration(
+                                          milliseconds:
+                                              (tooltipValue * 1000).round(),
+                                        ).toStringHMMSS(),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: scheme.onSurface,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
       },
     );
   }
@@ -280,9 +302,16 @@ class SpectrumProgressPainter extends CustomPainter {
   final Color activeColor;
   final Color inactiveColor;
 
+  // 复用 Paint 实例，消除每一帧（60fps）内部循环创建数十个 Paint 造成的严重 GC 颠簸
+  final Paint _activePaint = Paint();
+  final Paint _inactivePaint = Paint();
+
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
+    _activePaint.color = activeColor;
+    _inactivePaint.color = inactiveColor;
+
     final normalizedProgress = progress.clamp(0.0, 1.0);
     final values = spectrum.value;
     final hasSpectrum = spectrumActive &&
@@ -301,7 +330,7 @@ class SpectrumProgressPainter extends CustomPainter {
       ),
       const Radius.circular(1),
     );
-    canvas.drawRRect(rail, Paint()..color = inactiveColor);
+    canvas.drawRRect(rail, _inactivePaint);
 
     const gap = 1.5;
     final maxBars = math.max(1, ((size.width + gap) / 3.5).floor());
@@ -323,14 +352,14 @@ class SpectrumProgressPainter extends CustomPainter {
       height = height.clamp(2.0, maxHeight);
       final x = index * (barWidth + gap);
       final barProgress = barCount == 1 ? 0.0 : index / (barCount - 1);
-      final color =
-          barProgress <= normalizedProgress ? activeColor : inactiveColor;
+      final paint =
+          barProgress <= normalizedProgress ? _activePaint : _inactivePaint;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(x, centerY - height / 2, barWidth, height),
           Radius.circular(barWidth / 2),
         ),
-        Paint()..color = color,
+        paint,
       );
     }
   }
@@ -344,7 +373,7 @@ class SpectrumProgressPainter extends CustomPainter {
       ),
       const Radius.circular(1),
     );
-    canvas.drawRRect(track, Paint()..color = inactiveColor);
+    canvas.drawRRect(track, _inactivePaint);
     if (normalizedProgress <= 0) return;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
@@ -356,7 +385,7 @@ class SpectrumProgressPainter extends CustomPainter {
         ),
         const Radius.circular(1),
       ),
-      Paint()..color = activeColor,
+      _activePaint,
     );
   }
 

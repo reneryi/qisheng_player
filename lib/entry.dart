@@ -1,14 +1,15 @@
-import 'dart:async';
-
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/component/fluid_gradient_background.dart';
 import 'package:qisheng_player/component/app_shell.dart';
+import 'package:qisheng_player/component/now_playing_shell_underlay.dart';
+export 'package:qisheng_player/component/now_playing_shell_underlay.dart';
 import 'package:qisheng_player/page/album_detail_page.dart';
 import 'package:qisheng_player/page/albums_page.dart';
 import 'package:qisheng_player/page/artist_detail_page.dart';
 import 'package:qisheng_player/page/artists_page.dart';
 import 'package:qisheng_player/component/window_resize_frame.dart';
+import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
 import 'package:qisheng_player/page/audio_detail_page.dart';
 import 'package:qisheng_player/page/audios_page.dart';
 import 'package:qisheng_player/page/folder_detail_page.dart';
@@ -56,8 +57,8 @@ Widget _buildAppRouteTransition(
   );
   final contentReveal = CurvedAnimation(
     parent: animation,
-    curve: const Interval(0.08, 0.92, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.74, curve: Curves.easeInCubic),
+    curve: const Interval(0.0, 1.0, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 1.0, curve: Curves.easeInCubic),
   );
   final secondaryCurvedAnim = CurvedAnimation(
     parent: secondaryAnimation,
@@ -66,8 +67,10 @@ Widget _buildAppRouteTransition(
   );
   final outgoingContent = CurvedAnimation(
     parent: secondaryAnimation,
-    curve: const Interval(0.0, 0.9, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.78, curve: Curves.easeInCubic),
+    // 旧页面在新页面覆盖到中段前完成退场，避免半透明详情面板中
+    // 继续看到旧列表的头像、文字和卡片轮廓。
+    curve: const Interval(0.0, 0.72, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 0.72, curve: Curves.easeInCubic),
   );
   final transitionedChild = provideNowPlayingScope
       ? NowPlayingRouteTransitionScope(animation: curvedAnim, child: child)
@@ -75,185 +78,136 @@ Widget _buildAppRouteTransition(
 
   return FadeTransition(
     opacity: Tween<double>(begin: 0.0, end: 1.0).animate(contentReveal),
-    child: SlideTransition(
-      position: Tween<Offset>(
-        begin: const Offset(0, 0.02), // 极细腻的 2% 垂直微位移，保证桌面端文字清晰与沉稳
-        end: Offset.zero,
-      ).animate(contentReveal),
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.99, end: 1.0).animate(contentReveal), // 0.99 微缩放展开
-        child: ListenableBuilder(
-          listenable: AppNavigationState.instance,
-          builder: (context, _) {
-            final isNowPlayingAbove =
-                AppNavigationState.instance.nowPlayingPageActive;
-            return AnimatedBuilder(
-              animation: secondaryCurvedAnim,
-              child: transitionedChild,
-              builder: (context, child) {
-                final progress = secondaryCurvedAnim.value;
-                final outgoingProgress = outgoingContent.value;
+    child: ListenableBuilder(
+      listenable: AppNavigationState.instance,
+      builder: (context, _) {
+        final isNowPlayingAbove =
+            AppNavigationState.instance.nowPlayingPageActive;
+        return AnimatedBuilder(
+          animation: secondaryCurvedAnim,
+          child: transitionedChild,
+          builder: (context, child) {
+            final progress = secondaryCurvedAnim.value;
+            final outgoingProgress = outgoingContent.value;
 
-                if (isNowPlayingAbove) {
-                  final underlayOpacity = 1.0 -
-                      const Interval(
-                        0.0,
-                        0.48,
-                        curve: Curves.easeOutCubic,
-                      ).transform(secondaryAnimation.value);
-                  return IgnorePointer(
-                    key: const ValueKey('now-playing-underlay-pointer'),
-                    ignoring: progress > 0.001,
-                    child: TickerMode(
-                      enabled: underlayOpacity > 0.001,
-                      child: Opacity(
-                        key: const ValueKey('now-playing-underlay-opacity'),
-                        opacity: underlayOpacity.clamp(0.0, 1.0),
-                        child: child,
-                      ),
+            if (isNowPlayingAbove) {
+              final underlayFactor = const Interval(
+                0.0,
+                0.48,
+                curve: Curves.easeOutCubic,
+              ).transform(secondaryAnimation.value);
+              final underlayScale = 1.0 - 0.04 * underlayFactor;
+              final underlayOpacity = 1.0 - underlayFactor;
+              return IgnorePointer(
+                key: const ValueKey('now-playing-underlay-pointer'),
+                ignoring: progress > 0.001,
+                child: Transform.scale(
+                  key: const ValueKey('now-playing-underlay-scale'),
+                  scale: underlayScale.clamp(0.96, 1.0),
+                  child: TickerMode(
+                    enabled: underlayOpacity > 0.001,
+                    child: Opacity(
+                      key: const ValueKey('now-playing-underlay-opacity'),
+                      opacity: underlayOpacity.clamp(0.0, 1.0),
+                      child: child,
                     ),
-                  );
-                } else {
-                  // 普通的二级跳转折叠退场效果：移除高开销的 ImageFiltered 高斯模糊，采用纯粹平滑的淡出与微量沉降
-                  return Opacity(
-                    // 直接平滑淡出归零 (1.0 - outgoingProgress)，确保旧页面在完全被覆盖前已彻底透明
-                    opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
-                    child: Transform.translate(
-                      offset: Offset(0, 8.0 * outgoingProgress), // 轻柔自然的 8.0 像素下沉位移
-                      child: Transform.scale(
-                        scale: 1.0 - 0.008 * outgoingProgress,
-                        child: child,
-                      ),
-                    ),
-                  );
-                }
-              },
-            );
+                  ),
+                ),
+              );
+            } else {
+              // 侧栏页面与详情子路由的层级过渡：旧页面完整淡出，
+              // 让半透明的新详情面板不会把旧内容叠在上面。
+              return Transform.translate(
+                offset: Offset(-12.0 * outgoingProgress, 0),
+                child: Opacity(
+                  opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
+                  child: child,
+                ),
+              );
+            }
           },
-        ),
-      ),
+        );
+      },
     ),
   );
 }
 
-// 专为播放详情页设计的全屏沉浸渐显转场：
-// 页面背景与文字控件原地丝滑淡入 + 极微量中心展开 (0.985 -> 1.0)，
-// 将核心运动焦点完全交给封面 Hero 元素无缝过渡，彻底消除双重位移加速度冲突。
+// 专为播放详情页设计的全屏沉浸抽屉转场：
+// 页面自下而上丝滑升起进入，退出时整页平滑向下滑出（对齐 v1.3.2 饱受好评的实体质感），
+// 核心封面通过 Hero 在 Overlay 保持独立平滑飞行，实现极其柔和自然的空间动效。
 Widget _buildNowPlayingRouteTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
   Widget child,
 ) {
-  final curvedAnim = CurvedAnimation(
+  // 采用现代三次贝塞尔曲线，入场柔和减速，退场顺畅滑走
+  final slideAnim = CurvedAnimation(
     parent: animation,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
+    curve: const Cubic(0.2, 0.9, 0.2, 1.0),
+    reverseCurve: const Cubic(0.2, 0.0, 0.3, 1.0),
   );
 
-  // 包裹 NowPlayingRouteTransitionScope，以便让播放详情页中的渐显元素（如歌词、AppBar 等）能获取到入场动画进度并联动
+  // 包裹 NowPlayingRouteTransitionScope，以便详情页子组件获取动画状态
   final transitionedChild = NowPlayingRouteTransitionScope(
-    animation: curvedAnim,
+    animation: slideAnim,
     child: child,
   );
 
-  return FadeTransition(
-    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnim),
-    child: ScaleTransition(
-      scale: Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnim),
-      child: transitionedChild,
-    ),
+  return SlideTransition(
+    position: Tween<Offset>(
+      begin: const Offset(0.0, 1.0),
+      end: Offset.zero,
+    ).animate(slideAnim),
+    child: transitionedChild,
   );
 }
 
+// 内容详情页（艺术家/专辑/歌曲信息/文件夹/歌单）覆盖式淡入转场。
+// 详情页自身只承担一套轻量位移与淡入，旧页面的退场由其 secondaryAnimation
+// 完整驱动，避免 AppShell 和嵌套路由同时移动同一棵页面树。
 Widget _buildDetailRouteTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
   Widget child,
 ) {
-  // 使用二次方渐进缓动曲线
   final curvedAnim = CurvedAnimation(
     parent: animation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
+  final secondaryCurvedAnim = CurvedAnimation(
+    parent: secondaryAnimation,
+    curve: const Interval(0.0, 0.72, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 0.72, curve: Curves.easeInCubic),
+  );
 
-  return FadeTransition(
-    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnim),
-    child: ScaleTransition(
-      // 极轻微的原地中心膨胀缩放，完美配合 Hero 共享元素的飞跃落点
-      scale: Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnim),
+  final outgoingChild = FadeTransition(
+    key: const ValueKey('detail-route-outgoing-opacity'),
+    opacity: Tween<double>(begin: 1.0, end: 0.0).animate(secondaryCurvedAnim),
+    child: SlideTransition(
+      position: Tween<Offset>(
+        begin: Offset.zero,
+        end: const Offset(-0.018, 0.0),
+      ).animate(secondaryCurvedAnim),
       child: child,
     ),
   );
-}
 
-class NowPlayingShellUnderlay extends StatefulWidget {
-  const NowPlayingShellUnderlay({
-    super.key,
-    required this.child,
-  });
-
-  final Widget child;
-
-  @override
-  State<NowPlayingShellUnderlay> createState() =>
-      _NowPlayingShellUnderlayState();
-}
-
-class _NowPlayingShellUnderlayState extends State<NowPlayingShellUnderlay> {
-  static const _fadeDuration = Duration(milliseconds: 220);
-  static const _exitRevealDelay = Duration(milliseconds: 120);
-
-  Timer? _revealTimer;
-  late bool _hidden;
-
-  @override
-  void initState() {
-    super.initState();
-    final navigation = AppNavigationState.instance;
-    _hidden = navigation.nowPlayingPageActive;
-    navigation.addListener(_handleNavigationChange);
-  }
-
-  void _handleNavigationChange() {
-    final active = AppNavigationState.instance.nowPlayingPageActive;
-    _revealTimer?.cancel();
-    if (active) {
-      if (!_hidden && mounted) setState(() => _hidden = true);
-      return;
-    }
-    _revealTimer = Timer(_exitRevealDelay, () {
-      if (!mounted || !_hidden) return;
-      setState(() => _hidden = false);
-    });
-  }
-
-  @override
-  void dispose() {
-    AppNavigationState.instance.removeListener(_handleNavigationChange);
-    _revealTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      key: const ValueKey('now-playing-shell-underlay-pointer'),
-      ignoring: _hidden,
-      child: AnimatedOpacity(
-        key: const ValueKey('now-playing-shell-underlay-opacity'),
-        opacity: _hidden ? 0 : 1,
-        duration: _fadeDuration,
-        curve: _hidden ? Curves.easeOutCubic : Curves.easeInOutCubic,
-        child: TickerMode(
-          enabled: !_hidden,
-          child: widget.child,
-        ),
-      ),
-    );
-  }
+  return SlideTransition(
+    position: Tween<Offset>(
+      begin: const Offset(0.035, 0.0),
+      end: Offset.zero,
+    ).animate(curvedAnim),
+    child: FadeTransition(
+      key: const ValueKey('detail-route-incoming-opacity'),
+      // 先以少量可见度覆盖旧页面，再平滑完成显现，避免首帧空洞或
+      // 半透明 surface 把旧列表直接“印”到新页面上。
+      opacity: Tween<double>(begin: 0.12, end: 1.0).animate(curvedAnim),
+      child: outgoingChild,
+    ),
+  );
 }
 
 class DetailTransitionPage<T> extends CustomTransitionPage<T> {
@@ -265,8 +219,7 @@ class DetailTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration:
-              const Duration(milliseconds: 400), // 给 Hero 飞行留出舒缓平顺的 400ms 时间
+          transitionDuration: const Duration(milliseconds: 400),
           reverseTransitionDuration: const Duration(milliseconds: 320),
         );
 
@@ -294,10 +247,8 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(
-              milliseconds: 520), // 延长至 520ms 以便给共享元素 Hero 动画提供充分舒展的飞行时间
-          reverseTransitionDuration:
-              const Duration(milliseconds: 380), // 延长至 380ms
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 220),
         );
 
   static Widget _transitionsBuilder(
@@ -324,11 +275,10 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(
-              milliseconds: 520), // 统一设置为 520ms 供共享 Hero 元素充分展开，并通过测试
-          reverseTransitionDuration:
-              const Duration(milliseconds: 380), // 统一设置为 380ms 并通过测试
-          opaque: false, // 极为关键：允许底层被缩小的页面透过来呈现景深层叠效果
+          transitionDuration: const Duration(milliseconds: 520),
+          reverseTransitionDuration: const Duration(milliseconds: 450),
+          opaque: false, // 允许底层呈现平滑淡出与 Hero 连续飞跃
+          barrierColor: Colors.transparent, // 杜绝模态层级黑色遮罩，确保背景纯净通透
         );
 
   static Widget _transitionsBuilder(
@@ -406,13 +356,20 @@ class Entry extends StatelessWidget {
               final routedChild = WindowResizeFrame(
                 child: child ?? const SizedBox.shrink(),
               );
-              return shadcn.Theme(
-                data: shadcnTheme,
-                child: StartupUpdatePrompt(
-                  child: Listener(
-                    onPointerDown: HotkeysHelper.handlePointerDown,
-                    // 挂载全局流体情感交融背景，让其充满在所有窗口最底层
-                    child: FluidGradientBackground(child: routedChild),
+              return AnimatedTheme(
+                data: materialTheme,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeInOutCubic,
+                child: shadcn.Theme(
+                  data: shadcnTheme,
+                  child: StartupUpdatePrompt(
+                    child: Listener(
+                      onPointerDown: HotkeysHelper.handlePointerDown,
+                      // 挂载全局流体情感交融背景与全局辅助功能保护
+                      child: WindowsAccessibilityTooltipGuard(
+                        child: FluidGradientBackground(child: routedChild),
+                      ),
+                    ),
                   ),
                 ),
               );

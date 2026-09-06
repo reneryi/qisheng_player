@@ -73,31 +73,34 @@ List<Widget> buildAlbumContextMenuChildren(
       child: const Text('追加到队列'),
     ),
     SubmenuButton(
-      menuChildren: [
-        if (works.isEmpty || PLAYLISTS.isEmpty)
-          MenuItemButton(
-            onPressed: null,
-            child: Text(works.isEmpty ? '暂无歌曲' : '暂无歌单'),
-          )
-        else
-          ...PLAYLISTS.map(
-            (playlist) => MenuItemButton(
-              onPressed: () {
-                var added = 0;
-                for (final audio in works) {
-                  if (playlist.addAudio(audio)) added++;
-                }
-                showTextOnSnackBar(
-                  added == 0
-                      ? '专辑歌曲已全部在歌单「${playlist.name}」中'
-                      : '已添加 $added 首歌曲到歌单「${playlist.name}」',
-                );
-              },
-              leadingIcon: const Icon(Symbols.queue_music),
-              child: Text(playlist.name),
+      menuChildren: animatedMenuChildren(
+        context,
+        [
+          if (works.isEmpty || PLAYLISTS.isEmpty)
+            MenuItemButton(
+              onPressed: null,
+              child: Text(works.isEmpty ? '暂无歌曲' : '暂无歌单'),
+            )
+          else
+            ...PLAYLISTS.map(
+              (playlist) => MenuItemButton(
+                onPressed: () {
+                  var added = 0;
+                  for (final audio in works) {
+                    if (playlist.addAudio(audio)) added++;
+                  }
+                  showTextOnSnackBar(
+                    added == 0
+                        ? '专辑歌曲已全部在歌单「${playlist.name}」中'
+                        : '已添加 $added 首歌曲到歌单「${playlist.name}」',
+                  );
+                },
+                leadingIcon: const Icon(Symbols.queue_music),
+                child: Text(playlist.name),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
       child: const Text('添加到歌单'),
     ),
     MenuItemButton(
@@ -107,18 +110,21 @@ List<Widget> buildAlbumContextMenuChildren(
     ),
     if (album.artistsMap.isNotEmpty)
       SubmenuButton(
-        menuChildren: album.artistsMap.values
-            .map(
-              (artist) => MenuItemButton(
-                onPressed: () => context.push(
-                  app_paths.ARTIST_DETAIL_PAGE,
-                  extra: artist,
+        menuChildren: animatedMenuChildren(
+          context,
+          album.artistsMap.values
+              .map(
+                (artist) => MenuItemButton(
+                  onPressed: () => context.push(
+                    app_paths.ARTIST_DETAIL_PAGE,
+                    extra: artist,
+                  ),
+                  leadingIcon: const Icon(Symbols.artist),
+                  child: Text(artist.name),
                 ),
-                leadingIcon: const Icon(Symbols.artist),
-                child: Text(artist.name),
-              ),
-            )
-            .toList(),
+              )
+              .toList(),
+        ),
         child: const Text('艺术家'),
       ),
     MenuItemButton(

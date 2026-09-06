@@ -106,19 +106,7 @@ class SideNav extends StatelessWidget {
                 ),
               ),
             );
-          case ScreenType.medium:
-            return SizedBox(
-              key: const ValueKey('side-nav-large'),
-              width: context.chrome.sideNavCollapsedWidth,
-              child: _SideNavShell(
-                collapsed: true,
-                expansionProgress: 0,
-                selected: selected,
-                onDestinationSelected: onDestinationSelected,
-                onToggleCollapsed: null,
-              ),
-            );
-          case ScreenType.large:
+          case ScreenType.medium || ScreenType.large:
             final progress =
                 (expansionProgress ?? (collapsed ? 0.0 : 1.0)).clamp(0.0, 1.0);
             return SizedBox(
@@ -181,12 +169,12 @@ class _SideNavShell extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Stack(
                   children: [
-                    // 统一管理的物理连续滑行药丸胶囊与指示条：切换项时平滑上下滑行并产生弹性吸附
+                    // 统一管理的物理连续滑行药丸胶囊与指示条：切换项时平滑上下滑行并产生丝滑柔和吸附
                     if (selected >= 0 && selected < destinations.length) ...[
                       // 背景滑动药丸
                       AnimatedPositioned(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
+                        duration: const Duration(milliseconds: 380),
+                        curve: const Cubic(0.22, 1.0, 0.36, 1.0),
                         left: 0,
                         right: 0,
                         top: selected * (48.0 + 6.0),
@@ -208,8 +196,8 @@ class _SideNavShell extends StatelessWidget {
                       ),
                       // 左侧吸附发光线
                       AnimatedPositioned(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
+                        duration: const Duration(milliseconds: 380),
+                        curve: const Cubic(0.22, 1.0, 0.36, 1.0),
                         left: 0,
                         top: selected * (48.0 + 6.0) + 15.0,
                         width: 3,
@@ -302,21 +290,35 @@ class _MetalNavIcon extends StatelessWidget {
     super.key,
     required this.icon,
     required this.selected,
+    this.hovered = false,
   });
 
   final IconData icon;
   final bool selected;
+  final bool hovered;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
-    // 极简图标设计：直接根据选中状态输出纯色，去除了渐变遮罩和大面积光晕
-    return Icon(
-      icon,
-      size: 21,
-      color:
-          selected ? accents.accent : scheme.onSurface.withValues(alpha: 0.52),
+    final targetColor = selected
+        ? accents.accent
+        : (hovered
+            ? scheme.onSurface
+            : scheme.onSurface.withValues(alpha: 0.55));
+
+    // 使用颜色补间实现选中与未选中、悬停时的丝滑柔和色彩呼吸过渡
+    return TweenAnimationBuilder<Color?>(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      tween: ColorTween(end: targetColor),
+      builder: (context, color, _) {
+        return Icon(
+          icon,
+          size: 21,
+          color: color,
+        );
+      },
     );
   }
 }
@@ -351,15 +353,21 @@ class _SideNavItemState extends State<_SideNavItem> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
-    final motion = context.motion;
     final isDark = scheme.brightness == Brightness.dark;
 
     // 悬浮与选中色彩交互：选中项的背景由外层连续滑行药丸呈现，自身在非选中且悬浮时呈现微光高亮
     final highlightColor = (!widget.selected && (_hovered || _focused))
         ? (isDark
-            ? Colors.white.withValues(alpha: 0.045)
-            : Colors.black.withValues(alpha: 0.03))
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.035))
         : Colors.transparent;
+
+    // 悬浮与选中文字颜色：平滑联动
+    final targetTextColor = widget.selected
+        ? accents.accent
+        : (_hovered || _focused
+            ? scheme.onSurface
+            : scheme.onSurface.withValues(alpha: 0.72));
 
     final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -372,15 +380,17 @@ class _SideNavItemState extends State<_SideNavItem> {
         onTapUp: (_) => setState(() => _pressed = false),
         onTapCancel: () => setState(() => _pressed = false),
         child: AnimatedScale(
+          // 彻底去除悬停时的放大（scale 1.02 是导致文字亚像素颤动和边界抖动的元凶）
+          // 仅在真实按下时给予极细腻自然的物理触觉微缩放（0.985）
           scale: _pressed ? 0.985 : 1.0,
-          duration: motion.microInteractionDuration,
-          curve: motion.fast,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
           child: AnimatedContainer(
-            duration: motion.controlTransitionDuration,
-            curve: motion.normal,
-            height: 48, // 从 58 调矮至 48，更加简洁干练
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            height: 48, // 简洁干练的 48px 高度
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12), // 更加挺拔的 12px 圆角
+              borderRadius: BorderRadius.circular(12),
               color: highlightColor,
             ),
             child: Material(
@@ -397,12 +407,12 @@ class _SideNavItemState extends State<_SideNavItem> {
                   child: _SideNavItemContent(
                     expansionProgress: widget.expansionProgress,
                     selected: widget.selected,
+                    hovered: _hovered || _focused,
                     icon: widget.destination.icon,
                     label: widget.destination.label,
                     iconKey: widget.destination.desPath,
                     centerIcon: widget.centerIcon,
-                    textColor:
-                        widget.selected ? accents.accent : scheme.onSurface,
+                    textColor: targetTextColor,
                   ),
                 ),
               ),
@@ -426,6 +436,7 @@ class _SideNavItemContent extends StatelessWidget {
     required this.iconKey,
     required this.centerIcon,
     required this.textColor,
+    this.hovered = false,
   });
 
   final double expansionProgress;
@@ -435,6 +446,7 @@ class _SideNavItemContent extends StatelessWidget {
   final String iconKey;
   final bool centerIcon;
   final Color textColor;
+  final bool hovered;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +460,7 @@ class _SideNavItemContent extends StatelessWidget {
             key: ValueKey(icon),
             icon: icon,
             selected: selected,
+            hovered: hovered,
           ),
         ),
       );
@@ -468,6 +481,7 @@ class _SideNavItemContent extends StatelessWidget {
               key: ValueKey('side-nav-icon-$iconKey'),
               icon: icon,
               selected: selected,
+              hovered: hovered,
             ),
           ),
         ),
@@ -486,15 +500,19 @@ class _SideNavItemContent extends StatelessWidget {
                   child: Opacity(
                     key: ValueKey('side-nav-label-$iconKey'),
                     opacity: labelOpacity,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 15,
                         fontWeight:
                             selected ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),

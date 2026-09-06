@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/component/app_shell.dart';
+import 'package:qisheng_player/component/app_shell.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/app_preference.dart';
@@ -161,6 +161,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('切页动画测试'), findsOneWidget);
+    final routeContent = tester.element(find.text('切页动画测试'));
+    expect(
+      routeContent.findAncestorWidgetOfExactType<TweenAnimationBuilder>(),
+      isNull,
+    );
   });
 
   testWidgets(

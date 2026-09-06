@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/gestures.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_brand.dart';
@@ -228,28 +230,6 @@ class _TrackCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accents = context.accents;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(nowPlayingArtworkHeroRadius),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.12),
-            accents.accent.withValues(alpha: 0.08),
-          ],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Icon(
-        Symbols.music_note,
-        color: scheme.onSurface.withValues(alpha: 0.7),
-        size: size * 0.42,
-      ),
-    );
-
     return SizedBox(
       width: size,
       height: size,
@@ -257,62 +237,20 @@ class _TrackCover extends StatelessWidget {
         stream: context.read<PlaybackController>().playerStateStream,
         initialData: context.read<PlaybackController>().playerState,
         builder: (context, snapshot) {
-          final motion = context.motion;
           final spinning = snapshot.data == PlayerState.playing;
-          final artwork = audio == null
-              ? placeholder
-              : FutureBuilder<ImageProvider?>(
-                  future: audio!.cover,
-                  builder: (context, coverSnapshot) {
-                    final provider = coverSnapshot.data;
-                    final cover = provider == null
-                        ? placeholder
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              nowPlayingArtworkHeroRadius,
-                            ),
-                            child: Image(
-                              image: provider,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => placeholder,
-                            ),
-                          );
-
-                    return AnimatedSwitcher(
-                      duration: motion.controlTransitionDuration,
-                      switchInCurve: motion.normal,
-                      switchOutCurve: motion.fast,
-                      transitionBuilder: (child, animation) {
-                        final curved = CurvedAnimation(
-                          parent: animation,
-                          curve: motion.normal,
-                        );
-                        return FadeTransition(
-                          opacity: curved,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.96, end: 1)
-                                .animate(curved),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey('${audio!.path}:${provider.hashCode}'),
-                        child: cover,
-                      ),
-                    );
-                  },
-                );
-
-          final framedArtwork = NowPlayingArtworkHeroFrame(
-            child: RepaintBoundary(child: artwork),
+          final artworkCard = NowPlayingArtworkCard(
+            audio: audio,
+            coverProvider: NowPlayingArtworkCard.getSyncCover(audio),
+            radius: nowPlayingArtworkHeroRadius,
+            elevation: 0.8,
+            showShadow: false,
           );
 
           if (disableHero) {
             // 如果禁用 Hero，直接返回微呼吸动画子树，避免多 Hero 重复 Tag 冲突
             return SpinningArtwork(
               spinning: spinning,
-              child: framedArtwork,
+              child: artworkCard,
             );
           }
 
@@ -323,7 +261,7 @@ class _TrackCover extends StatelessWidget {
               createRectTween: (begin, end) =>
                   NowPlayingArtworkRectTween(begin: begin, end: end),
               flightShuttleBuilder: nowPlayingArtworkFlightShuttleBuilder,
-              child: framedArtwork,
+              child: artworkCard,
             ),
           );
         },
@@ -1251,19 +1189,24 @@ class _QueueEntryButton extends StatelessWidget {
 
   final bool dense;
 
-  // 优化：右侧滑出的半透明抽屉式浮层，不阻断全屏主流程，点击空白区域即可退出
+  // 优化：右侧滑出的高质感毛玻璃播放队列抽屉，带自适应半透明底色、高斯模糊与丝滑双向缓动
   Future<void> _openQueueDrawer(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final width = (size.width * 0.36).clamp(380.0, 520.0).toDouble();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: '播放队列',
-      barrierColor: Colors.black26,
-      transitionDuration: const Duration(milliseconds: 280),
+      barrierColor: isDark
+          ? Colors.black.withValues(alpha: 0.35)
+          : Colors.black.withValues(alpha: 0.18),
+      transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (context, anim1, anim2) {
         final scheme = Theme.of(context).colorScheme;
+        const blurSigma = 24.0;
+
         return Align(
           alignment: Alignment.centerRight,
           child: Material(
@@ -1272,44 +1215,103 @@ class _QueueEntryButton extends StatelessWidget {
               width: width,
               height: double.infinity,
               margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
-              child: CpSurface(
-                tone: CpSurfaceTone.floating,
-                radius: 24,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '播放队列',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: blurSigma,
+                    sigmaY: blurSigma,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      color: isDark
+                          ? Color.alphaBlend(
+                              scheme.primary.withValues(alpha: 0.08),
+                              const Color(0xFF131822).withValues(alpha: 0.82),
+                            )
+                          : Color.alphaBlend(
+                              scheme.primary.withValues(alpha: 0.04),
+                              Colors.white.withValues(alpha: 0.86),
                             ),
-                          ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [
+                                Colors.white.withValues(alpha: 0.06),
+                                scheme.primary.withValues(alpha: 0.03),
+                                Colors.transparent,
+                              ]
+                            : [
+                                Colors.white.withValues(alpha: 0.65),
+                                scheme.surfaceContainerLowest
+                                    .withValues(alpha: 0.4),
+                              ],
+                        stops: isDark ? const [0.0, 0.45, 1.0] : null,
+                      ),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black
+                              .withValues(alpha: isDark ? 0.42 : 0.12),
+                          blurRadius: 40,
+                          offset: const Offset(-8, 14),
+                          spreadRadius: -4,
                         ),
-                        CpIconButton(
-                          variant: CpButtonVariant.immersive,
-                          tooltip: '关闭',
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Symbols.close),
+                        BoxShadow(
+                          color: scheme.primary
+                              .withValues(alpha: isDark ? 0.12 : 0.05),
+                          blurRadius: 28,
+                          offset: const Offset(-2, 4),
+                          spreadRadius: -6,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    const Expanded(
-                      child: CurrentPlaylistView(
-                        showHeader: false,
-                        dense: true,
-                        enableReorder: true,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '播放队列',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              CpIconButton(
+                                variant: CpButtonVariant.immersive,
+                                tooltip: '关闭',
+                                onPressed: () => Navigator.pop(context),
+                                icon: const Icon(Symbols.close),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          const Expanded(
+                            child: CurrentPlaylistView(
+                              showHeader: false,
+                              dense: true,
+                              enableReorder: true,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1319,8 +1321,8 @@ class _QueueEntryButton extends StatelessWidget {
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
+          curve: const Cubic(0.16, 1.0, 0.3, 1.0),
+          reverseCurve: const Cubic(0.2, 0.0, 0.0, 1.0),
         );
         return SlideTransition(
           position: Tween<Offset>(

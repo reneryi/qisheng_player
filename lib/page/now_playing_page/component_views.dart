@@ -84,11 +84,12 @@ class _ImmersiveArtworkStage extends StatelessWidget {
         final availableWidth =
             constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
 
-        // 响应式自适应封面尺寸：根据宽高动态计算，保证大屏震撼、小屏精致
+        // 响应式自适应封面尺寸：保留下方信息区充足空间 (信息区约需 140px)
+        final maxCoverHeight = math.max(80.0, availableHeight - 140.0);
         final size = compact
-            ? (availableHeight * 0.44).clamp(80.0, 150.0).toDouble()
+            ? (availableHeight * 0.44).clamp(80.0, 160.0).toDouble()
             : math
-                .min(availableWidth * 0.74, availableHeight * 0.54)
+                .min(availableWidth * 0.76, maxCoverHeight)
                 .clamp(180.0, 380.0)
                 .toDouble();
 
@@ -98,9 +99,8 @@ class _ImmersiveArtworkStage extends StatelessWidget {
               const Positioned.fill(child: _ArtworkStageHitAbsorber()),
               Align(
                 alignment: compact ? Alignment.centerLeft : Alignment.center,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: compact ? Alignment.centerLeft : Alignment.center,
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: compact
@@ -109,30 +109,32 @@ class _ImmersiveArtworkStage extends StatelessWidget {
                     children: [
                       _NowPlayingArtwork(
                         size: size,
-                        radius: compact ? 14 : 24,
+                        radius: compact ? 16.0 : 24.0,
                         large: true,
                         showBackdropGlow: true,
                       ),
                       SizedBox(height: compact ? 10 : 20),
                       _NowPlayingStagedReveal(
-                        begin: 0.24,
-                        end: 0.68,
-                        beginOffset: const Offset(0, 0.06),
+                        begin: 0.10,
+                        end: 0.48,
+                        beginOffset: const Offset(0, 0.012),
                         child: _NowPlayingTrackIdentity(compact: compact),
                       ),
                       const SizedBox(height: 10),
                       // 极简音频参数胶囊标牌
                       const _NowPlayingStagedReveal(
-                        begin: 0.3,
-                        end: 0.75,
+                        begin: 0.14,
+                        end: 0.54,
+                        beginOffset: Offset(0, 0.01),
                         child: _ImmersiveMetadataStrip(),
                       ),
                       // 模块化实时音频频谱律动条
                       if (AppSettings.instance.showSpectrumVisualizer) ...[
                         const SizedBox(height: 12),
                         const _NowPlayingStagedReveal(
-                          begin: 0.35,
-                          end: 0.8,
+                          begin: 0.14,
+                          end: 0.54,
+                          beginOffset: Offset(0, 0.01),
                           child: _ImmersiveSpectrumBar(),
                         ),
                       ],
@@ -467,9 +469,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
-    final motion = context.motion;
     final effectsLevel = context.surfaces.effectsLevel;
 
     return Selector<PlaybackController, Audio?>(
@@ -488,59 +488,6 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
           future: future,
           builder: (context, snapshot) {
             final provider = snapshot.data;
-            final placeholder = DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(widget.radius),
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
-              child: Icon(
-                provider == null ? Symbols.music_note : Symbols.broken_image,
-                color: scheme.onSurface.withValues(alpha: 0.62),
-                size: widget.size * 0.24,
-              ),
-            );
-
-            Widget image(ImageProvider<Object> imageProvider) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(widget.radius),
-                child: Image(
-                  image: imageProvider,
-                  width: widget.size,
-                  height: widget.size,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => placeholder,
-                ),
-              );
-            }
-
-            final mainImage = provider == null ? placeholder : image(provider);
-            final imageKey = ValueKey(
-              '${audio?.path ?? 'empty'}:${provider.hashCode}:${widget.size.round()}',
-            );
-            final heroArtwork = NowPlayingArtworkHeroFrame(
-              child: RepaintBoundary(
-                child: AnimatedSwitcher(
-                  duration: motion.controlTransitionDuration,
-                  switchInCurve: motion.normal,
-                  switchOutCurve: motion.fast,
-                  transitionBuilder: (child, animation) {
-                    final curved = CurvedAnimation(
-                      parent: animation,
-                      curve: motion.normal,
-                    );
-                    return FadeTransition(
-                      opacity: curved,
-                      child: ScaleTransition(
-                        scale:
-                            Tween<double>(begin: 0.975, end: 1).animate(curved),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: KeyedSubtree(key: imageKey, child: mainImage),
-                ),
-              ),
-            );
             final motionEnabled = effectsLevel != UiEffectsLevel.performance &&
                 !MediaQuery.disableAnimationsOf(context);
             final shadowOffset = Offset(
@@ -548,38 +495,9 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
               7 + _dragOffset.dy * 0.45,
             );
 
-            final showVinyl = AppSettings.instance.showVinylRecord && widget.large;
             final enableBreath = AppSettings.instance.coverBreathEffect &&
                 enableBackdropGlow &&
                 provider != null;
-
-            if (showVinyl) {
-              return SizedBox(
-                width: widget.size * 1.15,
-                height: widget.size,
-                child: Hero(
-                  tag: nowPlayingArtworkHeroTag,
-                  createRectTween: (begin, end) =>
-                      NowPlayingArtworkRectTween(begin: begin, end: end),
-                  flightShuttleBuilder:
-                      nowPlayingArtworkFlightShuttleBuilder,
-                  child: GestureDetector(
-                    key: const ValueKey('now-playing-artwork-drag'),
-                    behavior: HitTestBehavior.opaque,
-                    onPanStart: motionEnabled ? _handlePanStart : null,
-                    onPanUpdate: motionEnabled ? _handlePanUpdate : null,
-                    onPanEnd: motionEnabled ? (_) => _handlePanEnd() : null,
-                    child: Center(
-                      child: VinylRecordPlayerView(
-                        size: widget.size * 0.92,
-                        coverProvider: provider,
-                        showTonearm: true,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
 
             return SizedBox(
               width: widget.size,
@@ -587,6 +505,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
+                  // 1. 环境光晕与呼吸发光 (置于 Hero 外部)
                   if (enableBreath)
                     Positioned.fill(
                       child: Padding(
@@ -608,47 +527,66 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
                               ),
                             );
                           },
-                          child: ImageFiltered(
-                            imageFilter: ImageFilter.blur(
-                              sigmaX: 32,
-                              sigmaY: 32,
+                          child: RepaintBoundary(
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(
+                                sigmaX: 32,
+                                sigmaY: 32,
+                              ),
+                              child: ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(widget.radius),
+                                child: Image(
+                                  image: provider,
+                                  width: widget.size,
+                                  height: widget.size,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
-                            child: image(provider),
                           ),
                         ),
                       ),
                     ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(widget.radius),
-                      boxShadow: [
-                        BoxShadow(
-                          color: accents.accentGlow.withValues(alpha: 0.34),
-                          blurRadius: enableBackdropGlow ? 32 : 18,
-                          spreadRadius: enableBackdropGlow ? 1 : 0,
-                          offset: shadowOffset,
+
+                  // 2. 手势检测与 3D 悬浮倾斜 (置于 Hero 外部)
+                  GestureDetector(
+                    key: const ValueKey('now-playing-artwork-drag'),
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: motionEnabled ? _handlePanStart : null,
+                    onPanUpdate: motionEnabled ? _handlePanUpdate : null,
+                    onPanEnd: motionEnabled ? (_) => _handlePanEnd() : null,
+                    onPanCancel: motionEnabled ? _handlePanEnd : null,
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: motionEnabled
+                          ? _artworkTransform()
+                          : Matrix4.identity(),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(widget.radius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accents.accentGlow.withValues(alpha: 0.34),
+                              blurRadius: enableBackdropGlow ? 32 : 18,
+                              spreadRadius: enableBackdropGlow ? 1 : 0,
+                              offset: shadowOffset,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Hero(
-                      tag: nowPlayingArtworkHeroTag,
-                      createRectTween: (begin, end) =>
-                          NowPlayingArtworkRectTween(begin: begin, end: end),
-                      flightShuttleBuilder:
-                          nowPlayingArtworkFlightShuttleBuilder,
-                      child: GestureDetector(
-                        key: const ValueKey('now-playing-artwork-drag'),
-                        behavior: HitTestBehavior.opaque,
-                        onPanStart: motionEnabled ? _handlePanStart : null,
-                        onPanUpdate: motionEnabled ? _handlePanUpdate : null,
-                        onPanEnd: motionEnabled ? (_) => _handlePanEnd() : null,
-                        onPanCancel: motionEnabled ? _handlePanEnd : null,
-                        child: Transform(
-                          alignment: Alignment.center,
-                          transform: motionEnabled
-                              ? _artworkTransform()
-                              : Matrix4.identity(),
-                          child: heroArtwork,
+                        child: Hero(
+                          tag: nowPlayingArtworkHeroTag,
+                          createRectTween: (begin, end) =>
+                              NowPlayingArtworkRectTween(begin: begin, end: end),
+                          flightShuttleBuilder:
+                              nowPlayingArtworkFlightShuttleBuilder,
+                          child: NowPlayingArtworkCard(
+                            audio: audio,
+                            coverProvider: provider,
+                            radius: widget.radius,
+                            elevation: 1.2,
+                            showShadow: false,
+                          ),
                         ),
                       ),
                     ),
@@ -670,70 +608,91 @@ class _ImmersiveLyricStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget content;
     final useLegacyLyricView =
         context.read<PlaybackController>() is PlaybackService &&
             context.read<LyricController>() is LyricService;
     if (useLegacyLyricView) {
-      return _NowPlayingStagedReveal(
-        begin: 0.34,
-        end: 0.9,
-        beginOffset: const Offset(0, 0.05),
+      content = _NowPlayingStagedReveal(
+        begin: 0.12,
+        end: 0.52,
+        beginOffset: const Offset(0, 0.012),
         child: VerticalLyricView(compact: compact),
       );
-    }
-    final lyricController = context.read<LyricController>();
-    final scheme = Theme.of(context).colorScheme;
+    } else {
+      final lyricController = context.read<LyricController>();
+      final scheme = Theme.of(context).colorScheme;
 
-    return ListenableBuilder(
-      listenable: lyricController,
-      builder: (context, _) {
-        return FutureBuilder<Lyric?>(
-          future: lyricController.currLyricFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const _NowPlayingStagedReveal(
-                begin: 0.34,
-                end: 0.9,
-                beginOffset: Offset(0, 0.05),
-                child: Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              );
-            }
-
-            final lyric = snapshot.data;
-            if (lyric == null || lyric.lines.isEmpty) {
-              return _NowPlayingStagedReveal(
-                begin: 0.34,
-                end: 0.9,
-                beginOffset: const Offset(0, 0.05),
-                child: Center(
-                  child: Text(
-                    '暂无歌词',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.6),
-                      fontSize: compact ? 22 : 24,
-                      fontWeight: FontWeight.w600,
+      content = ListenableBuilder(
+        listenable: lyricController,
+        builder: (context, _) {
+          return FutureBuilder<Lyric?>(
+            future: lyricController.currLyricFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const _NowPlayingStagedReveal(
+                  begin: 0.12,
+                  end: 0.52,
+                  beginOffset: Offset(0, 0.012),
+                  child: Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                ),
-              );
-            }
+                );
+              }
 
-            return _NowPlayingStagedReveal(
-              begin: 0.34,
-              end: 0.9,
-              beginOffset: const Offset(0, 0.05),
-              child: _CenteredLyricView(lyric: lyric, compact: compact),
-            );
-          },
-        );
-      },
+              final lyric = snapshot.data;
+              if (lyric == null || lyric.lines.isEmpty) {
+                return _NowPlayingStagedReveal(
+                  begin: 0.12,
+                  end: 0.52,
+                  beginOffset: const Offset(0, 0.012),
+                  child: Center(
+                    child: Text(
+                      '暂无歌词',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.6),
+                        fontSize: compact ? 22 : 24,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return _NowPlayingStagedReveal(
+                begin: 0.12,
+                end: 0.52,
+                beginOffset: const Offset(0, 0.012),
+                child: _CenteredLyricView(lyric: lyric, compact: compact),
+              );
+            },
+          );
+        },
+      );
+    }
+
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const Positioned.fill(child: _LyricStageHitAbsorber()),
+          content,
+        ],
+      ),
     );
+  }
+}
+
+class _LyricStageHitAbsorber extends StatelessWidget {
+  const _LyricStageHitAbsorber();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AbsorbPointer(child: SizedBox.expand());
   }
 }
 
@@ -918,8 +877,13 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
       return;
     }
 
+    final routeAnimation = NowPlayingRouteTransitionScope.maybeOf(context);
+    final inEntranceTransition =
+        routeAnimation != null && routeAnimation.value < 0.95;
+    final effectiveAnimated = animated && !inEntranceTransition;
+
     final duration =
-        animated ? context.motion.lyricScrollDuration : Duration.zero;
+        effectiveAnimated ? context.motion.lyricScrollDuration : Duration.zero;
     Scrollable.ensureVisible(
       lineContext,
       alignment: 0.5,
@@ -1056,7 +1020,13 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     return Stack(
       alignment: Alignment.center,
       children: [
+        const Positioned.fill(
+          child: AbsorbPointer(
+            child: SizedBox.expand(),
+          ),
+        ),
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           // 捕获双指捏合手势以缩放歌词大小
           onScaleStart: (details) {
             _baseScale = _fontScale;
@@ -1205,7 +1175,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             ),
           ),
         ),
-        // 精致的高斯毛玻璃风格缩放比例提示胶囊组件
+        // 精致的高斯毛玻璃风格缩放比例提示胶囊组件 (惰性挂载，闲置期彻底卸载 BackdropFilter)
         Positioned(
           top: 32,
           child: IgnorePointer(
@@ -1213,50 +1183,53 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
               opacity: _showScaleIndicator ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainer.withValues(alpha: 0.68),
+              child: _showScaleIndicator
+                  ? ClipRRect(
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 16,
-                          spreadRadius: -4,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Symbols.zoom_in,
-                          size: 16,
-                          color: scheme.onSurface.withValues(alpha: 0.8),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '歌词大小: ${(_fontScale * 100).round()}%',
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(
+                            color:
+                                scheme.surfaceContainer.withValues(alpha: 0.68),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 16,
+                                spreadRadius: -4,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Symbols.zoom_in,
+                                size: 16,
+                                color: scheme.onSurface.withValues(alpha: 0.8),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '歌词大小: ${(_fontScale * 100).round()}%',
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
           ),
         ),

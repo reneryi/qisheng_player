@@ -354,20 +354,6 @@ Widget _buildPlaybackImmersiveSwitch({
   );
 }
 
-class ShowVinylRecordSwitch extends StatelessWidget {
-  const ShowVinylRecordSwitch({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildPlaybackImmersiveSwitch(
-      description: "显示黑胶唱盘",
-      hint: "在大尺寸播放页中显示旋转唱盘与唱针。",
-      readValue: (settings) => settings.showVinylRecord,
-      writeValue: (settings, value) => settings.showVinylRecord = value,
-    );
-  }
-}
-
 class ShowSpectrumVisualizerSwitch extends StatelessWidget {
   const ShowSpectrumVisualizerSwitch({super.key});
 

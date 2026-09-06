@@ -37,11 +37,28 @@ Future<void> _atomicWriteString(
   try {
     await temp.writeAsString(content, flush: true);
     if (beforeCommit != null) await beforeCommit();
-    await temp.rename(path);
-  } finally {
-    if (await temp.exists()) {
-      await temp.delete();
+    // 优先尝试原子 rename 替换；若因 OneDrive/防病毒软件加锁触发拒绝访问 (errno 5)，进行微退避重试并降级直接写入
+    bool replaced = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        await temp.rename(path);
+        replaced = true;
+        break;
+      } on FileSystemException {
+        if (attempt < 2) {
+          await Future.delayed(Duration(milliseconds: (attempt + 1) * 15));
+        }
+      }
     }
+    if (!replaced) {
+      await target.writeAsString(content, flush: true);
+    }
+  } finally {
+    try {
+      if (await temp.exists()) {
+        await temp.delete();
+      }
+    } catch (_) {}
   }
 }
 

@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -20,6 +20,7 @@ class ArtistsPage extends StatelessWidget {
       contentRevision: AudioLibrary.revision.value,
       contentBuilder: (_, item, __, multiSelectController) =>
           ArtistTile(artist: item, enableHero: true),
+      tableMaxCrossAxisExtent: 250,
       enableShufflePlay: false,
       enableSortMethod: true,
       enableSortOrder: true,

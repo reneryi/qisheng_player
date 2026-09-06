@@ -91,7 +91,7 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
-    window_class.style = CS_HREDRAW | CS_VREDRAW;
+    window_class.style = 0;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
@@ -188,21 +188,25 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
 
     case WM_DPICHANGED: {
-      auto newRectSize = reinterpret_cast<RECT*>(lparam);
-      LONG newWidth = newRectSize->right - newRectSize->left;
-      LONG newHeight = newRectSize->bottom - newRectSize->top;
+      if (IsZoomed(hwnd) == FALSE) {
+        auto newRectSize = reinterpret_cast<RECT*>(lparam);
+        LONG newWidth = newRectSize->right - newRectSize->left;
+        LONG newHeight = newRectSize->bottom - newRectSize->top;
 
-      SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
-                   newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
+        SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
+                     newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+      }
       return 0;
     }
+    case WM_ERASEBKGND:
+      return 1;
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
-        // Size and position the child window.
+        // Size and position the child window without synchronous GDI invalidation.
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-                   rect.bottom - rect.top, TRUE);
+                   rect.bottom - rect.top, FALSE);
       }
       return 0;
     }
@@ -213,6 +217,8 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_THEMECHANGED:
+    case WM_SETTINGCHANGE:
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;

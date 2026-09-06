@@ -17,7 +17,7 @@
 
 - 新增 Rust 专辑封面主色调提取 API，从原始封面字节中提取 4-6 个稳定色值。
 - 新增 Dart `AlbumPalette` 模型和 `ThemeProvider` 调色板缓存，快速切歌时通过 request id 避免旧结果覆盖当前主题。
-- 新增 `LiquidGradientBackground`，主窗口背景支持随专辑封面色彩变化的柔和流体渐变，并遵守 `UiEffectsLevel` 性能降级策略。
+- 新增 `LiquidGradientBackground`，主窗口背景支持随专辑封面色彩变化的柔和流体渐变，并默认使用完整视觉效果。
 - 新增底部播放器实时 FFT 音频可视化，使用 BASS `BASS_ChannelGetData` 采样、服务层 30fps 平滑频谱和低干扰流体波形绘制。
 - 新增专辑列表到专辑详情页的共享封面 Hero 转场，使用独立 `album-artwork:*` tag，避免与 Now Playing 的 `now-playing-artwork` 冲突。
 

@@ -61,7 +61,7 @@ enum ContentView {
 }
 
 const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-  maxCrossAxisExtent: 300,
+  maxCrossAxisExtent: 250,
   mainAxisExtent: 64,
   mainAxisSpacing: 8.0,
   crossAxisSpacing: 8.0,
@@ -109,7 +109,28 @@ double resolveSideNavTransitionGridOffset({
   required double crossAxisSpacing,
   double? mainAxisExtent,
   double childAspectRatio = 1,
+  bool shrinkHorizontally = false,
 }) {
+  if (shrinkHorizontally) {
+    final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
+    final expandedExtent = math.max(
+      1.0,
+      crossAxisExtent - sideNavWidthDelta * (1.0 - progress),
+    );
+    final crossAxisCount = math.max(
+      1,
+      (expandedExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil(),
+    );
+    final usableCrossAxisExtent = math.max(
+      0.0,
+      crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
+    );
+    final childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
+    final effectiveAspectRatio = math.max(0.001, childAspectRatio);
+    final childMainAxisExtent =
+        mainAxisExtent ?? (childCrossAxisExtent / effectiveAspectRatio);
+    return (index ~/ crossAxisCount) * (childMainAxisExtent + mainAxisSpacing);
+  }
   final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
   final collapsedExtent = math.max(
     0.0,
@@ -146,6 +167,43 @@ class _SideNavAnimatedTableGrid extends StatelessWidget {
     required this.padding,
     required this.itemCount,
     required this.itemBuilder,
+    this.maxCrossAxisExtent = 250,
+  });
+
+  final ScrollController controller;
+  final EdgeInsetsGeometry padding;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final double maxCrossAxisExtent;
+
+  @override
+  Widget build(BuildContext context) {
+    final transition = SideNavTransitionScope.maybeOf(context);
+    return GridView.builder(
+      controller: controller,
+      padding: padding,
+      gridDelegate: SideNavAnimatedGridDelegate(
+        expansionProgress: transition?.expansionProgress ?? 0,
+        sideNavWidthDelta: transition?.widthDelta ?? 0,
+        reflowCollapsing: transition?.collapsing ?? false,
+        shrinkHorizontally: true,
+        maxCrossAxisExtent: maxCrossAxisExtent,
+        mainAxisExtent: 64,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemCount: itemCount,
+      itemBuilder: itemBuilder,
+    );
+  }
+}
+
+class _SideNavAnimatedCoverGrid extends StatelessWidget {
+  const _SideNavAnimatedCoverGrid({
+    required this.controller,
+    required this.padding,
+    required this.itemCount,
+    required this.itemBuilder,
   });
 
   final ScrollController controller;
@@ -163,10 +221,11 @@ class _SideNavAnimatedTableGrid extends StatelessWidget {
         expansionProgress: transition?.expansionProgress ?? 0,
         sideNavWidthDelta: transition?.widthDelta ?? 0,
         reflowCollapsing: transition?.collapsing ?? false,
-        maxCrossAxisExtent: 300,
-        mainAxisExtent: 64,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+        shrinkHorizontally: true,
+        maxCrossAxisExtent: 220,
+        childAspectRatio: 0.65,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
       ),
       itemCount: itemCount,
       itemBuilder: itemBuilder,
@@ -179,19 +238,23 @@ class SideNavAnimatedGridDelegate extends SliverGridDelegate {
     required this.expansionProgress,
     required this.sideNavWidthDelta,
     this.reflowCollapsing = false,
+    this.shrinkHorizontally = false,
     required this.maxCrossAxisExtent,
     required this.mainAxisSpacing,
     required this.crossAxisSpacing,
-    required this.mainAxisExtent,
+    this.mainAxisExtent,
+    this.childAspectRatio = 1.0,
   });
 
   final double expansionProgress;
   final double sideNavWidthDelta;
   final bool reflowCollapsing;
+  final bool shrinkHorizontally;
   final double maxCrossAxisExtent;
   final double mainAxisSpacing;
   final double crossAxisSpacing;
-  final double mainAxisExtent;
+  final double? mainAxisExtent;
+  final double childAspectRatio;
 
   SliverGridRegularTileLayout _layoutForExtent(
     SliverConstraints constraints,
@@ -202,6 +265,7 @@ class SideNavAnimatedGridDelegate extends SliverGridDelegate {
       mainAxisExtent: mainAxisExtent,
       mainAxisSpacing: mainAxisSpacing,
       crossAxisSpacing: crossAxisSpacing,
+      childAspectRatio: childAspectRatio,
     );
     return delegate.getLayout(
       constraints.copyWith(
@@ -212,6 +276,35 @@ class SideNavAnimatedGridDelegate extends SliverGridDelegate {
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
+    if (shrinkHorizontally) {
+      final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
+      final expandedExtent = math.max(
+        1.0,
+        constraints.crossAxisExtent - sideNavWidthDelta * (1.0 - progress),
+      );
+      final crossAxisCount = math.max(
+        1,
+        (expandedExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil(),
+      );
+      final usableCrossAxisExtent = math.max(
+        0.0,
+        constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
+      );
+      final childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
+      final effectiveAspectRatio = math.max(0.001, childAspectRatio);
+      final childMainAxisExtent =
+          mainAxisExtent ?? (childCrossAxisExtent / effectiveAspectRatio);
+      return SliverGridRegularTileLayout(
+        crossAxisCount: crossAxisCount,
+        mainAxisStride: childMainAxisExtent + mainAxisSpacing,
+        crossAxisStride: childCrossAxisExtent + crossAxisSpacing,
+        childMainAxisExtent: childMainAxisExtent,
+        childCrossAxisExtent: childCrossAxisExtent,
+        reverseCrossAxis:
+            axisDirectionIsReversed(constraints.crossAxisDirection),
+      );
+    }
+
     final progress = expansionProgress.clamp(0.0, 1.0).toDouble();
     final collapsedExtent =
         constraints.crossAxisExtent + sideNavWidthDelta * progress;
@@ -244,10 +337,12 @@ class SideNavAnimatedGridDelegate extends SliverGridDelegate {
     return expansionProgress != oldDelegate.expansionProgress ||
         sideNavWidthDelta != oldDelegate.sideNavWidthDelta ||
         reflowCollapsing != oldDelegate.reflowCollapsing ||
+        shrinkHorizontally != oldDelegate.shrinkHorizontally ||
         maxCrossAxisExtent != oldDelegate.maxCrossAxisExtent ||
         mainAxisSpacing != oldDelegate.mainAxisSpacing ||
         crossAxisSpacing != oldDelegate.crossAxisSpacing ||
-        mainAxisExtent != oldDelegate.mainAxisExtent;
+        mainAxisExtent != oldDelegate.mainAxisExtent ||
+        childAspectRatio != oldDelegate.childAspectRatio;
   }
 }
 
@@ -486,6 +581,7 @@ class UniPage<T> extends StatefulWidget {
     this.rightPaneBuilder,
     this.showRightPane = false,
     this.rightPaneWidth = 296,
+    this.tableMaxCrossAxisExtent = 250,
   });
 
   final PagePreference pref;
@@ -521,12 +617,14 @@ class UniPage<T> extends StatefulWidget {
   final WidgetBuilder? rightPaneBuilder;
   final bool showRightPane;
   final double rightPaneWidth;
+  final double tableMaxCrossAxisExtent;
 
   @override
   State<UniPage<T>> createState() => _UniPageState<T>();
 }
 
-class _UniPageState<T> extends State<UniPage<T>> {
+class _UniPageState<T> extends State<UniPage<T>>
+    with SingleTickerProviderStateMixin {
   late SortMethodDesc<T>? currSortMethod =
       widget.sortMethods?[widget.pref.sortMethod];
   late SortOrder currSortOrder = widget.pref.sortOrder;
@@ -535,10 +633,25 @@ class _UniPageState<T> extends State<UniPage<T>> {
   late List<T> _sortedContentSnapshot;
   String? _activeSideIndexLabel;
 
+  late final AnimationController _rightPaneAnimationController;
+  late final Animation<double> _rightPaneAnimation;
+
   @override
   void initState() {
     super.initState();
     _sortContent();
+
+    _rightPaneAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      value: widget.showRightPane ? 1.0 : 0.0,
+    );
+    _rightPaneAnimation = CurvedAnimation(
+      parent: _rightPaneAnimationController,
+      curve: Curves.easeInOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    );
+
     if (widget.locateTo == null) return;
 
     final targetAt = widget.contentList.indexOf(widget.locateTo as T);
@@ -550,8 +663,24 @@ class _UniPageState<T> extends State<UniPage<T>> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final duration = context.motion.panelTransitionDuration;
+    _rightPaneAnimationController.duration = duration;
+    _rightPaneAnimationController.reverseDuration = duration;
+  }
+
+  @override
   void didUpdateWidget(covariant UniPage<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.showRightPane != oldWidget.showRightPane) {
+      if (widget.showRightPane) {
+        _rightPaneAnimationController.forward();
+      } else {
+        _rightPaneAnimationController.reverse();
+      }
+    }
+
     final canRestorePreviousOrder = widget.contentRevision != null &&
         widget.contentRevision == oldWidget.contentRevision &&
         restorePreviousContentOrder(
@@ -615,17 +744,18 @@ class _UniPageState<T> extends State<UniPage<T>> {
       ContentView.table => _gridOffsetForIndex(
           index,
           animateSideNavReflow: true,
-          maxCrossAxisExtent: 300,
+          maxCrossAxisExtent: widget.tableMaxCrossAxisExtent,
           mainAxisExtent: 64,
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
         ),
       ContentView.grid => _gridOffsetForIndex(
           index,
+          animateSideNavReflow: true,
           maxCrossAxisExtent: 220,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          childAspectRatio: 0.72,
+          childAspectRatio: 0.65,
         ),
     };
     final position = scrollController.position;
@@ -660,12 +790,12 @@ class _UniPageState<T> extends State<UniPage<T>> {
     final hasLocateButton =
         widget.locateTo != null || widget.locateIndexResolver != null;
     final sideRailReserved = hasSideIndex || hasLocateButton ? 60.0 : 0.0;
-    final showRightPane =
-        widget.rightPaneBuilder != null && widget.showRightPane;
+    final hasRightPane = widget.rightPaneBuilder != null;
+    final rightPaneProgress = _rightPaneAnimation.value;
     final rightPaneReserved =
-        showRightPane ? widget.rightPaneWidth + 14.0 : 0.0;
+        hasRightPane ? (widget.rightPaneWidth + 14.0) * rightPaneProgress : 0.0;
     final crossAxisExtent =
-        (renderObject.size.width - sideRailReserved - rightPaneReserved)
+        (renderObject.size.width - sideRailReserved - rightPaneReserved - 22.0)
             .clamp(0.0, double.infinity)
             .toDouble();
     if (animateSideNavReflow) {
@@ -681,6 +811,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
           mainAxisSpacing: mainAxisSpacing,
           crossAxisSpacing: crossAxisSpacing,
           childAspectRatio: childAspectRatio,
+          shrinkHorizontally: true,
         );
       }
     }
@@ -697,6 +828,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
 
   @override
   void dispose() {
+    _rightPaneAnimationController.dispose();
     scrollController.dispose();
     super.dispose();
   }
@@ -784,144 +916,154 @@ class _UniPageState<T> extends State<UniPage<T>> {
     final hasLocateButton =
         widget.locateTo != null || widget.locateIndexResolver != null;
     final hasRightPane = widget.rightPaneBuilder != null;
-    final showRightPane = hasRightPane && widget.showRightPane;
+
     const sideRailWidth = 48.0;
     const sideRailPadding = 10.0;
     const rightPaneGap = 14.0;
-    final sideRailReserved = (hasSideIndex || hasLocateButton) ? 60.0 : 0.0;
-    final rightPaneReserved =
-        showRightPane ? widget.rightPaneWidth + rightPaneGap : 0.0;
-    final rightReserved = sideRailReserved + rightPaneReserved;
-    final sideRailRight = showRightPane ? 6.0 : sideRailPadding;
     final rightPaneRight =
         (hasSideIndex || hasLocateButton) ? sideRailWidth + 18.0 : 10.0;
-    final listPadding = EdgeInsets.fromLTRB(
-      0,
-      0,
-      rightReserved,
-      32,
-    );
+    const listPadding = EdgeInsets.fromLTRB(6, 0, 16, 32);
 
-    final listBody = WindowsAccessibilityTooltipGuard(
-      child: Material(
-        type: MaterialType.transparency,
-        // 键盘导航：Tab/Shift+Tab 与 ↑/↓/←/→ 方向键在列表项之间移动焦点
-        // （ReadingOrderTraversalPolicy 自带方向键几何遍历支持）
-        child: FocusTraversalGroup(
-          policy: ReadingOrderTraversalPolicy(),
-          child: switch (currContentView) {
-            ContentView.list => _canReorder
-                ? ReorderableListView.builder(
-                    scrollController: scrollController,
-                    buildDefaultDragHandles: false,
-                    padding: listPadding,
-                    itemCount: widget.contentList.length,
-                    itemExtent: 64,
-                    onReorder: _handleReorder,
-                    itemBuilder: (context, i) => KeyedSubtree(
-                      key: ObjectKey(widget.contentList[i]),
-                      child: ReorderableDelayedDragStartListener(
-                        index: i,
-                        child: widget.contentBuilder(
-                          context,
-                          widget.contentList[i],
-                          i,
-                          multiSelectController,
+    final listBody = KeyedSubtree(
+      key: const ValueKey('uni-page-content-viewport'),
+      child: WindowsAccessibilityTooltipGuard(
+        child: Material(
+          type: MaterialType.transparency,
+          // 键盘导航：Tab/Shift+Tab 与 ↑/↓/←/→ 方向键在列表项之间移动焦点
+          // （ReadingOrderTraversalPolicy 自带方向键几何遍历支持）
+          child: FocusTraversalGroup(
+            policy: ReadingOrderTraversalPolicy(),
+            child: switch (currContentView) {
+              ContentView.list => _canReorder
+                  ? ReorderableListView.builder(
+                      scrollController: scrollController,
+                      buildDefaultDragHandles: false,
+                      padding: listPadding,
+                      itemCount: widget.contentList.length,
+                      itemExtent: 64,
+                      onReorder: _handleReorder,
+                      itemBuilder: (context, i) => KeyedSubtree(
+                        key: ObjectKey(widget.contentList[i]),
+                        child: ReorderableDelayedDragStartListener(
+                          index: i,
+                          child: widget.contentBuilder(
+                            context,
+                            widget.contentList[i],
+                            i,
+                            multiSelectController,
+                          ),
                         ),
                       ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: listPadding,
+                      itemCount: widget.contentList.length,
+                      itemExtent: 64,
+                      itemBuilder: (context, i) => widget.contentBuilder(
+                        context,
+                        widget.contentList[i],
+                        i,
+                        multiSelectController,
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    controller: scrollController,
-                    padding: listPadding,
-                    itemCount: widget.contentList.length,
-                    itemExtent: 64,
-                    itemBuilder: (context, i) => widget.contentBuilder(
-                      context,
-                      widget.contentList[i],
-                      i,
-                      multiSelectController,
-                    ),
-                  ),
-            ContentView.table => _SideNavAnimatedTableGrid(
-                controller: scrollController,
-                padding: listPadding,
-                itemCount: widget.contentList.length,
-                itemBuilder: (context, i) => widget.contentBuilder(
-                  context,
-                  widget.contentList[i],
-                  i,
-                  multiSelectController,
-                ),
-              ),
-            ContentView.grid => GridView.builder(
-                controller: scrollController,
-                padding: listPadding,
-                gridDelegate: coverGridDelegate,
-                itemCount: widget.contentList.length,
-                itemBuilder: (context, i) {
-                  final builder = widget.gridBuilder ?? widget.contentBuilder;
-                  return builder(
+              ContentView.table => _SideNavAnimatedTableGrid(
+                  controller: scrollController,
+                  padding: listPadding,
+                  itemCount: widget.contentList.length,
+                  maxCrossAxisExtent: widget.tableMaxCrossAxisExtent,
+                  itemBuilder: (context, i) => widget.contentBuilder(
                     context,
                     widget.contentList[i],
                     i,
                     multiSelectController,
-                  );
-                },
-              ),
-          },
+                  ),
+                ),
+              ContentView.grid => _SideNavAnimatedCoverGrid(
+                  controller: scrollController,
+                  padding: listPadding,
+                  itemCount: widget.contentList.length,
+                  itemBuilder: (context, i) {
+                    final builder = widget.gridBuilder ?? widget.contentBuilder;
+                    return builder(
+                      context,
+                      widget.contentList[i],
+                      i,
+                      multiSelectController,
+                    );
+                  },
+                ),
+            },
+          ),
         ),
       ),
     );
-    final rightPaneChild = widget.rightPaneBuilder?.call(context);
 
-    final scheme = Theme.of(context).colorScheme;
-    final body = Stack(
-      children: [
-        listBody,
-        if (hasRightPane)
+    // 将整个列表实体作为静态 child 传递给 AnimatedBuilder，在右侧面板展开/折叠期间保持 0 次 Rebuild
+    final body = AnimatedBuilder(
+      animation: _rightPaneAnimation,
+      builder: (context, child) {
+        final rightPaneProgress = _rightPaneAnimation.value;
+        final isRightPaneActive =
+            hasRightPane && (widget.showRightPane || rightPaneProgress > 0.0001);
+
+        final sideRailReserved = (hasSideIndex || hasLocateButton) ? 60.0 : 0.0;
+        final rightPaneReserved = hasRightPane
+            ? (widget.rightPaneWidth + rightPaneGap) * rightPaneProgress
+            : 0.0;
+        final rightReserved = sideRailReserved + rightPaneReserved;
+        final sideRailRight =
+            lerpDouble(sideRailPadding, 6.0, rightPaneProgress) ?? sideRailPadding;
+
+        final paddedList = Padding(
+          padding: EdgeInsets.only(right: rightReserved),
+          child: child,
+        );
+
+        final hasOverlayContent =
+            isRightPaneActive || hasSideIndex || hasLocateButton;
+        if (!hasOverlayContent) {
+          return paddedList;
+        }
+
+        final rightPaneChild = widget.rightPaneBuilder?.call(context);
+        final scheme = Theme.of(context).colorScheme;
+
+        return Stack(
+          key: const ValueKey('uni-page-overlay-layer'),
+          children: [
+            paddedList,
+        if (isRightPaneActive)
           Positioned(
             top: 8,
             bottom: 8,
             right: rightPaneRight,
             child: ClipRect(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(end: showRightPane ? 1 : 0),
-                duration: context.motion.panelTransitionDuration,
-                curve: context.motion.normal,
-                builder: (context, progress, _) {
-                  final clamped = progress.clamp(0.0, 1.0);
-                  final width = widget.rightPaneWidth * clamped;
-                  final slideX = (1 - clamped) * 18;
-                  return SizedBox(
-                    width: width,
-                    child: IgnorePointer(
-                      ignoring: clamped < 0.02,
-                      child: Opacity(
-                        opacity: clamped,
-                        child: Transform.translate(
-                          offset: Offset(slideX, 0),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: SizedBox(
-                              width: widget.rightPaneWidth,
-                              child: clamped <= 0.001
-                                  ? const SizedBox.shrink()
-                                  : rightPaneChild ?? const SizedBox.shrink(),
-                            ),
-                          ),
+              child: SizedBox(
+                width: widget.rightPaneWidth * rightPaneProgress,
+                child: IgnorePointer(
+                  ignoring: !widget.showRightPane || rightPaneProgress < 0.02,
+                  child: Opacity(
+                    opacity: rightPaneProgress.clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset((1 - rightPaneProgress) * 18.0, 0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: SizedBox(
+                          width: widget.rightPaneWidth,
+                          child: rightPaneProgress <= 0.001
+                              ? const SizedBox.shrink()
+                              : rightPaneChild ?? const SizedBox.shrink(),
                         ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ),
         if (hasSideIndex)
-          AnimatedPositioned(
-            duration: context.motion.panelTransitionDuration,
-            curve: context.motion.normal,
+          Positioned(
             right: sideRailRight,
             top: 8,
             bottom: hasLocateButton ? 58 : 8,
@@ -1014,9 +1156,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
             ),
           ),
         if (hasLocateButton)
-          AnimatedPositioned(
-            duration: context.motion.panelTransitionDuration,
-            curve: context.motion.normal,
+          Positioned(
             right: sideRailRight,
             bottom: 12,
             child: SizedBox(
@@ -1050,7 +1190,24 @@ class _UniPageState<T> extends State<UniPage<T>> {
           ),
       ],
     );
+      },
+      child: listBody,
+    );
 
+    return _buildPageScaffold(
+      multiSelectController,
+      primaryAction,
+      secondaryActions,
+      body,
+    );
+  }
+
+  Widget _buildPageScaffold(
+    MultiSelectController<T>? multiSelectController,
+    Widget? primaryAction,
+    List<Widget> secondaryActions,
+    Widget body,
+  ) {
     Widget? effectivePrimaryAction = primaryAction;
     List<Widget> effectiveSecondaryActions = [...secondaryActions];
     if (multiSelectController != null) {

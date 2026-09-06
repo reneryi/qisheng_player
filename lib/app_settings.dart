@@ -189,8 +189,6 @@ class AppSettings {
   UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.solidCard;
 
   /// 播放页沉浸模块化设置
-  /// 是否显示黑胶唱盘与旋转唱针
-  bool showVinylRecord = false;
 
   /// 是否显示实时音频频谱动效
   bool showSpectrumVisualizer = true;
@@ -406,7 +404,6 @@ class AppSettings {
       _instance.uiVisualStyleMode = parseUiVisualStyleMode(
         settingsMap["UiVisualStyleMode"],
       );
-      _instance.showVinylRecord = settingsMap["ShowVinylRecord"] ?? true;
       _instance.showSpectrumVisualizer =
           settingsMap["ShowSpectrumVisualizer"] ?? true;
       _instance.showKaraokeAnimation =
@@ -443,7 +440,6 @@ class AppSettings {
         "UiEffectsLevel": uiEffectsLevel.name,
         "LyricDepthBlur": lyricDepthBlur,
         "UiVisualStyleMode": uiVisualStyleMode.name,
-        "ShowVinylRecord": showVinylRecord,
         "ShowSpectrumVisualizer": showSpectrumVisualizer,
         "ShowKaraokeAnimation": showKaraokeAnimation,
         "CoverBreathEffect": coverBreathEffect,

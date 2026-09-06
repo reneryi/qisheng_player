@@ -73,8 +73,8 @@ class CpMotionPressable extends StatefulWidget {
     this.selected = false,
     this.enabled = true,
     this.semanticLabel,
-    this.hoverScale = 1.0,
-    this.pressScale = 0.992,
+    this.hoverScale = 1.02,
+    this.pressScale = 0.965,
     this.hoverShadow = false,
     this.selectedGlow = false,
     this.hoverShadowOpacity,
@@ -83,6 +83,8 @@ class CpMotionPressable extends StatefulWidget {
     this.focusNode,
     this.showFocusRing = true,
     this.onFocusChanged,
+    this.decoration,
+    this.hoverDecoration,
   });
 
   final Widget child;
@@ -103,6 +105,8 @@ class CpMotionPressable extends StatefulWidget {
   final FocusNode? focusNode;
   final bool showFocusRing;
   final ValueChanged<bool>? onFocusChanged;
+  final BoxDecoration? decoration;
+  final BoxDecoration? hoverDecoration;
 
   @override
   State<CpMotionPressable> createState() => _CpMotionPressableState();
@@ -236,17 +240,21 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
                 duration: motion.microInteractionDuration,
                 curve: motion.normal,
                 padding: widget.padding,
-                decoration: BoxDecoration(
-                  color: background,
-                  borderRadius: radius,
-                  border: widget.border || showFocusRing
-                      ? Border.all(
-                          color: borderColor,
-                          width: showFocusRing ? 2 : 1,
-                        )
-                      : null,
-                  boxShadow: shadows,
-                ),
+                decoration: widget.decoration != null
+                    ? (_hovered && widget.hoverDecoration != null
+                        ? widget.hoverDecoration!
+                        : widget.decoration!)
+                    : BoxDecoration(
+                        color: background,
+                        borderRadius: radius,
+                        border: widget.border || showFocusRing
+                            ? Border.all(
+                                color: borderColor,
+                                width: showFocusRing ? 2 : 1,
+                              )
+                            : null,
+                        boxShadow: shadows,
+                      ),
                 child: widget.child,
               ),
             ),

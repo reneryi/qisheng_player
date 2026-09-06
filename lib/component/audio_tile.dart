@@ -52,7 +52,6 @@ class AudioTile extends StatefulWidget {
 }
 
 class _AudioTileState extends State<AudioTile> {
-  bool _isHovered = false; // 跟踪悬浮状态以支持右滑 4px 呼吸动画
   final FocusNode _focusNode = FocusNode(debugLabel: 'audio-tile');
 
   void _handleFocusChanged(bool focused) {
@@ -77,7 +76,6 @@ class _AudioTileState extends State<AudioTile> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final motion = context.motion; // 获取全局主题动效参数
     final audio = widget.playlist[widget.audioIndex];
     // 使用 Selector 精细化监听：仅当当前歌曲的播放状态与自身切实相关时才重绘，避免全列表无差别刷新
     return Selector<PlaybackController, bool>(
@@ -107,40 +105,82 @@ class _AudioTileState extends State<AudioTile> {
 
             final rowRadius = BorderRadius.circular(14.0);
             final isDark = scheme.brightness == Brightness.dark;
-            // 依据悬停与选中状态计算平滑的背景色彩，避免死板的突变，同时取消原本固定卡片的硬边框
-            final Color targetBgColor = (effectiveFocus || selected)
-                ? scheme.primary.withValues(alpha: isDark ? 0.12 : 0.08)
-                : _isHovered
-                    ? (isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : Colors.black.withValues(alpha: 0.03))
-                    : Colors.transparent;
+            final surfaces = context.surfaces;
+            // 依据风格模式、悬停与选中状态自适应计算实体卡片 / 无界浮动背景与边框
+            final isHighlight = effectiveFocus || selected;
+            final highlightBgColor =
+                scheme.primary.withValues(alpha: isDark ? 0.16 : 0.10);
+            final highlightBorderColor =
+                scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35);
 
-            return MouseRegion(
-              onEnter: (_) => setState(() => _isHovered = true),
-              onExit: (_) => setState(() => _isHovered = false),
-              // 采用弹性最小高度约束替代原本写死的 height: 64.0，在大字号与高 DPI 下自适应容纳文本防溢出
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 64.0),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: AnimatedContainer(
-                    duration: motion.controlTransitionDuration,
-                    curve: motion.emphasized,
-                    decoration: BoxDecoration(
-                      color: targetBgColor,
-                      borderRadius: rowRadius,
+            final normalDecoration = BoxDecoration(
+              color: isHighlight ? highlightBgColor : surfaces.tileBackground,
+              borderRadius: rowRadius,
+              border: (isHighlight ? highlightBorderColor : surfaces.tileBorderColor) ==
+                      Colors.transparent
+                  ? null
+                  : Border.all(
+                      color: isHighlight
+                          ? highlightBorderColor
+                          : surfaces.tileBorderColor,
+                      width: 0.5,
                     ),
-                    child: CpMotionPressable(
-                      borderRadius: rowRadius,
-                      selected: effectiveFocus || selected,
-                      border: false, // 禁用自带的硬边框，实现真正的 borderless 呼吸质感
-                      hoverScale: 1.0,
-                      pressScale: 0.985, // 按压时轻微内敛提供实体触感
-                      hoverShadow: false, // 禁用自带的 hover 阴影，让流体背景更通透地露出
-                      selectedGlow: false,
-                      focusNode: _focusNode,
-                      onFocusChanged: _handleFocusChanged,
+              boxShadow: isHighlight
+                  ? [
+                      BoxShadow(
+                        color: scheme.primary
+                            .withValues(alpha: isDark ? 0.20 : 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : surfaces.tileShadow,
+            );
+
+            final hoverDecoration = BoxDecoration(
+              color: isHighlight ? highlightBgColor : surfaces.tileHoverBackground,
+              borderRadius: rowRadius,
+              border: (isHighlight
+                          ? highlightBorderColor
+                          : surfaces.tileHoverBorderColor) ==
+                      Colors.transparent
+                  ? null
+                  : Border.all(
+                      color: isHighlight
+                          ? highlightBorderColor
+                          : surfaces.tileHoverBorderColor,
+                      width: 0.5,
+                    ),
+              boxShadow: isHighlight
+                  ? [
+                      BoxShadow(
+                        color: scheme.primary
+                            .withValues(alpha: isDark ? 0.20 : 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : surfaces.tileShadow,
+            );
+
+            // 采用弹性最小高度约束替代原本写死的 height: 64.0，在大字号与高 DPI 下自适应容纳文本防溢出
+            // 移除了外层冗余的 MouseRegion(setState) 与外层 AnimatedContainer，全量收拢至 CpMotionPressable，消除双重渲染
+            return ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64.0),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: CpMotionPressable(
+                  borderRadius: rowRadius,
+                  decoration: normalDecoration,
+                  hoverDecoration: hoverDecoration,
+                  selected: effectiveFocus || selected,
+                  border: false, // 禁用自带的硬边框，由 decoration 精准控制
+                  hoverScale: 1.0,
+                  pressScale: 0.985, // 按压时轻微内敛提供实体触感
+                  hoverShadow: false,
+                  selectedGlow: false,
+                  focusNode: _focusNode,
+                  onFocusChanged: _handleFocusChanged,
                         onTap: () {
                           if (controller.isOpen) {
                             controller.close();
@@ -289,35 +329,61 @@ class _AudioTileState extends State<AudioTile> {
                                     ),
                                   ),
                                   const SizedBox(width: 8.0),
-                                  Semantics(
-                                    label: '更多',
-                                    button: true,
-                                    child: Focus(
-                                      skipTraversal: true,
-                                      canRequestFocus: false,
-                                      child: IconButton(
-                                        tooltip: '更多',
-                                        onPressed: () => controller.open(),
-                                        icon: const Icon(Symbols.more_vert),
-                                        color:
-                                            textColor.withValues(alpha: 0.76),
-                                        visualDensity: VisualDensity.compact,
-                                        style: IconButton.styleFrom(
-                                          minimumSize: const Size(36, 36),
-                                          padding: EdgeInsets.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ).copyWith(
-                                          backgroundColor:
-                                              const WidgetStatePropertyAll(
-                                            Colors.transparent,
-                                          ),
-                                          overlayColor: WidgetStatePropertyAll(
-                                            textColor.withValues(alpha: 0.08),
+                                  AudioContextMenu(
+                                    audio: audio,
+                                    playlist: widget.playlist,
+                                    audioIndex: widget.audioIndex,
+                                    onEdit: () => showDialog(
+                                      context: context,
+                                      builder: (context) =>
+                                          AudioEditDialog(audio: audio),
+                                    ),
+                                    builder: (context, moreMenuController, _) {
+                                      return Semantics(
+                                        label: '更多',
+                                        button: true,
+                                        child: Focus(
+                                          skipTraversal: true,
+                                          canRequestFocus: false,
+                                          child: IconButton(
+                                            tooltip: '更多',
+                                            onPressed: () {
+                                              if (moreMenuController.isOpen) {
+                                                moreMenuController.close();
+                                              } else {
+                                                moreMenuController.open();
+                                              }
+                                            },
+                                            icon: const Icon(Symbols.more_vert),
+                                            color: textColor.withValues(
+                                              alpha: 0.76,
+                                            ),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            style: IconButton.styleFrom(
+                                              minimumSize: const Size(36, 36),
+                                              fixedSize: const Size(36, 36),
+                                              padding: EdgeInsets.zero,
+                                              elevation: 0,
+                                              shadowColor: Colors.transparent,
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              side: BorderSide.none,
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                            ).copyWith(
+                                              overlayColor:
+                                                  WidgetStatePropertyAll(
+                                                scheme.primary.withValues(
+                                                  alpha: 0.08,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -351,14 +417,12 @@ class _AudioTileState extends State<AudioTile> {
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           );
-        },
-      );
-    }
+        }
   }
 
 class AudioEditDialog extends StatefulWidget {

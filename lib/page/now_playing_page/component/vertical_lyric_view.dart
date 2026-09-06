@@ -189,6 +189,11 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
 
                         return Stack(
                           children: [
+                            const Positioned.fill(
+                              child: AbsorbPointer(
+                                child: SizedBox.expand(),
+                              ),
+                            ),
                             switch (snapshot.connectionState) {
                               ConnectionState.none => loadingWidget,
                               ConnectionState.waiting => loadingWidget,
@@ -409,45 +414,71 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
             const Duration(milliseconds: 120)) {
       return;
     }
+    final isLargeJump = _lastSafeIndex != null &&
+        (safeIndex - _lastSafeIndex!).abs() > 5;
     _lastSafeIndex = safeIndex;
     _lastLyricUpdateAt = now;
     lyricTiles = _generateLyricTiles(safeIndex);
     setState(() {});
 
-    _scrollCurrentLyricIntoView();
+    _scrollCurrentLyricIntoView(animated: !isLargeJump, jumpFast: isLargeJump);
   }
 
-  void _scrollCurrentLyricIntoView({bool animated = true, int attempt = 0}) {
+  void _scrollCurrentLyricIntoView({
+    bool animated = true,
+    bool jumpFast = false,
+    int attempt = 0,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       if (!mounted) return;
       if (!scrollController.hasClients) {
-        _retryScrollCurrentLyricIntoView(animated: animated, attempt: attempt);
+        _retryScrollCurrentLyricIntoView(
+          animated: animated,
+          jumpFast: jumpFast,
+          attempt: attempt,
+        );
         return;
       }
 
       final targetContext = currentLyricTileKey.currentContext;
       if (targetContext == null || !targetContext.mounted) {
-        _retryScrollCurrentLyricIntoView(animated: animated, attempt: attempt);
+        _retryScrollCurrentLyricIntoView(
+          animated: animated,
+          jumpFast: jumpFast,
+          attempt: attempt,
+        );
         return;
       }
+
+      final duration = jumpFast
+          ? const Duration(milliseconds: 120)
+          : animated
+              ? context.motion.lyricScrollDuration
+              : Duration.zero;
+      final curve = jumpFast ? Curves.easeOutCubic : context.motion.emphasized;
 
       Scrollable.ensureVisible(
         targetContext,
         alignment: widget.currentLineAlignment,
-        duration: animated ? context.motion.lyricScrollDuration : Duration.zero,
-        curve: context.motion.emphasized,
+        duration: duration,
+        curve: curve,
       );
     });
   }
 
   void _retryScrollCurrentLyricIntoView({
     required bool animated,
+    bool jumpFast = false,
     required int attempt,
   }) {
     if (attempt >= 3) return;
     Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
       if (!mounted) return;
-      _scrollCurrentLyricIntoView(animated: animated, attempt: attempt + 1);
+      _scrollCurrentLyricIntoView(
+        animated: animated,
+        jumpFast: jumpFast,
+        attempt: attempt + 1,
+      );
     });
   }
 

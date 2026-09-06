@@ -1,8 +1,15 @@
+import 'package:provider/provider.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/page/now_playing_page/page.dart';
+import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
+import 'package:qisheng_player/play_service/lyric_service.dart';
+import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:qisheng_player/theme/app_theme.dart';
+import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -306,7 +313,7 @@ void main() {
     expect(tester.getRect(hero), initialHeroRect);
 
     await gesture.up();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(
       MatrixUtils.transformPoint(artworkTransform().transform, Offset.zero)
           .distance,
@@ -424,6 +431,176 @@ void main() {
     await tester.pump();
 
     expect(tester.widget<AnimatedOpacity>(overlayOpacityFinder).opacity, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ImmersiveNowPlayingView cover glow uses RepaintBoundary for GPU texture caching', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Glow Cover Song',
+      artist: 'Glow Artist',
+      album: 'Glow Album',
+      path: r'E:\Music\glow.flac',
+    );
+    final playback = FakePlaybackController(audio: audio, queue: [audio]);
+    final lyric = FakeLyricController(
+      Lrc(buildLongLrcLines(), LrcSource.local),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: ThemeProvider.instance),
+          ChangeNotifierProvider<PlaybackController>.value(
+            value: playback,
+          ),
+          ChangeNotifierProvider<LyricController>.value(
+            value: lyric,
+          ),
+          ChangeNotifierProvider<DesktopLyricController>.value(
+            value: FakeDesktopLyricController(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.build(
+            colorScheme: AppTheme.applyChromeSurfaces(
+              ColorScheme.fromSeed(
+                seedColor: const Color(0xFF53A4FF),
+                brightness: Brightness.dark,
+              ),
+            ),
+            effectsLevel: UiEffectsLevel.visual,
+          ),
+          home: const Scaffold(
+            body: ImmersiveNowPlayingView(compact: false),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // 验证呼吸发光层中的 ImageFiltered 被 RepaintBoundary 包裹，以启用 GPU 纹理缓存
+    final imageFilteredFinder = find.byType(ImageFiltered);
+    expect(imageFilteredFinder, findsOneWidget);
+
+    final repaintBoundaryFinder = find.ancestor(
+      of: imageFilteredFinder,
+      matching: find.byType(RepaintBoundary),
+    );
+    expect(repaintBoundaryFinder, findsWidgets);
+  });
+
+  testWidgets('_CenteredLyricView lazily mounts BackdropFilter only when scale indicator is shown', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Scale Lyric Song',
+      artist: 'Scale Artist',
+      album: 'Scale Album',
+      path: r'E:\Music\scale-lyric.flac',
+    );
+    final playback = FakePlaybackController(audio: audio, queue: [audio]);
+    final lyric = FakeLyricController(
+      Lrc(buildLongLrcLines(), LrcSource.local),
+    );
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: lyric,
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const ImmersiveNowPlayingView(compact: false),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // 闲置状态下：BackdropFilter 必须完全卸载以释放 GPU 采样通道
+    expect(find.byType(BackdropFilter), findsNothing);
+
+    // 触发双指缩放手势唤醒缩放指示器
+    final gesture = await tester.createGesture();
+    await gesture.down(tester.getCenter(find.byType(Scrollbar)));
+    final scaleFinder = find.byType(GestureDetector);
+    final scaleDetector = tester.widgetList<GestureDetector>(scaleFinder).firstWhere(
+      (gd) => gd.onScaleUpdate != null,
+    );
+    scaleDetector.onScaleUpdate!(
+      ScaleUpdateDetails(
+        scale: 1.25,
+        focalPoint: Offset.zero,
+        localFocalPoint: Offset.zero,
+      ),
+    );
+    await tester.pump();
+
+    // 缩放激活时：BackdropFilter 惰性挂载于绘制树
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(find.text('歌词大小: 125%'), findsOneWidget);
+
+    // 1400ms 定时器触发后：BackdropFilter 自动从绘制树彻底卸载
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  testWidgets('NowPlayingRouteTransitionScope locks lyric scroll during entrance', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Entrance Song',
+      artist: 'Entrance Artist',
+      album: 'Entrance Album',
+      path: r'E:\Music\entrance-scroll.flac',
+    );
+    final playback = FakePlaybackController(audio: audio, queue: [audio]);
+    final lyric = FakeLyricController(
+      Lrc(buildLongLrcLines(), LrcSource.local),
+    );
+    final routeAnimation = AnimationController(
+      vsync: tester,
+      value: 0.45, // 入场进行中 (< 0.95)
+      duration: const Duration(milliseconds: 480),
+    );
+    addTearDown(routeAnimation.dispose);
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: lyric,
+        desktopLyricController: FakeDesktopLyricController(),
+        child: NowPlayingRouteTransitionScope(
+          animation: routeAnimation,
+          child: const NowPlayingPage(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 在转场入场期间切换歌词行，验证不会抛出异常并完成定位
+    lyric.emitLine(5);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    // 转场彻底完成 (>= 0.95)
+    routeAnimation.value = 1.0;
+    await tester.pump();
+    lyric.emitLine(8);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(tester.takeException(), isNull);
   });
 }

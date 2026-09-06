@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/lyric_line_motion.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 
@@ -12,7 +11,6 @@ void main() {
       return MaterialApp(
         theme: AppTheme.build(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-          effectsLevel: UiEffectsLevel.visual,
         ),
         home: LyricLineMotion(
           isCurrent: isCurrent,

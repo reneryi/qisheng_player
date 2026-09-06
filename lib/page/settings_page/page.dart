@@ -206,7 +206,6 @@ class _SettingsPageState extends State<SettingsPage> {
             title: '播放页沉浸模块化',
             description: '自由勾选拼装正在播放界面的视觉组件与动效元素。',
             children: [
-              ShowVinylRecordSwitch(),
               ShowSpectrumVisualizerSwitch(),
               ShowKaraokeAnimationSwitch(),
               CoverBreathEffectSwitch(),

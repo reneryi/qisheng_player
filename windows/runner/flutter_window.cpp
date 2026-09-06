@@ -273,17 +273,6 @@ bool ShouldRoundMainWindow(HWND hwnd) {
          !IsEffectivelyFullscreen(hwnd);
 }
 
-int WindowCornerRadiusPx(HWND hwnd) {
-  UINT dpi = USER_DEFAULT_SCREEN_DPI;
-  if (hwnd != nullptr) {
-    dpi = GetDpiForWindow(hwnd);
-    if (dpi == 0) {
-      dpi = USER_DEFAULT_SCREEN_DPI;
-    }
-  }
-  return std::max(12, MulDiv(18, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-}
-
 bool HandleNativeSetCursor(HWND hwnd, WPARAM wparam, LPARAM lparam) {
   const auto target = reinterpret_cast<HWND>(wparam);
   if (target != hwnd) {
@@ -291,8 +280,7 @@ bool HandleNativeSetCursor(HWND hwnd, WPARAM wparam, LPARAM lparam) {
   }
 
   const WORD hit_test = LOWORD(lparam);
-  if (IsResizeHitTest(hit_test) || hit_test == HTCLIENT ||
-      hit_test == HTERROR || hit_test == HTNOWHERE) {
+  if (IsResizeHitTest(hit_test)) {
     SetCursor(LoadCursor(nullptr, CursorForHitTest(hit_test)));
     return true;
   }
@@ -753,6 +741,125 @@ bool FlutterWindow::OnCreate() {
           return;
         }
 
+        if (method_call.method_name() == "toggle_maximize") {
+          ToggleMaximize();
+          result->Success(
+              flutter::EncodableValue(IsZoomed(GetHandle()) != FALSE));
+          return;
+        }
+
+        if (method_call.method_name() == "maximize") {
+          Maximize();
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "unmaximize") {
+          Unmaximize();
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "minimize") {
+          Minimize();
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "toggle_fullscreen") {
+          ToggleFullscreen();
+          result->Success(flutter::EncodableValue(is_fullscreen_));
+          return;
+        }
+
+        if (method_call.method_name() == "set_fullscreen") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          bool enable_fullscreen = false;
+          if (map != nullptr) {
+            const auto it =
+                map->find(flutter::EncodableValue("isFullScreen"));
+            if (it != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it->second)) {
+                enable_fullscreen = *val;
+              }
+            }
+          }
+          if (enable_fullscreen) {
+            EnterFullscreen();
+          } else {
+            ExitFullscreen();
+          }
+          result->Success(flutter::EncodableValue(is_fullscreen_));
+          return;
+        }
+
+        if (method_call.method_name() == "is_maximized") {
+          const bool is_max = !is_fullscreen_ &&
+                              !IsEffectivelyFullscreen(GetHandle()) &&
+                              (IsZoomed(GetHandle()) != FALSE);
+          result->Success(flutter::EncodableValue(is_max));
+          return;
+        }
+
+        if (method_call.method_name() == "is_fullscreen") {
+          result->Success(flutter::EncodableValue(
+              is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())));
+          return;
+        }
+
+        if (method_call.method_name() == "is_minimized") {
+          result->Success(
+              flutter::EncodableValue(IsIconic(GetHandle()) != FALSE));
+          return;
+        }
+
+        if (method_call.method_name() == "get_window_layout_mode") {
+          std::string mode = "normal";
+          if (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())) {
+            mode = "fullscreen";
+          } else if (IsZoomed(GetHandle())) {
+            mode = "maximized";
+          }
+          result->Success(flutter::EncodableValue(mode));
+          return;
+        }
+
+        if (method_call.method_name() == "set_maximize_button_rect") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          if (map != nullptr) {
+            const double left = GetDoubleArg(map, "left", 0.0);
+            const double top = GetDoubleArg(map, "top", 0.0);
+            const double width = GetDoubleArg(map, "width", 0.0);
+            const double height = GetDoubleArg(map, "height", 0.0);
+            const double dpr = GetDoubleArg(map, "devicePixelRatio", 1.0);
+            if (width > 0.0 && height > 0.0) {
+              maximize_button_rect_ = {
+                  static_cast<LONG>(std::lround(left * dpr)),
+                  static_cast<LONG>(std::lround(top * dpr)),
+                  static_cast<LONG>(std::lround((left + width) * dpr)),
+                  static_cast<LONG>(std::lround((top + height) * dpr)),
+              };
+              has_maximize_button_rect_ = true;
+            } else {
+              has_maximize_button_rect_ = false;
+            }
+          }
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "exit_app") {
+          ExitApplication();
+          result->Success();
+          return;
+        }
+
         result->NotImplemented();
       });
 
@@ -765,6 +872,8 @@ bool FlutterWindow::OnCreate() {
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
   ApplyRoundedWindowAppearance();
+  MARGINS margins = {0, 0, 0, 1};
+  DwmExtendFrameIntoClientArea(GetHandle(), &margins);
 
   return true;
 }
@@ -816,13 +925,212 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
-    case WM_NCCALCSIZE:
-      return 0;
-    case WM_NCHITTEST:
+    case WM_NCCALCSIZE: {
+      if (wparam == TRUE) {
+        auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+
+        if (is_fullscreen_ || IsEffectivelyFullscreen(hwnd)) {
+          HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+          if (monitor != nullptr) {
+            MONITORINFO monitor_info = {};
+            monitor_info.cbSize = sizeof(MONITORINFO);
+            if (GetMonitorInfo(monitor, &monitor_info)) {
+              params->rgrc[0] = monitor_info.rcMonitor;
+            }
+          }
+          return 0;
+        }
+
+        if (IsZoomed(hwnd)) {
+          HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+          if (monitor != nullptr) {
+            MONITORINFO monitor_info = {};
+            monitor_info.cbSize = sizeof(MONITORINFO);
+            if (GetMonitorInfo(monitor, &monitor_info)) {
+              params->rgrc[0] = monitor_info.rcWork;
+            }
+          }
+          return 0;
+        }
+
+        return 0;
+      } else {
+        auto* rect = reinterpret_cast<RECT*>(lparam);
+        if (rect != nullptr) {
+          if (is_fullscreen_ || IsEffectivelyFullscreen(hwnd)) {
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (monitor != nullptr) {
+              MONITORINFO monitor_info = {};
+              monitor_info.cbSize = sizeof(MONITORINFO);
+              if (GetMonitorInfo(monitor, &monitor_info)) {
+                *rect = monitor_info.rcMonitor;
+              }
+            }
+            return 0;
+          }
+
+          if (IsZoomed(hwnd)) {
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (monitor != nullptr) {
+              MONITORINFO monitor_info = {};
+              monitor_info.cbSize = sizeof(MONITORINFO);
+              if (GetMonitorInfo(monitor, &monitor_info)) {
+                *rect = monitor_info.rcWork;
+              }
+            }
+            return 0;
+          }
+        }
+        return 0;
+      }
+    }
+    case WM_NCHITTEST: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+
+      const POINT cursor = {
+          static_cast<LONG>(static_cast<short>(LOWORD(lparam))),
+          static_cast<LONG>(static_cast<short>(HIWORD(lparam))),
+      };
+      POINT client_cursor = cursor;
+      ScreenToClient(hwnd, &client_cursor);
+
+      if (!is_fullscreen_ && !IsEffectivelyFullscreen(hwnd)) {
+        if (has_maximize_button_rect_ &&
+            PtInRect(&maximize_button_rect_, client_cursor)) {
+          return HTMAXBUTTON;
+        }
+      }
+
       return NativeWindowHitTest(hwnd, lparam);
+    }
+    case WM_NCMOUSEMOVE:
+    case WM_NCMOUSELEAVE: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+      break;
+    }
+    case WM_NCLBUTTONDOWN: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+      if (wparam == HTMAXBUTTON) {
+        return 0;
+      }
+      break;
+    }
+    case WM_NCLBUTTONUP: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+      if (wparam == HTMAXBUTTON) {
+        POINT cursor = {
+            static_cast<LONG>(static_cast<short>(LOWORD(lparam))),
+            static_cast<LONG>(static_cast<short>(HIWORD(lparam))),
+        };
+        POINT client_cursor = cursor;
+        ScreenToClient(hwnd, &client_cursor);
+        if (has_maximize_button_rect_ &&
+            PtInRect(&maximize_button_rect_, client_cursor)) {
+          ToggleMaximize();
+        }
+        return 0;
+      }
+      break;
+    }
+    case WM_NCLBUTTONDBLCLK: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+      if (wparam == HTMAXBUTTON) {
+        return 0;
+      }
+      break;
+    }
+    case WM_NCRBUTTONDOWN:
+    case WM_NCRBUTTONUP: {
+      LRESULT dwm_result = 0;
+      if (DwmDefWindowProc(hwnd, message, wparam, lparam, &dwm_result)) {
+        return dwm_result;
+      }
+      break;
+    }
+    case WM_GETMINMAXINFO: {
+      auto* minmax = reinterpret_cast<MINMAXINFO*>(lparam);
+      if (minmax != nullptr) {
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor != nullptr) {
+          MONITORINFO monitor_info = {};
+          monitor_info.cbSize = sizeof(MONITORINFO);
+          if (GetMonitorInfo(monitor, &monitor_info)) {
+            if (is_fullscreen_ || IsEffectivelyFullscreen(hwnd)) {
+              minmax->ptMaxPosition.x = monitor_info.rcMonitor.left;
+              minmax->ptMaxPosition.y = monitor_info.rcMonitor.top;
+              minmax->ptMaxSize.x =
+                  monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+              minmax->ptMaxSize.y =
+                  monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+              minmax->ptMaxTrackSize = minmax->ptMaxSize;
+            } else {
+              minmax->ptMaxPosition.x = monitor_info.rcWork.left;
+              minmax->ptMaxPosition.y = monitor_info.rcWork.top;
+              minmax->ptMaxSize.x =
+                  monitor_info.rcWork.right - monitor_info.rcWork.left;
+              minmax->ptMaxSize.y =
+                  monitor_info.rcWork.bottom - monitor_info.rcWork.top;
+            }
+          }
+        }
+        UINT dpi = GetDpiForWindow(hwnd);
+        if (dpi == 0) {
+          dpi = USER_DEFAULT_SCREEN_DPI;
+        }
+        const int min_width =
+            MulDiv(500, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+        const int min_height =
+            MulDiv(360, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+        minmax->ptMinTrackSize.x =
+            std::max<LONG>(minmax->ptMinTrackSize.x, min_width);
+        minmax->ptMinTrackSize.y =
+            std::max<LONG>(minmax->ptMinTrackSize.y, min_height);
+      }
+      return 0;
+    }
     case WM_SIZE:
-    case WM_DPICHANGED:
+      ApplyRoundedWindowAppearance();
+      NotifyWindowLayoutChanged();
+      break;
+    case WM_DPICHANGED: {
+      ApplyRoundedWindowAppearance();
+      if (is_fullscreen_ || IsEffectivelyFullscreen(hwnd)) {
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor != nullptr) {
+          MONITORINFO monitor_info = {};
+          monitor_info.cbSize = sizeof(MONITORINFO);
+          if (GetMonitorInfo(monitor, &monitor_info)) {
+            SetWindowPos(
+                hwnd, HWND_TOP,
+                monitor_info.rcMonitor.left,
+                monitor_info.rcMonitor.top,
+                monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+          }
+        }
+        return 0;
+      }
+      break;
+    }
     case WM_WINDOWPOSCHANGED:
+    case WM_THEMECHANGED:
+    case WM_SETTINGCHANGE:
       ApplyRoundedWindowAppearance();
       break;
     case WM_SETCURSOR:
@@ -942,6 +1250,9 @@ void FlutterWindow::RemoveTrayIcon() {
 }
 
 void FlutterWindow::MinimizeToTray() {
+  if (is_fullscreen_) {
+    ExitFullscreen();
+  }
   AddTrayIcon();
   thumb_buttons_added_ = false;
   was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
@@ -1055,7 +1366,7 @@ flutter::EncodableMap FlutterWindow::SetWindowBackdropMode(
     MARGINS margins = {-1, -1, -1, -1};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
   } else {
-    MARGINS margins = {0, 0, 0, 0};
+    MARGINS margins = {0, 0, 0, 1};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
   }
 
@@ -1075,43 +1386,175 @@ void FlutterWindow::ApplyRoundedWindowAppearance() {
       DWMWA_WINDOW_CORNER_PREFERENCE,
       &corner_preference,
       sizeof(corner_preference));
-  UpdateRoundedWindowRegion();
 }
 
-void FlutterWindow::UpdateRoundedWindowRegion() {
-  const HWND hwnd = GetHandle();
+void FlutterWindow::EnterFullscreen() {
+  if (is_fullscreen_) {
+    return;
+  }
+
+  HWND hwnd = GetHandle();
   if (hwnd == nullptr) {
     return;
   }
 
-  if (!ShouldRoundMainWindow(hwnd)) {
-    SetWindowRgn(hwnd, nullptr, TRUE);
+  saved_window_placement_.length = sizeof(WINDOWPLACEMENT);
+  GetWindowPlacement(hwnd, &saved_window_placement_);
+
+  HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+  if (monitor == nullptr) {
     return;
   }
 
-  RECT window_rect = {};
-  if (GetWindowRect(hwnd, &window_rect) == FALSE) {
+  MONITORINFO monitor_info = {};
+  monitor_info.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfo(monitor, &monitor_info)) {
     return;
   }
 
-  const int width =
-      std::max(0, static_cast<int>(window_rect.right - window_rect.left));
-  const int height =
-      std::max(0, static_cast<int>(window_rect.bottom - window_rect.top));
-  if (width == 0 || height == 0) {
+  is_fullscreen_ = true;
+
+  if (saved_window_placement_.showCmd == SW_SHOWMAXIMIZED) {
+    SetWindowPos(
+        hwnd, HWND_TOP,
+        monitor_info.rcMonitor.left,
+        monitor_info.rcMonitor.top,
+        monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+        monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+        SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  } else {
+    ShowWindow(hwnd, SW_MAXIMIZE);
+  }
+
+  ApplyRoundedWindowAppearance();
+  NotifyWindowLayoutChanged();
+}
+
+void FlutterWindow::ExitFullscreen() {
+  if (!is_fullscreen_) {
     return;
   }
 
-  const int radius = WindowCornerRadiusPx(hwnd);
-  HRGN region =
-      CreateRoundRectRgn(0, 0, width + 1, height + 1, radius, radius);
-  if (region == nullptr) {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
     return;
   }
 
-  if (SetWindowRgn(hwnd, region, TRUE) == 0) {
-    DeleteObject(region);
+  is_fullscreen_ = false;
+
+  WINDOWPLACEMENT restore_placement = saved_window_placement_;
+  restore_placement.length = sizeof(WINDOWPLACEMENT);
+  if (SetWindowPlacement(hwnd, &restore_placement) != FALSE) {
+    ShowWindow(hwnd, restore_placement.showCmd == SW_SHOWMAXIMIZED
+                         ? SW_SHOWMAXIMIZED
+                         : SW_SHOWNORMAL);
+  } else {
+    ShowWindow(hwnd, SW_RESTORE);
   }
+
+  ApplyRoundedWindowAppearance();
+  NotifyWindowLayoutChanged();
+}
+
+void FlutterWindow::ToggleFullscreen() {
+  if (is_fullscreen_) {
+    ExitFullscreen();
+  } else {
+    EnterFullscreen();
+  }
+}
+
+void FlutterWindow::Maximize() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  if (is_fullscreen_) {
+    ExitFullscreen();
+  }
+  ShowWindow(hwnd, SW_MAXIMIZE);
+}
+
+void FlutterWindow::Unmaximize() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  if (is_fullscreen_) {
+    ExitFullscreen();
+  }
+  ShowWindow(hwnd, SW_RESTORE);
+}
+
+void FlutterWindow::ToggleMaximize() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  if (is_fullscreen_) {
+    ExitFullscreen();
+    return;
+  }
+  if (IsZoomed(hwnd)) {
+    ShowWindow(hwnd, SW_RESTORE);
+  } else {
+    ShowWindow(hwnd, SW_MAXIMIZE);
+  }
+}
+
+void FlutterWindow::Minimize() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  ShowWindow(hwnd, SW_MINIMIZE);
+}
+
+void FlutterWindow::NotifyWindowLayoutChanged() {
+  if (media_control_channel_) {
+    const bool is_effective_fullscreen =
+        is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
+    const bool is_effective_maximized =
+        !is_effective_fullscreen && (IsZoomed(GetHandle()) != FALSE);
+    std::string mode = "normal";
+    if (is_effective_fullscreen) {
+      mode = "fullscreen";
+    } else if (is_effective_maximized) {
+      mode = "maximized";
+    }
+    flutter::EncodableMap map;
+    map[flutter::EncodableValue("mode")] = flutter::EncodableValue(mode);
+    map[flutter::EncodableValue("isMaximized")] =
+        flutter::EncodableValue(is_effective_maximized);
+    map[flutter::EncodableValue("isFullScreen")] =
+        flutter::EncodableValue(is_effective_fullscreen);
+    media_control_channel_->InvokeMethod(
+        "on_window_layout_changed",
+        std::make_unique<flutter::EncodableValue>(map));
+  }
+}
+
+double FlutterWindow::GetDoubleArg(const flutter::EncodableMap* map,
+                                  const char* key, double default_value) {
+  if (map == nullptr || key == nullptr) {
+    return default_value;
+  }
+
+  const auto it = map->find(flutter::EncodableValue(key));
+  if (it == map->end()) {
+    return default_value;
+  }
+
+  if (const auto* double_value = std::get_if<double>(&it->second)) {
+    return *double_value;
+  }
+  if (const auto* int_value = std::get_if<int32_t>(&it->second)) {
+    return static_cast<double>(*int_value);
+  }
+  if (const auto* int_value = std::get_if<int64_t>(&it->second)) {
+    return static_cast<double>(*int_value);
+  }
+  return default_value;
 }
 
 HWND FlutterWindow::FindDesktopLyricWindowByPid(DWORD pid) const {

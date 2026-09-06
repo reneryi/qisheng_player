@@ -1,4 +1,5 @@
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/theme/app_component_themes.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
@@ -218,63 +219,57 @@ class AppTheme {
     UiVisualStyleMode visualStyleMode = UiVisualStyleMode.solidCard,
   }) {
     final isDark = scheme.brightness == Brightness.dark;
-    final onSurface =
-        isDark ? const Color(0xFFEAF8FF) : const Color(0xFF17121E);
-    final surface = isDark
-        ? Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.12),
-            const Color(0xFF07111F),
-          )
-        : Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.045),
-            const Color(0xFFF8F4FF),
-          );
-    final surfaceLow = isDark
-        ? Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.10),
-            const Color(0xFF0A1829),
-          )
-        : Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.055),
-            const Color(0xFFFBF8FF),
-          );
-    final surfaceContainer = isDark
-        ? Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.18),
-            const Color(0xFF0E2236),
-          )
-        : Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.075),
-            const Color(0xFFFFFCF6),
-          );
-    final surfaceHigh = isDark
-        ? Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.24),
-            const Color(0xFF142D45),
-          )
-        : Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.09),
-            Colors.white,
-          );
-    final outline = isDark ? const Color(0xFF6B91AA) : const Color(0xFFB9BFD0);
-    final outlineVariant =
-        isDark ? const Color(0xFF2A5265) : const Color(0xFFE0E4F1);
-    final shadow = Colors.black.withValues(alpha: isDark ? 0.38 : 0.1);
+    final hsl = HSLColor.fromColor(scheme.primary);
+    final lum = AlbumPalette.pureHueLuminance(hsl.hue);
+    final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+
+    // 基于 Material 3 动态/手动主题色阶有机调和，针对高感知亮度色相降低暗色容器混合度，彻底杜绝奶浊发黄与刺眼死白
+    final surfaceAlpha = isDark ? (0.06 - excess * 0.02) : 0.02;
+    final surfaceLowAlpha = isDark ? (0.04 - excess * 0.015) : 0.015;
+    final surfaceContainerAlpha = isDark ? (0.08 - excess * 0.03) : 0.035;
+    final surfaceHighAlpha = isDark ? (0.12 - excess * 0.05) : 0.05;
+    final surfaceHighestAlpha = isDark ? (0.16 - excess * 0.07) : 0.065;
+
+    final surface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: surfaceAlpha),
+      scheme.surface,
+    );
+    final surfaceLow = Color.alphaBlend(
+      scheme.primary.withValues(alpha: surfaceLowAlpha),
+      scheme.surfaceContainerLow,
+    );
+    final surfaceContainer = Color.alphaBlend(
+      scheme.primary.withValues(alpha: surfaceContainerAlpha),
+      scheme.surfaceContainer,
+    );
+    final surfaceHigh = Color.alphaBlend(
+      scheme.primary.withValues(alpha: surfaceHighAlpha),
+      scheme.surfaceContainerHigh,
+    );
+    final surfaceHighest = Color.alphaBlend(
+      scheme.primary.withValues(alpha: surfaceHighestAlpha),
+      scheme.surfaceContainerHighest,
+    );
+
+    final onSurface = scheme.onSurface;
+    final outline = scheme.outline;
+    final outlineVariant = scheme.outlineVariant;
+    final shadow = Colors.black.withValues(alpha: isDark ? 0.35 : 0.08);
     final scrim = Colors.black.withValues(alpha: isDark ? 0.5 : 0.22);
 
     return scheme.copyWith(
       surface: surface,
       onSurface: onSurface,
       surfaceTint: Colors.transparent,
-      surfaceDim: surface,
-      surfaceBright: surfaceHigh,
-      surfaceContainerLowest: surfaceLow,
+      surfaceDim: scheme.surfaceDim,
+      surfaceBright: scheme.surfaceBright,
+      surfaceContainerLowest: scheme.surfaceContainerLowest,
       surfaceContainerLow: surfaceLow,
       surfaceContainer: surfaceContainer,
       surfaceContainerHigh: surfaceHigh,
-      surfaceContainerHighest: surfaceHigh,
+      surfaceContainerHighest: surfaceHighest,
       secondaryContainer: surfaceContainer,
-      onSecondaryContainer: onSurface,
+      onSecondaryContainer: scheme.onSecondaryContainer,
       outline: outline,
       outlineVariant: outlineVariant,
       shadow: shadow,

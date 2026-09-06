@@ -52,34 +52,25 @@ class _WaveformSliderState extends State<WaveformSlider>
 
   bool _isDragging = false;
   double _dragPercent = 0.0; // 当前手指拖拽所在的百分比位置 (0.0 到 1.0)
-  double _dragWeight = 0.0; // 果冻变形权重 (手势按下时平滑到 1.0，松开时回弹到 0)
 
   bool _isHovering = false;
   double _hoverPercent = 0.0; // 鼠标当前悬停的百分比位置
-  double _hoverWeight = 0.0; // 悬停物理引力权重 (0.0 -> 0.45，提供柔和的引力吸附感)
 
   @override
   void initState() {
     super.initState();
     // 拖拽阻尼过渡：按下时以 curves.easeOut 变扁，松开时用物理弹簧效果进行回弹
+    // 由 CustomPainter(repaint: ...) 直接驱动，彻底告别在每帧触发全局 setState
     _dragController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
-    )..addListener(() {
-        setState(() {
-          _dragWeight = _dragController.value;
-        });
-      });
+    );
 
     // 悬停引力过渡：悬停淡入 150ms，移出淡出 150ms，以防柱子形变瞬间闪现
     _hoverController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
-    )..addListener(() {
-        setState(() {
-          _hoverWeight = _hoverController.value * 0.45; // 最大引力比例设为 45%
-        });
-      });
+    );
   }
 
   @override
@@ -144,7 +135,8 @@ class _WaveformSliderState extends State<WaveformSlider>
       stiffness: 140, // 刚度：控制频率
       damping: 10, // 阻尼：控制衰减速度
     );
-    final simulation = SpringSimulation(spring, _dragWeight, 0.0, 0.0);
+    final simulation =
+        SpringSimulation(spring, _dragController.value, 0.0, 0.0);
     _dragController.animateWith(simulation);
   }
 
@@ -169,7 +161,7 @@ class _WaveformSliderState extends State<WaveformSlider>
           child: SizedBox(
             width: totalWidth,
             child: Stack(
-              clipBehavior: Clip.none, // 修正为 Clip.none，允许气泡提示浮在波形外面而不被截断
+              clipBehavior: Clip.none, // 允许气泡提示浮在波形外面而不被截断
               children: [
                 GestureDetector(
                   onHorizontalDragStart: (details) =>
@@ -191,10 +183,10 @@ class _WaveformSliderState extends State<WaveformSlider>
                         percent: currentPercent,
                         isDragging: _isDragging,
                         dragPercent: _dragPercent,
-                        dragWeight: _dragWeight,
+                        dragAnimation: _dragController,
                         isHovering: _isHovering,
                         hoverPercent: _hoverPercent,
-                        hoverWeight: _hoverWeight,
+                        hoverAnimation: _hoverController,
                         colorScheme: Theme.of(context).colorScheme,
                       ),
                     ),
@@ -262,30 +254,50 @@ class _WaveformSliderState extends State<WaveformSlider>
 
 /// 自定义绘制波形进度条的 Painter
 class _WaveformSliderPainter extends CustomPainter {
-  const _WaveformSliderPainter({
+  _WaveformSliderPainter({
     required this.percent,
     required this.isDragging,
     required this.dragPercent,
-    required this.dragWeight,
+    required this.dragAnimation,
     required this.isHovering,
     required this.hoverPercent,
-    required this.hoverWeight,
+    required this.hoverAnimation,
     required this.colorScheme,
-  });
+  }) : super(repaint: Listenable.merge([dragAnimation, hoverAnimation]));
 
   final double percent; // 激活的长度占比 (0.0 到 1.0)
   final bool isDragging; // 是否正在被拖拽
   final double dragPercent; // 拖拽焦点百分比 (0.0 到 1.0)
-  final double dragWeight; // 果冻受力物理形变系数 (0.0 -> 1.0)
+  final Animation<double> dragAnimation; // 果冻受力物理形变动画
   final bool isHovering; // 鼠标当前是否处于悬停状态
   final double hoverPercent; // 悬停焦点百分比 (0.0 到 1.0)
-  final double hoverWeight; // 悬停引力物理系数 (0.0 -> 0.45)
+  final Animation<double> hoverAnimation; // 悬停引力物理动画
   final ColorScheme colorScheme;
 
   static const int _barCount = 52; // 精细波形柱子总数
   static const double _barWidth = 3.5; // 柱子宽度
   static const double _gap = 2.0; // 柱子间距
   static const double _minHeight = 4.0; // 柱子最低高度
+
+  // 预计算静态高斯声波基础高度（中间高、两边低），避免每帧 52 次三角函数与浮点幂开销
+  static final List<double> _baseBarHeights = List<double>.generate(_barCount, (i) {
+    final double normalizedIdx = i / (_barCount - 1);
+    final double centerFactor = 1.0 - (normalizedIdx - 0.5).abs() * 2.0;
+    return _minHeight +
+        20.0 * math.sin(normalizedIdx * math.pi) * (0.6 + 0.4 * centerFactor);
+  });
+
+  // 预计算柱子相对 X 偏移量
+  static final List<double> _barXOffsets = List<double>.generate(
+    _barCount,
+    (i) => i * (_barWidth + _gap),
+  );
+
+  // 复用 Paint 绘制对象，杜绝每帧 GC 内存分配
+  final Paint _activePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _inactivePaint = Paint()..style = PaintingStyle.fill;
+  final Paint _focusPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -298,19 +310,17 @@ class _WaveformSliderPainter extends CustomPainter {
     final double startX = (availableWidth - totalPaintWidth) / 2;
 
     // 已播放主色画笔 (高饱和激活主色)
-    final activePaint = Paint()
-      ..color = colorScheme.primary
-      ..style = PaintingStyle.fill;
+    _activePaint.color = colorScheme.primary;
 
     // 未播放背景色画笔 (半透明高雅灰色)
-    final inactivePaint = Paint()
-      ..color = colorScheme.onSurface.withValues(alpha: 0.18)
-      ..style = PaintingStyle.fill;
+    _inactivePaint.color = colorScheme.onSurface.withValues(alpha: 0.18);
 
     // 拖拽触点高亮标记画笔
-    final focusPaint = Paint()
-      ..color = colorScheme.secondary.withValues(alpha: 0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    _focusPaint.color = colorScheme.secondary.withValues(alpha: 0.4);
+
+    // 从动画控制器中实时获取权重，0 Widget Rebuild
+    final double dragWeight = dragAnimation.value;
+    final double hoverWeight = hoverAnimation.value * 0.45;
 
     // 确定当前的物理形变中心与形变权重 (拖动时以拖拽焦点的果冻效果为主，悬停时则展示引力微澜)
     final double activeWeight = isDragging ? dragWeight : hoverWeight;
@@ -319,11 +329,8 @@ class _WaveformSliderPainter extends CustomPainter {
 
     // 逐根绘制波形柱
     for (int i = 0; i < _barCount; i++) {
-      // 1. 生成经典高斯声波高矮轮廓 (中间高、两边低)
-      final double normalizedIdx = i / (_barCount - 1);
-      final double centerFactor = 1.0 - (normalizedIdx - 0.5).abs() * 2.0;
-      double barHeight = _minHeight +
-          20.0 * math.sin(normalizedIdx * math.pi) * (0.6 + 0.4 * centerFactor);
+      // 1. 读取预计算高斯声波高矮轮廓
+      double barHeight = _baseBarHeights[i];
 
       // Continuous audio movement is drawn by LiquidAudioVisualizer. This
       // control only reacts to direct hover and drag input.
@@ -350,7 +357,7 @@ class _WaveformSliderPainter extends CustomPainter {
       barHeight = barHeight.clamp(_minHeight, size.height - 2.0);
 
       // 4. 计算当前柱子的 X 轴物理渲染坐标
-      final double x = startX + i * (_barWidth + _gap);
+      final double x = startX + _barXOffsets[i];
 
       // 5. 确定当前柱子是否处于已播放的激活状态
       final bool isActive = (i / (_barCount - 1)) <= percent;
@@ -370,11 +377,11 @@ class _WaveformSliderPainter extends CustomPainter {
       if (isDragging && (i - dragIndex).abs() < 1.8) {
         canvas.drawRRect(
           rect.inflate(3),
-          focusPaint,
+          _focusPaint,
         );
       }
 
-      canvas.drawRRect(rect, isActive ? activePaint : inactivePaint);
+      canvas.drawRRect(rect, isActive ? _activePaint : _inactivePaint);
     }
   }
 
@@ -383,10 +390,10 @@ class _WaveformSliderPainter extends CustomPainter {
     return oldDelegate.percent != percent ||
         oldDelegate.isDragging != isDragging ||
         oldDelegate.dragPercent != dragPercent ||
-        oldDelegate.dragWeight != dragWeight ||
+        oldDelegate.dragAnimation != dragAnimation ||
         oldDelegate.isHovering != isHovering ||
         oldDelegate.hoverPercent != hoverPercent ||
-        oldDelegate.hoverWeight != hoverWeight ||
+        oldDelegate.hoverAnimation != hoverAnimation ||
         oldDelegate.colorScheme != colorScheme;
   }
 }

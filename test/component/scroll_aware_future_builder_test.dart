@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/component/scroll_aware_future_builder.dart';
+import 'package:qisheng_player/component/scroll_aware_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

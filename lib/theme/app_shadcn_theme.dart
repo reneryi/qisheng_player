@@ -14,8 +14,11 @@ class AppShadcnTheme {
           ? shadcn.ColorSchemes.darkSlate
           : shadcn.ColorSchemes.lightSlate,
       radius: 0.72,
-      scaling: 0.96,
-      typography: const shadcn.Typography.geist(),
+      scaling: 1.0,
+      typography: shadcn.Typography.geist(
+        sans: material.TextStyle(fontFamily: fontFamily),
+        mono: material.TextStyle(fontFamily: fontFamily),
+      ),
       surfaceOpacity: isDark ? 0.86 : 0.94,
       surfaceBlur: 18,
       enableFeedback: false,

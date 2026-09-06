@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/page/album_detail_page.dart';
 import 'package:qisheng_player/page/artist_detail_page.dart';

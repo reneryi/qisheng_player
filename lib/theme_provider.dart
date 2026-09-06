@@ -125,17 +125,29 @@ Color buildGlassTint(Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
   if (isNeutralColor(dominantColor)) {
     final lightness = brightness == Brightness.dark
-        ? hsl.lightness.clamp(0.42, 0.68)
-        : hsl.lightness.clamp(0.38, 0.62);
+        ? hsl.lightness.clamp(0.48, 0.68)
+        : hsl.lightness.clamp(0.38, 0.56);
     return hsl.withSaturation(0).withLightness(lightness).toColor();
   }
-  // 移除硬编码的青蓝锚点插值，100% 忠实表达专辑封面与主题提取色的原生色彩
+  // 极浅淡微染色管道：暗色模式提亮晶体透光，日间模式雅致微染色，杜绝发脏发灰
+  final isDark = brightness == Brightness.dark;
+  final lum = AlbumPalette.pureHueLuminance(hsl.hue);
+  final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+  final darkMaxL = (0.76 - excess * 0.18).clamp(0.52, 0.76);
+  final darkMinL = (0.62 - excess * 0.14).clamp(0.44, darkMaxL);
+  final lightMaxL = (0.50 - excess * 0.12).clamp(0.36, 0.50);
+  final lightMinL = (0.38 - excess * 0.08).clamp(0.28, lightMaxL);
+
   return hsl
-      .withSaturation(hsl.saturation.clamp(0.0, 0.55).toDouble())
+      .withSaturation(
+        isDark
+            ? (hsl.saturation * (1.0 - excess * 0.20)).clamp(0.10, 0.44).toDouble()
+            : hsl.saturation.clamp(0.08, 0.36).toDouble(),
+      )
       .withLightness(
-        brightness == Brightness.dark
-            ? hsl.lightness.clamp(0.60, 0.78).toDouble()
-            : hsl.lightness.clamp(0.32, 0.48).toDouble(),
+        isDark
+            ? hsl.lightness.clamp(darkMinL, darkMaxL).toDouble()
+            : hsl.lightness.clamp(lightMinL, lightMaxL).toDouble(),
       )
       .toColor();
 }
@@ -147,22 +159,59 @@ List<Color> buildDynamicSurfaceGradient(
   Brightness brightness,
 ) {
   final hsl = HSLColor.fromColor(primaryColor);
-  final saturation = isNeutralColor(primaryColor)
-      ? 0.0
-      : hsl.saturation.clamp(0.04, 0.72).toDouble();
-  final baseLightness = brightness == Brightness.dark
-      ? hsl.lightness.clamp(0.34, 0.72).toDouble()
-      : hsl.lightness.clamp(0.28, 0.68).toDouble();
-  final startLightness = brightness == Brightness.dark
-      ? (baseLightness * 1.24).clamp(0.0, 1.0)
-      : (baseLightness * 1.08).clamp(0.0, 1.0);
-  final endLightness = brightness == Brightness.dark
-      ? (baseLightness * 0.88).clamp(0.0, 1.0)
-      : (baseLightness * 0.92).clamp(0.0, 1.0);
+  final isNeutral = isNeutralColor(primaryColor);
+  final lum = isNeutral ? 0.0 : AlbumPalette.pureHueLuminance(hsl.hue);
+  final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
 
+  final maxSat = isNeutral ? 0.0 : (0.70 - excess * 0.22).clamp(0.35, 0.70);
+  final saturation = isNeutral
+      ? 0.0
+      : hsl.saturation.clamp(0.04, maxSat).toDouble();
+
+  if (brightness == Brightness.dark) {
+    // 暗色模式：避免高感知亮度色彩（黄、橙、嫩绿、青等）在微透渐变中产生白炽暴晒感
+    final maxBaseL = (0.58 - excess * 0.26).clamp(0.32, 0.58);
+    final baseLightness = hsl.lightness.clamp(0.30, maxBaseL).toDouble();
+    final startLightness =
+        (baseLightness * (1.24 - excess * 0.35)).clamp(0.18, 0.68);
+    final endLightness =
+        (baseLightness * (0.88 - excess * 0.10)).clamp(0.12, 0.60);
+
+    return [
+      hsl.withSaturation(saturation).withLightness(startLightness).toColor(),
+      hsl.withSaturation(saturation).withLightness(endLightness).toColor(),
+    ];
+  } else {
+    // 亮色模式：温润水彩白底衬，保留既有明度算法确保测试与既有视觉一致性
+    final maxBaseL = (0.68 - excess * 0.14).clamp(0.48, 0.68);
+    final baseLightness = hsl.lightness.clamp(0.28, maxBaseL).toDouble();
+    final startLightness = (baseLightness * 1.08).clamp(0.0, 0.88);
+    final endLightness = (baseLightness * 0.92).clamp(0.0, 0.82);
+
+    return [
+      hsl.withSaturation(saturation).withLightness(startLightness).toColor(),
+      hsl.withSaturation(saturation).withLightness(endLightness).toColor(),
+    ];
+  }
+}
+
+List<Color> buildAuroraGlowGradient(
+  AlbumPalette palette,
+  Brightness brightness,
+) {
+  if (brightness == Brightness.dark) {
+    final darkPalette = palette.forDarkMode();
+    return [
+      Color.lerp(const Color(0xFF060A13), darkPalette.primary, 0.16)!,
+      Color.lerp(const Color(0xFF080D18), darkPalette.muted, 0.10)!,
+      Color.lerp(const Color(0xFF060A13), darkPalette.secondary, 0.16)!,
+    ];
+  }
+  final lightPalette = palette.forLightMode();
   return [
-    hsl.withSaturation(saturation).withLightness(startLightness).toColor(),
-    hsl.withSaturation(saturation).withLightness(endLightness).toColor(),
+    Color.lerp(const Color(0xFFF7F9FD), lightPalette.primary, 0.14)!,
+    Color.lerp(const Color(0xFFF1F5FA), lightPalette.muted, 0.08)!,
+    Color.lerp(const Color(0xFFF6F8FD), lightPalette.secondary, 0.14)!,
   ];
 }
 
@@ -478,6 +527,16 @@ class ThemeProvider extends ChangeNotifier {
     _darkAccentColor = _resolveAccentColor(palette.accent, Brightness.dark);
   }
 
+  @visibleForTesting
+  void setDynamicAlbumPaletteForTesting(AlbumPalette? palette) {
+    if (palette == null) {
+      _resetDynamicTheme();
+    } else {
+      _applyAlbumPalette(palette);
+      notifyListeners();
+    }
+  }
+
   void _cachePalette(String key, AlbumPalette palette) {
     if (!_paletteCache.containsKey(key) &&
         _paletteCache.length >= _maxPaletteCacheEntries) {
@@ -497,11 +556,23 @@ class ThemeProvider extends ChangeNotifier {
 
   Color _resolveAccentColor(Color color, Brightness brightness) {
     final hsl = HSLColor.fromColor(color);
-    final saturation = hsl.saturation.clamp(0.35, 0.9).toDouble();
-    final lightness = brightness == Brightness.dark
-        ? hsl.lightness.clamp(0.52, 0.68).toDouble()
-        : hsl.lightness.clamp(0.38, 0.56).toDouble();
-    return hsl.withSaturation(saturation).withLightness(lightness).toColor();
+    final lum = AlbumPalette.pureHueLuminance(hsl.hue);
+    final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+    if (brightness == Brightness.dark) {
+      final darkMaxL = (0.58 - excess * 0.22).clamp(0.36, 0.58);
+      final darkMinL = (0.44 - excess * 0.16).clamp(0.28, darkMaxL);
+      final maxSat = (0.80 - excess * 0.26).clamp(0.48, 0.80);
+      final saturation = hsl.saturation.clamp(0.30, maxSat).toDouble();
+      final lightness = hsl.lightness.clamp(darkMinL, darkMaxL).toDouble();
+      return hsl.withSaturation(saturation).withLightness(lightness).toColor();
+    } else {
+      final lightMaxL = (0.54 - excess * 0.18).clamp(0.34, 0.54);
+      final lightMinL = (0.36 - excess * 0.12).clamp(0.24, lightMaxL);
+      final maxSat = (0.86 - excess * 0.18).clamp(0.52, 0.86);
+      final saturation = hsl.saturation.clamp(0.35, maxSat).toDouble();
+      final lightness = hsl.lightness.clamp(lightMinL, lightMaxL).toDouble();
+      return hsl.withSaturation(saturation).withLightness(lightness).toColor();
+    }
   }
 
   Color _normalizeColor(Color color) {

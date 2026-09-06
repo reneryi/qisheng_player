@@ -1,6 +1,8 @@
-﻿import 'package:qisheng_player/component/ui/expandable_search_action.dart';
+import 'package:qisheng_player/component/ui/expandable_search_action.dart';
+import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import '../test_helpers/media_test_harness.dart';
 
@@ -8,14 +10,17 @@ void main() {
   testWidgets('ExpandableSearchAction stays stable on narrow width',
       (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTestTheme(),
-        home: Center(
-          child: SizedBox(
-            width: 74,
-            child: ExpandableSearchAction(
-              hintText: 'Search',
-              onChanged: (_) {},
+      ChangeNotifierProvider<ThemeProvider>.value(
+        value: ThemeProvider.instance,
+        child: MaterialApp(
+          theme: buildTestTheme(),
+          home: Center(
+            child: SizedBox(
+              width: 74,
+              child: ExpandableSearchAction(
+                hintText: 'Search',
+                onChanged: (_) {},
+              ),
             ),
           ),
         ),
@@ -33,15 +38,18 @@ void main() {
     String latestValue = '';
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTestTheme(),
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 280,
-              child: ExpandableSearchAction(
-                hintText: 'Search',
-                onChanged: (value) => latestValue = value,
+      ChangeNotifierProvider<ThemeProvider>.value(
+        value: ThemeProvider.instance,
+        child: MaterialApp(
+          theme: buildTestTheme(),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                child: ExpandableSearchAction(
+                  hintText: 'Search',
+                  onChanged: (value) => latestValue = value,
+                ),
               ),
             ),
           ),

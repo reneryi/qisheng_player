@@ -1,5 +1,4 @@
 import 'package:qisheng_player/component/responsive_builder.dart';
-import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 
 class PageScaffold extends StatelessWidget {
@@ -41,27 +40,27 @@ class PageScaffold extends StatelessWidget {
             ),
         };
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Stack(
-                    children: [
-                      const Positioned.fill(child: _HeaderHitAbsorber()),
-                      header,
-                    ],
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const Positioned.fill(child: _HeaderHitAbsorber()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 4, 6, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: header,
+                    ),
                   ),
-                ),
+                  Expanded(child: body),
+                ],
               ),
-              SizedBox(height: context.visuals.contentHeaderGap),
-              Expanded(child: body),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );

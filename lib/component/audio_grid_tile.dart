@@ -137,8 +137,8 @@ class _AudioGridTileState extends State<AudioGridTile> {
                   borderRadius: tileRadius,
                   selected: effectiveFocus || selected,
                   border: false, // 无边框通透设计
-                  hoverScale: 1.0,
-                  pressScale: 0.97, // 按压时略微收缩以提供绝佳的触觉反馈
+                  hoverScale: 1.025,
+                  pressScale: 0.96, // 按压时略微收缩以提供绝佳的触觉反馈
                   hoverShadow: false,
                   selectedGlow: false,
                   focusNode: _focusNode,

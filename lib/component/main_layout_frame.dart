@@ -54,6 +54,11 @@ class MainLayoutFrame extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              const Positioned.fill(
+                child: AbsorbPointer(
+                  child: SizedBox.expand(),
+                ),
+              ),
               Padding(
                 padding: EdgeInsets.fromLTRB(4.0, topInset, 4.0, 0),
                 child: Column(

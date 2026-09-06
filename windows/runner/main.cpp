@@ -5,6 +5,22 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+namespace {
+
+#if defined(_DEBUG)
+constexpr wchar_t kSingleInstanceMutexName[] =
+    L"Local\\QishengPlayerDebugSingleInstance";
+constexpr wchar_t kActivateWindowMessageName[] =
+    L"QishengPlayerDebugActivateMainWindow";
+#else
+constexpr wchar_t kSingleInstanceMutexName[] =
+    L"Local\\QishengPlayerSingleInstance";
+constexpr wchar_t kActivateWindowMessageName[] =
+    L"QishengPlayerActivateMainWindow";
+#endif
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -18,13 +34,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
   HANDLE single_instance_mutex =
-      CreateMutexW(nullptr, FALSE, L"Local\\QishengPlayerSingleInstance");
+      CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   const DWORD single_instance_error = GetLastError();
   if (single_instance_mutex != nullptr &&
       (single_instance_error == ERROR_ALREADY_EXISTS ||
        single_instance_error == ERROR_ACCESS_DENIED)) {
     const UINT activate_window_message =
-        RegisterWindowMessage(L"QishengPlayerActivateMainWindow");
+        RegisterWindowMessage(kActivateWindowMessageName);
     if (activate_window_message != 0) {
       AllowSetForegroundWindow(ASFW_ANY);
       PostMessage(HWND_BROADCAST, activate_window_message, 0, 0);

@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/page/folders_page.dart';
+import 'package:qisheng_player/page/folders_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

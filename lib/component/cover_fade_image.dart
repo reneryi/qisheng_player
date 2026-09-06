@@ -164,6 +164,7 @@ class _CoverFadeImageState extends State<CoverFadeImage>
                   width: widget.width,
                   height: widget.height,
                   fit: widget.fit,
+                  filterQuality: FilterQuality.medium,
                   gaplessPlayback: true,
                   errorBuilder: (_, __, ___) => placeholder,
                 ),

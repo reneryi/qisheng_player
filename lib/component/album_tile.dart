@@ -28,19 +28,17 @@ class _AlbumTileState extends State<AlbumTile> {
   Future<void> _openAlbumDetail() async {
     final tag = widget.enableHero ? albumArtworkHeroTag(widget.album) : null;
     final navigation = AppNavigationState.instance;
-    if (!navigation.beginAlbumArtworkHeroNavigation(
-      tag: tag,
-      sourceKey: _heroSourceKey,
-    )) {
-      return;
+    if (tag != null) {
+      navigation.beginAlbumArtworkHeroNavigation(
+        tag: tag,
+        sourceKey: _heroSourceKey,
+      );
     }
 
     try {
-      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       await context.push(app_paths.ALBUM_DETAIL_PAGE, extra: widget.album);
     } finally {
-      await Future<void>.delayed(const Duration(milliseconds: 380));
       navigation.endAlbumArtworkHeroNavigation(_heroSourceKey);
     }
   }
@@ -113,6 +111,19 @@ class _AlbumTileState extends State<AlbumTile> {
                       return Hero(
                         tag: tag,
                         transitionOnUserGestures: true,
+                        flightShuttleBuilder: (
+                          flightContext,
+                          animation,
+                          flightDirection,
+                          fromHeroContext,
+                          toHeroContext,
+                        ) {
+                          final toHero = toHeroContext.widget as Hero;
+                          return Material(
+                            type: MaterialType.transparency,
+                            child: toHero.child,
+                          );
+                        },
                         child: child!,
                       );
                     },

@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_visibility.dart';
+import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_visibility.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

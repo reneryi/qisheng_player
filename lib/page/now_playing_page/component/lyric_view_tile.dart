@@ -166,51 +166,70 @@ class _SyncLineContent extends StatelessWidget {
           stream: PlayService.instance.playbackService.positionStream,
           builder: (context, snapshot) {
             final posInMs = (snapshot.data ?? 0) * 1000;
+            final mainStyle = _primaryStyle(
+              scheme,
+              lyricFontSize,
+              isMainLine: true,
+            );
+            final inactiveStyle = mainStyle.copyWith(
+              color: scheme.onSecondaryContainer.withValues(alpha: 0.28),
+              shadows: const [],
+            );
+
+            final List<InlineSpan> wordSpans = [];
+            for (var i = 0; i < syncLine.words.length; i++) {
+              final word = syncLine.words[i];
+              final wordStart = word.start.inMilliseconds;
+              final wordLength = max(1, word.length.inMilliseconds);
+
+              if (posInMs >= wordStart + wordLength) {
+                // 已唱完：直接 TextSpan 渲染高亮文字，零离屏开销
+                wordSpans.add(TextSpan(
+                  text: word.content,
+                  style: mainStyle,
+                ));
+              } else if (posInMs <= wordStart) {
+                // 尚未唱到：直接 TextSpan 渲染暗色文字，零离屏开销
+                wordSpans.add(TextSpan(
+                  text: word.content,
+                  style: inactiveStyle,
+                ));
+              } else {
+                // 正在演唱中：全行唯一活跃的平滑字内擦除 ShaderMask
+                final progress =
+                    ((posInMs - wordStart) / wordLength).clamp(0.0, 1.0);
+                wordSpans.add(WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (bounds) {
+                      return LinearGradient(
+                        colors: [
+                          scheme.primary,
+                          scheme.primary,
+                          scheme.primary.withValues(alpha: 0.28),
+                          scheme.primary.withValues(alpha: 0.28),
+                        ],
+                        stops: [0, progress, progress, 1],
+                      ).createShader(bounds);
+                    },
+                    child: Text(
+                      word.content,
+                      style: mainStyle,
+                    ),
+                  ),
+                ));
+              }
+            }
+
             return RichText(
               textAlign: switch (alignment) {
                 LyricTextAlign.left => TextAlign.left,
                 LyricTextAlign.center => TextAlign.center,
                 LyricTextAlign.right => TextAlign.right,
               },
-              text: TextSpan(
-                children: List.generate(
-                  syncLine.words.length,
-                  (i) {
-                    final posFromWordStart = max(
-                      posInMs - syncLine.words[i].start.inMilliseconds,
-                      0,
-                    );
-                    final progress = min(
-                      posFromWordStart / syncLine.words[i].length.inMilliseconds,
-                      1.0,
-                    );
-                    return WidgetSpan(
-                      child: ShaderMask(
-                        blendMode: BlendMode.dstIn,
-                        shaderCallback: (bounds) {
-                          return LinearGradient(
-                            colors: [
-                              scheme.primary,
-                              scheme.primary,
-                              scheme.primary.withValues(alpha: 0.10),
-                              scheme.primary.withValues(alpha: 0.10),
-                            ],
-                            stops: [0, progress, progress, 1],
-                          ).createShader(bounds);
-                        },
-                        child: Text(
-                          syncLine.words[i].content,
-                          style: _primaryStyle(
-                            scheme,
-                            lyricFontSize,
-                            isMainLine: true,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              text: TextSpan(children: wordSpans),
             );
           },
         )
@@ -542,27 +561,24 @@ class LyricTransitionTileController extends ChangeNotifier {
   late final StreamSubscription positionStreamSub;
 
   double sizeFactor = 0;
-  double k = 1;
   late final Ticker factorTicker;
   bool _disposed = false;
 
   LyricTransitionTileController([this.lrcLine, this.syncLine]) {
     positionStreamSub = playbackService.positionStream.listen(_updateProgress);
+    // 使用真实时间轴（elapsed）计算呼吸律动，彻底解决 120Hz/144Hz 高刷屏动画速度加倍的 BUG
     factorTicker = Ticker((elapsed) {
-      sizeFactor += k * 1 / 180;
-      if (sizeFactor > 1) {
-        k = -1;
-        sizeFactor = 1;
-      } else if (sizeFactor < 0) {
-        k = 1;
-        sizeFactor = 0;
-      }
+      if (_disposed) return;
+      final seconds = elapsed.inMicroseconds / 1000000.0;
+      // 1.5 秒完整自然正弦呼吸周期，无论 60Hz 还是 144Hz 均保持严格一致的物理律动
+      sizeFactor = (0.5 + 0.5 * sin(seconds * (2 * pi / 1.5))).clamp(0.0, 1.0);
       notifyListeners();
     });
     factorTicker.start();
   }
 
   void _updateProgress(double position) {
+    if (_disposed) return;
     late int startInMs;
     late int lengthInMs;
     if (lrcLine != null) {
@@ -573,11 +589,14 @@ class LyricTransitionTileController extends ChangeNotifier {
       lengthInMs = syncLine!.length.inMilliseconds;
     }
     final sinceStart = position * 1000 - startInMs;
-    progress = max(sinceStart, 0) / lengthInMs;
+    progress = max(sinceStart, 0) / max(1, lengthInMs);
     notifyListeners();
 
-    if (progress >= 1) {
-      dispose();
+    if (progress >= 1.0) {
+      // 播放完成后停止时钟节约计算，由 Widget State 统一负责最终销毁
+      if (factorTicker.isActive) {
+        factorTicker.stop();
+      }
     }
   }
 

@@ -110,45 +110,64 @@ class _MarqueeTextState extends State<MarqueeText>
           );
         }
 
+        final distance = _textWidth + widget.gap;
+        final cachedContent = OverflowBox(
+          alignment: Alignment.centerLeft,
+          minWidth: distance * 2,
+          maxWidth: distance * 2,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_text, maxLines: 1, style: widget.style),
+              SizedBox(width: widget.gap),
+              Text(_text, maxLines: 1, style: widget.style),
+            ],
+          ),
+        );
+
         return SizedBox(
           height: height,
-          child: ClipRect(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                final distance = _textWidth + widget.gap;
-                final t = _controller.value;
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) {
+              return const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.transparent,
+                  Colors.black,
+                  Colors.black,
+                  Colors.transparent,
+                ],
+                stops: [0.0, 0.04, 0.96, 1.0],
+              ).createShader(bounds);
+            },
+            child: ClipRect(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  final t = _controller.value;
 
-                // 呼吸式停顿曲线：
-                // 0.0 ~ 0.20 (前 20% 时间)：停留在起点，方便阅读歌名开头
-                // 0.20 ~ 0.80 (中间 60% 时间)：平滑匀速滚动到末尾
-                // 0.80 ~ 1.00 (后 20% 时间)：停留在循环接合点
-                double scrollProgress;
-                if (t < 0.20) {
-                  scrollProgress = 0.0;
-                } else if (t < 0.80) {
-                  scrollProgress = (t - 0.20) / 0.60;
-                } else {
-                  scrollProgress = 1.0;
-                }
+                  // 呼吸式停顿曲线：
+                  // 0.0 ~ 0.20 (前 20% 时间)：停留在起点，方便阅读歌名开头
+                  // 0.20 ~ 0.80 (中间 60% 时间)：平滑匀速滚动到末尾
+                  // 0.80 ~ 1.00 (后 20% 时间)：停留在循环接合点
+                  double scrollProgress;
+                  if (t < 0.20) {
+                    scrollProgress = 0.0;
+                  } else if (t < 0.80) {
+                    scrollProgress = (t - 0.20) / 0.60;
+                  } else {
+                    scrollProgress = 1.0;
+                  }
 
-                return Transform.translate(
-                  offset: Offset(-distance * scrollProgress, 0),
-                  child: OverflowBox(
-                    alignment: Alignment.centerLeft,
-                    minWidth: distance * 2,
-                    maxWidth: distance * 2,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_text, maxLines: 1, style: widget.style),
-                        SizedBox(width: widget.gap),
-                        Text(_text, maxLines: 1, style: widget.style),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                  return Transform.translate(
+                    offset: Offset(-distance * scrollProgress, 0),
+                    child: child,
+                  );
+                },
+                child: cachedContent,
+              ),
             ),
           ),
         );

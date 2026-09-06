@@ -4,9 +4,7 @@ import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/page/uni_page.dart';
-import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AlbumsPage extends StatelessWidget {
@@ -25,7 +23,7 @@ class AlbumsPage extends StatelessWidget {
           AlbumTile(album: item, enableHero: true),
       gridBuilder: (context, item, i, multiSelectController) => AlbumGridTile(
         album: item,
-        onTap: () => context.push(app_paths.ALBUM_DETAIL_PAGE, extra: item),
+        enableHero: true,
       ),
       enableShufflePlay: false,
       enableSortMethod: true,

@@ -2,8 +2,6 @@ use anyhow::{bail, Context};
 use image::imageops::FilterType;
 use std::collections::HashMap;
 
-const MIN_CLUSTER_PERCENT: u64 = 6;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RgbSample {
     r: u8,
@@ -43,6 +41,12 @@ struct OkLab {
     l: f64,
     a: f64,
     b: f64,
+}
+
+impl OkLab {
+    fn chroma(self) -> f64 {
+        (self.a * self.a + self.b * self.b).sqrt()
+    }
 }
 
 fn srgb_to_linear(value: u8) -> f64 {
@@ -131,30 +135,111 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
 
     let bins = histogram.into_values().collect::<Vec<_>>();
     let average_luminance = weighted_average_luminance(&bins, total_weight);
-    let mut colors = cluster_histogram(&bins, target_count);
-    colors.sort_by(|left, right| {
+
+    // 第一阶段：细粒度初始聚类（16 个聚类中心），充分捕获主体与小面积鲜活特征色
+    let fine_count = bins.len().min(16).max(target_count);
+    let mut raw_clusters = cluster_histogram(&bins, fine_count);
+
+    // 第二阶段：在感知色彩空间中合并极相近的同色系微弱渐变（避免渐变背景占用过多名额）
+    let mut merged = Vec::<WeightedColor>::with_capacity(raw_clusters.len());
+    raw_clusters.sort_by(|a, b| b.weight.cmp(&a.weight));
+    for c in raw_clusters {
+        if let Some(target) = merged
+            .iter_mut()
+            .find(|m| color_distance_sq(m.rgb, c.rgb) < 0.048_f64.powi(2))
+        {
+            let total_w = target.weight + c.weight;
+            let tr = ((target.rgb >> 16) & 0xFF) as u64 * target.weight
+                + ((c.rgb >> 16) & 0xFF) as u64 * c.weight;
+            let tg = ((target.rgb >> 8) & 0xFF) as u64 * target.weight
+                + ((c.rgb >> 8) & 0xFF) as u64 * c.weight;
+            let tb = (target.rgb & 0xFF) as u64 * target.weight
+                + (c.rgb & 0xFF) as u64 * c.weight;
+            target.rgb = (((tr / total_w) as u32) << 16)
+                | (((tg / total_w) as u32) << 8)
+                | ((tb / total_w) as u32);
+            target.weight = total_w;
+        } else {
+            merged.push(c);
+        }
+    }
+
+    // 第三阶段：自适应特征色保留过滤
+    // 若画面为极端单一背景（单色占比 >= 88%，如纯灰大底衬带一条细边缘线），严格过滤微小边缘噪点（<= 5.5%）；
+    // 若为正常多色封面（无单一绝对主导色），充分保留视觉主体与鲜活特征色（高纯度特征色只要 >= 1.8% 即可保留）
+    let has_multiple_colors = merged.len() > 1;
+    let max_weight = merged.iter().map(|c| c.weight).max().unwrap_or(total_weight);
+    let is_dominant_single_background = (max_weight as f64 / total_weight as f64) >= 0.88;
+
+    merged.retain(|c| {
+        if !has_multiple_colors {
+            return true;
+        }
+        let area_pct = c.weight as f64 / total_weight as f64 * 100.0;
+        let sample = rgb_sample(c.rgb);
+        let chroma = sample.to_oklab().chroma();
+        let sat = rgb_saturation(sample);
+
+        let is_high_contrast =
+            (relative_luminance(sample) - average_luminance).abs() >= 0.30;
+
+        if is_dominant_single_background {
+            area_pct >= 5.8
+        } else if chroma >= 0.045 || sat >= 0.35 || (is_high_contrast && area_pct >= 1.3) {
+            area_pct >= 1.5
+        } else {
+            area_pct >= 3.6
+        }
+    });
+
+    merged.sort_by(|left, right| {
         visual_salience_score(*right, total_weight, average_luminance)
-            .partial_cmp(&visual_salience_score(
-                *left,
-                total_weight,
-                average_luminance,
-            ))
+            .partial_cmp(&visual_salience_score(*left, total_weight, average_luminance))
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| right.weight.cmp(&left.weight))
     });
-    let has_multiple_colors = colors.len() > 1;
-    colors.retain(|color| {
-        !has_multiple_colors
-            || color.weight.saturating_mul(100) >= total_weight.saturating_mul(MIN_CLUSTER_PERCENT)
-    });
 
-    let mut result = Vec::with_capacity(colors.len());
-    for color in colors {
-        if result
+    // 第四阶段：多样性感知贪心选择（Perceptual Diversity Selection）
+    // 优先覆盖不同色相与明暗维度的代表色，确保稳定选满 target_count 个优质色彩
+    let mut result = Vec::with_capacity(target_count);
+    if let Some(first) = merged.first() {
+        result.push(first.rgb);
+    }
+
+    while result.len() < target_count && result.len() < merged.len() {
+        let next_best = merged
             .iter()
-            .all(|existing| color_distance_sq(*existing, color.rgb) > 0.035_f64.powi(2))
-        {
-            result.push(color.rgb);
+            .filter(|candidate| !result.contains(&candidate.rgb))
+            .max_by(|a, b| {
+                let dist_a = result
+                    .iter()
+                    .map(|&r| color_distance_sq(r, a.rgb).sqrt())
+                    .fold(f64::INFINITY, f64::min);
+                let dist_b = result
+                    .iter()
+                    .map(|&r| color_distance_sq(r, b.rgb).sqrt())
+                    .fold(f64::INFINITY, f64::min);
+                let salience_a = visual_salience_score(**a, total_weight, average_luminance);
+                let salience_b = visual_salience_score(**b, total_weight, average_luminance);
+                let score_a = salience_a * 0.58 + dist_a * 0.42;
+                let score_b = salience_b * 0.58 + dist_b * 0.42;
+                score_a
+                    .partial_cmp(&score_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+        if let Some(chosen) = next_best {
+            let min_dist = result
+                .iter()
+                .map(|&r| color_distance_sq(r, chosen.rgb).sqrt())
+                .fold(f64::INFINITY, f64::min);
+            if min_dist > 0.038 || result.len() < target_count.min(3) {
+                result.push(chosen.rgb);
+            } else {
+                break;
+            }
+        } else {
+            break;
         }
     }
 
@@ -185,12 +270,16 @@ fn visual_salience_score(color: WeightedColor, total_weight: u64, average_lumina
 
     let area = color.weight as f64 / total_weight as f64;
     let sample = rgb_sample(color.rgb);
+    let chroma = sample.to_oklab().chroma();
     let saturation = rgb_saturation(sample);
     let contrast = (relative_luminance(sample) - average_luminance).abs();
 
-    // Area remains the strongest signal, while vivid and contrasting colors
-    // can outrank a visually flat color that occupies a slightly larger area.
-    area.powf(0.50) * (0.50 + saturation * 0.35 + contrast * 0.15)
+    // 综合显著度评分：
+    // 1. 降低面积权重的绝对统治地位（使用 area^0.36）
+    // 2. 引入 Oklab 真实感知纯度（chroma）与饱和度（saturation）
+    // 3. 引入明度反差（contrast）
+    let vibrancy = (chroma.min(0.24) * 3.6 + saturation * 0.25).max(0.0);
+    area.powf(0.36) * (0.36 + vibrancy * 0.48 + contrast * 0.16)
 }
 
 fn rgb_sample(rgb: u32) -> RgbSample {
@@ -457,5 +546,26 @@ mod tests {
         let eg = ((expected >> 8) & 0xFF) as i32;
         let eb = (expected & 0xFF) as i32;
         (ar - er).abs() <= tolerance && (ag - eg).abs() <= tolerance && (ab - eb).abs() <= tolerance
+    }
+
+    #[test]
+    fn extracts_rich_palette_with_vibrant_accents() {
+        // 创建一个包含蓝天（大面积）、草地绿、暖红主体、阳光金黄的多色合成图像
+        let bytes = encode_png(120, 120, |x, y| {
+            if (35..65).contains(&x) && (35..65).contains(&y) {
+                Rgba([0xE6, 0x30, 0x30, 0xFF]) // 中心暖红主体
+            } else if y > 80 {
+                Rgba([0x2E, 0x8B, 0x57, 0xFF]) // 草地绿
+            } else if x > 90 && y < 30 {
+                Rgba([0xFF, 0xD7, 0x00, 0xFF]) // 金黄阳光
+            } else {
+                Rgba([0x46, 0x82, 0xB4, 0xFF]) // 蓝天
+            }
+        });
+        let colors = extract_dominant_colors(bytes, 6).unwrap();
+        assert!(colors.len() >= 4, "expected at least 4 distinct colors, got {}", colors.len());
+        // 确保中心暖红和金黄等特征色均被提取保留
+        assert!(colors.iter().any(|c| is_close(*c, 0xE63030, 18)));
+        assert!(colors.iter().any(|c| is_close(*c, 0x4682B4, 18)));
     }
 }

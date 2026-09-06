@@ -1,9 +1,11 @@
-﻿import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/page/folders_page.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
+import 'package:qisheng_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 ThemeData _buildTheme() {
   final baseScheme = ColorScheme.fromSeed(
@@ -37,9 +39,12 @@ Widget _buildApp(AudioFolder folder) {
     ],
   );
 
-  return MaterialApp.router(
-    theme: _buildTheme(),
-    routerConfig: router,
+  return ChangeNotifierProvider<ThemeProvider>.value(
+    value: ThemeProvider.instance,
+    child: MaterialApp.router(
+      theme: _buildTheme(),
+      routerConfig: router,
+    ),
   );
 }
 

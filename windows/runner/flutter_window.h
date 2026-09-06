@@ -55,6 +55,14 @@ class FlutterWindow : public Win32Window {
   void RestoreFromTray();
   void ExitApplication();
   void ShowTrayMenu();
+  void EnterFullscreen();
+  void ExitFullscreen();
+  void ToggleFullscreen();
+  void Maximize();
+  void Unmaximize();
+  void ToggleMaximize();
+  void Minimize();
+  void NotifyWindowLayoutChanged();
   void SetRegisteredDesktopLyricProcess(
       DWORD pid, const std::wstring& executable_path);
   DWORD ResolveDesktopLyricPid(
@@ -65,13 +73,14 @@ class FlutterWindow : public Win32Window {
       const flutter::EncodableValue* arguments) const;
   static int GetIntArg(const flutter::EncodableMap* map, const char* key,
                        int default_value);
+  static double GetDoubleArg(const flutter::EncodableMap* map, const char* key,
+                             double default_value);
   static std::string GetStringArg(const flutter::EncodableMap* map,
                                   const char* key,
                                   const std::string& default_value);
   flutter::EncodableMap SetWindowBackdropMode(
       const std::string& requested_mode);
   void ApplyRoundedWindowAppearance();
-  void UpdateRoundedWindowRegion();
   void SetupTaskbarButtons();
   HICON CreateTransportIcon(TransportIconType type) const;
   bool HandlePlaybackCommand(UINT command_id);
@@ -93,6 +102,12 @@ class FlutterWindow : public Win32Window {
   bool is_playing_ = false;
   bool thumb_buttons_added_ = false;
   bool was_maximized_before_tray_ = false;
+  bool is_fullscreen_ = false;
+  WINDOWPLACEMENT saved_window_placement_ = {sizeof(WINDOWPLACEMENT)};
+  DWORD saved_window_style_ = 0;
+  DWORD saved_window_ex_style_ = 0;
+  RECT maximize_button_rect_ = {};
+  bool has_maximize_button_rect_ = false;
   DWORD desktop_lyric_pid_ = 0;
   std::wstring desktop_lyric_executable_path_;
   NOTIFYICONDATA tray_icon_data_ = {};

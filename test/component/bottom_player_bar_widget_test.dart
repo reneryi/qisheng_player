@@ -260,4 +260,65 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'BottomPlayerBar opens queue drawer with BackdropFilter glassmorphism and closes smoothly',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final audio = TestAudio(
+      title: 'Drawer Song',
+      artist: 'Drawer Artist',
+      album: 'Drawer Album',
+      path: r'E:\Music\drawer.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: audio,
+      queue: [audio],
+    );
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: FakeLyricController(
+          Lrc([], LrcSource.local),
+        ),
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const Center(
+          child: SizedBox(
+            width: 1280,
+            child: BottomPlayerBar(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 点击打开播放队列按钮
+    final queueButton = find.byTooltip('打开播放队列');
+    expect(queueButton, findsOneWidget);
+    await tester.tap(queueButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // 验证播放队列抽屉及 BackdropFilter 毛玻璃存在
+    expect(find.text('播放队列'), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsWidgets);
+
+    // 点击关闭按钮
+    final closeButton = find.byTooltip('关闭');
+    expect(closeButton, findsOneWidget);
+    await tester.tap(closeButton);
+    await tester.pump();
+
+    // 推进部分时间，抽屉处于退场动画中
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('播放队列'), findsOneWidget);
+
+    // 推进至动画完全结束 (320ms 动画，再推进 350ms)
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('播放队列'), findsNothing);
+  });
 }

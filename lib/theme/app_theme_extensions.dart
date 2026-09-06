@@ -170,6 +170,12 @@ class AppSurfaceTokens extends ThemeExtension<AppSurfaceTokens> {
     required this.effectsLevel,
     required this.backdropStrategy,
     required this.pressedDepth,
+    this.tileBackground = Colors.transparent,
+    this.tileBorderColor = Colors.transparent,
+    this.tileHoverBackground = Colors.transparent,
+    this.tileHoverBorderColor = Colors.transparent,
+    this.tileShadow = const [],
+    this.pagePanelAlpha = 0.0,
   });
 
   final double radiusSm;
@@ -198,6 +204,12 @@ class AppSurfaceTokens extends ThemeExtension<AppSurfaceTokens> {
   final UiEffectsLevel effectsLevel;
   final AppBackdropStrategy backdropStrategy;
   final double pressedDepth;
+  final Color tileBackground;
+  final Color tileBorderColor;
+  final Color tileHoverBackground;
+  final Color tileHoverBorderColor;
+  final List<BoxShadow> tileShadow;
+  final double pagePanelAlpha;
 
   @override
   AppSurfaceTokens copyWith({
@@ -227,6 +239,12 @@ class AppSurfaceTokens extends ThemeExtension<AppSurfaceTokens> {
     UiEffectsLevel? effectsLevel,
     AppBackdropStrategy? backdropStrategy,
     double? pressedDepth,
+    Color? tileBackground,
+    Color? tileBorderColor,
+    Color? tileHoverBackground,
+    Color? tileHoverBorderColor,
+    List<BoxShadow>? tileShadow,
+    double? pagePanelAlpha,
   }) {
     return AppSurfaceTokens(
       radiusSm: radiusSm ?? this.radiusSm,
@@ -255,6 +273,12 @@ class AppSurfaceTokens extends ThemeExtension<AppSurfaceTokens> {
       effectsLevel: effectsLevel ?? this.effectsLevel,
       backdropStrategy: backdropStrategy ?? this.backdropStrategy,
       pressedDepth: pressedDepth ?? this.pressedDepth,
+      tileBackground: tileBackground ?? this.tileBackground,
+      tileBorderColor: tileBorderColor ?? this.tileBorderColor,
+      tileHoverBackground: tileHoverBackground ?? this.tileHoverBackground,
+      tileHoverBorderColor: tileHoverBorderColor ?? this.tileHoverBorderColor,
+      tileShadow: tileShadow ?? this.tileShadow,
+      pagePanelAlpha: pagePanelAlpha ?? this.pagePanelAlpha,
     );
   }
 
@@ -290,6 +314,14 @@ class AppSurfaceTokens extends ThemeExtension<AppSurfaceTokens> {
       effectsLevel: t < 0.5 ? effectsLevel : other.effectsLevel,
       backdropStrategy: t < 0.5 ? backdropStrategy : other.backdropStrategy,
       pressedDepth: _lerpDouble(pressedDepth, other.pressedDepth, t),
+      tileBackground: Color.lerp(tileBackground, other.tileBackground, t)!,
+      tileBorderColor: Color.lerp(tileBorderColor, other.tileBorderColor, t)!,
+      tileHoverBackground:
+          Color.lerp(tileHoverBackground, other.tileHoverBackground, t)!,
+      tileHoverBorderColor:
+          Color.lerp(tileHoverBorderColor, other.tileHoverBorderColor, t)!,
+      tileShadow: t < 0.5 ? tileShadow : other.tileShadow,
+      pagePanelAlpha: _lerpDouble(pagePanelAlpha, other.pagePanelAlpha, t),
     );
   }
 }
@@ -369,7 +401,7 @@ class AppAccentTokens extends ThemeExtension<AppAccentTokens> {
 @immutable
 class AppVisualTokens extends ThemeExtension<AppVisualTokens> {
   const AppVisualTokens({
-    required this.styleMode,
+    this.styleMode = UiVisualStyleMode.solidCard,
     required this.buttonGlowBlur,
     required this.buttonGlowSpread,
     required this.buttonGlowOpacity,

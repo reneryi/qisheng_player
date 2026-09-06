@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/component/album_artwork_hero.dart';
+import 'package:qisheng_player/component/album_artwork_hero.dart';
 import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';

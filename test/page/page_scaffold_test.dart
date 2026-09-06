@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/page/page_scaffold.dart';
+import 'package:qisheng_player/page/page_scaffold.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -152,6 +152,8 @@ void main() {
     tester.view.physicalSize = const Size(1400, 720);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -165,7 +167,17 @@ void main() {
               onPressed: () {},
               child: const Text('随机播放'),
             ),
-            body: const Placeholder(),
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 280,
+                child: TextField(
+                  key: const ValueKey('header-gap-focus-field'),
+                  focusNode: focusNode,
+                  decoration: const InputDecoration(labelText: '筛选'),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -184,6 +196,15 @@ void main() {
     expect(hitWidgets, isNot(contains('FilledButton')));
     expect(hitWidgets, isNot(contains('ButtonStyleButton')));
     expect(hitWidgets, isNot(contains('IconButton')));
+    expect(hitWidgets, isNot(contains('GestureDetector')));
+
+    await tester.tap(find.byKey(const ValueKey('header-gap-focus-field')));
+    await tester.pump();
+    expect(focusNode.hasFocus, isTrue);
+
+    await tester.tapAt(hitPoint);
+    await tester.pump();
+    expect(focusNode.hasFocus, isTrue);
   });
 }
 

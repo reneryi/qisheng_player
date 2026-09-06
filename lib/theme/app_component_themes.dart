@@ -269,6 +269,7 @@ class AppComponentThemes {
     AppAccentTokens accents,
     AppVisualTokens visuals,
   ) {
+    final isDark = scheme.brightness == Brightness.dark;
     return IconButtonThemeData(
       style: ButtonStyle(
         minimumSize: const WidgetStatePropertyAll(_minInteractiveSize),
@@ -279,6 +280,9 @@ class AppComponentThemes {
           if (states.contains(WidgetState.disabled)) {
             return scheme.onSurface.withValues(alpha: 0.38);
           }
+          if (states.contains(WidgetState.pressed)) {
+            return accents.accent;
+          }
           return scheme.onSurface;
         }),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -286,19 +290,15 @@ class AppComponentThemes {
             return accents.accentSoft.withValues(alpha: 0.58);
           }
           if (states.contains(WidgetState.hovered)) {
-            return Colors.white.withValues(alpha: 0.14);
+            return scheme.primary.withValues(alpha: isDark ? 0.12 : 0.08);
           }
-          return Colors.white.withValues(alpha: 0.075);
+          return Colors.transparent;
         }),
         overlayColor: WidgetStatePropertyAll(
-          scheme.onSurface.withValues(alpha: 0.08),
+          scheme.primary.withValues(alpha: 0.08),
         ),
-        elevation: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.pressed)) return 0.8;
-          if (states.contains(WidgetState.hovered)) return 3.4;
-          return 1.8;
-        }),
-        shadowColor: _resolveGlowShadow(accents, visuals),
+        elevation: const WidgetStatePropertyAll(0),
+        shadowColor: const WidgetStatePropertyAll(Colors.transparent),
         side: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.focused)) {
             return BorderSide(
@@ -309,7 +309,7 @@ class AppComponentThemes {
               width: 1.4,
             );
           }
-          return BorderSide(color: Colors.white.withValues(alpha: 0.12));
+          return BorderSide.none;
         }),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
@@ -345,7 +345,7 @@ class AppComponentThemes {
     );
   }
 
-  // 鐜颁唬绠€绾︼細瀵硅瘽妗嗕娇鐢ㄦ洿澶у渾瑙掑拰鏌斿拰闃村奖
+  // 现代简约：对话框使用更大圆角和柔和阴影
   static DialogThemeData dialogTheme(
     AppSurfaceTokens surfaces,
   ) {
@@ -364,67 +364,71 @@ class AppComponentThemes {
     ColorScheme scheme,
     AppSurfaceTokens surfaces,
   ) {
+    final isDark = scheme.brightness == Brightness.dark;
     return MenuThemeData(
       style: MenuStyle(
-        // 极简锐利卡片模式下使用 100% 实体石墨卡片色，玻璃模式下使用 88% 毛玻璃半透色
         backgroundColor: WidgetStatePropertyAll(
           Color.alphaBlend(
             scheme.primary.withValues(
-              alpha: scheme.brightness == Brightness.dark ? 0.22 : 0.10,
+              alpha: isDark ? 0.12 : 0.06,
             ),
-            surfaces.surfaceFloating.withValues(alpha: 0.92),
+            surfaces.surfaceFloating.withValues(alpha: isDark ? 0.94 : 0.96),
           ),
         ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        ),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(surfaces.radiusLg),
-            // 降低描边边框的对比度，使之更加柔和不生硬
+            borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-                color: surfaces.strokeSubtle.withValues(alpha: 0.38)),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+              width: 1.0,
+            ),
           ),
         ),
-        // 提升阴影高度并搭配淡晕投影，以在视觉上将弹出菜单卡片立体化悬浮
-        elevation: const WidgetStatePropertyAll(12),
+        elevation: const WidgetStatePropertyAll(10),
         shadowColor: WidgetStatePropertyAll(
-          surfaces.shadowColor.withValues(alpha: 0.28),
+          Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
         ),
       ),
     );
   }
 
-  // 新增：菜单项按钮的全局主题配置，完全移除所有物理描边，只使用纯色半透明高亮和微圆角
+  // 菜单项按钮的全局主题配置，完全移除所有物理黑边描边，使用半透明胶囊高亮和圆角
   static MenuButtonThemeData menuButtonTheme(
     ColorScheme scheme,
     AppSurfaceTokens surfaces,
     AppAccentTokens accents,
     AppVisualTokens visuals,
   ) {
+    final isDark = scheme.brightness == Brightness.dark;
     return MenuButtonThemeData(
       style: ButtonStyle(
         enableFeedback: false,
-        minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
+        minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
         padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
-        // 彻底移除所有交互状态下的描边，消除悬停时有方框边框的割裂感
+        // 彻底移除描边，消除黑边割裂感
         side: const WidgetStatePropertyAll(BorderSide.none),
-        // 移除多余的阴影以保持平滑
         elevation: const WidgetStatePropertyAll(0),
-        // 悬停 (Hover) 和聚焦 (Focus) 时以渐变的半透底色高亮，没有物理框线
+        // 悬停 (Hover) 与聚焦 (Focus) 时呈现温润半透明胶囊高亮
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
             return Colors.transparent;
           }
           if (states.contains(WidgetState.pressed)) {
-            return accents.accentSoft; // 点击时呈现品牌软底色
+            return scheme.primary.withValues(alpha: isDark ? 0.22 : 0.16);
           }
           if (states.contains(WidgetState.hovered) ||
               states.contains(WidgetState.focused)) {
-            final isDark = scheme.brightness == Brightness.dark;
-            return isDark
-                ? Colors.white.withValues(alpha: 0.08) // 深色模式下用微弱白色
-                : Colors.black.withValues(alpha: 0.04); // 浅色模式下用微弱黑色
+            return scheme.primary.withValues(
+              alpha: isDark ? 0.14 : 0.09,
+            );
           }
           return Colors.transparent;
         }),
@@ -434,7 +438,7 @@ class AppComponentThemes {
             return scheme.onSurface.withValues(alpha: 0.38);
           }
           if (states.contains(WidgetState.pressed)) {
-            return accents.accent;
+            return scheme.primary;
           }
           return scheme.onSurface;
         }),
@@ -443,14 +447,14 @@ class AppComponentThemes {
             return scheme.onSurface.withValues(alpha: 0.38);
           }
           if (states.contains(WidgetState.pressed)) {
-            return accents.accent;
+            return scheme.primary;
           }
-          return scheme.onSurface.withValues(alpha: 0.82);
+          return scheme.onSurface.withValues(alpha: 0.85);
         }),
-        // 形状采用微圆角设计，摆脱生硬的直角框框
+        // 8px 微圆角胶囊设计
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(surfaces.radiusSm),
+            borderRadius: BorderRadius.circular(8),
           ),
         ),
       ),
@@ -461,7 +465,6 @@ class AppComponentThemes {
     ColorScheme scheme,
     AppAccentTokens accents,
   ) {
-    // 鐜颁唬绠€绾︼細TabBar 鏈€変腑鏍囩绋嶅井鏇存贰
     return TabBarThemeData(
       dividerColor: Colors.transparent,
       indicatorColor: accents.accent,
@@ -482,7 +485,7 @@ class AppComponentThemes {
         animationDuration: const Duration(milliseconds: 200), // 丝滑动画
         minimumSize: const WidgetStatePropertyAll(_minInteractiveSize),
         enableFeedback: false,
-        // 鐜颁唬绠€绾︼細鍒嗘鎸夐挳鏇村鏉?
+        // 分段按钮宽松舒适内边距
         padding: _pressablePadding(
           const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           visuals,
@@ -492,9 +495,9 @@ class AppComponentThemes {
             return accents.accentContainer;
           }
           if (states.contains(WidgetState.hovered)) {
-            return surfaces.surfaceInset.withValues(alpha: 0.96);
+            return scheme.surfaceContainerHigh;
           }
-          return surfaces.surfaceInset.withValues(alpha: surfaces.panelAlpha);
+          return scheme.surfaceContainerLow;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -515,9 +518,11 @@ class AppComponentThemes {
           if (states.contains(WidgetState.selected)) {
             return BorderSide(color: accents.accent.withValues(alpha: 0.52));
           }
-          return BorderSide(color: surfaces.strokeSubtle);
+          return BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.45),
+          );
         }),
-        // 鐜颁唬绠€绾︼細鍒嗘鎸夐挳浣跨敤鏇村ぇ鍦嗚
+        // 分段按钮圆润胶囊
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(surfaces.radiusXl),
@@ -580,5 +585,44 @@ class AppComponentThemes {
         alpha: accents.accentGlow.a * visuals.buttonGlowOpacity,
       );
     });
+  }
+
+  static ScrollbarThemeData scrollbarTheme(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    AppAccentTokens accents,
+  ) {
+    return ScrollbarThemeData(
+      thumbVisibility: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.dragged)) {
+          return true;
+        }
+        return null;
+      }),
+      thickness: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.dragged)) {
+          return 8.0;
+        }
+        return 6.0;
+      }),
+      radius: const Radius.circular(4.0),
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.dragged)) {
+          return accents.accent.withValues(alpha: 0.75);
+        }
+        if (states.contains(WidgetState.hovered)) {
+          return scheme.onSurface.withValues(alpha: 0.38);
+        }
+        return scheme.onSurface.withValues(alpha: 0.18);
+      }),
+      trackColor: const WidgetStatePropertyAll(Colors.transparent),
+      trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+      crossAxisMargin: 2.0,
+      mainAxisMargin: 4.0,
+      minThumbLength: 36.0,
+      interactive: true,
+    );
   }
 }
