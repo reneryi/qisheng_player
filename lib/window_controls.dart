@@ -263,7 +263,7 @@ class WindowControls {
   static Future<WindowBackdropModeResult> setWindowBackdropMode(
     WindowBackdropMode mode,
   ) async {
-    // 软件渲染材质（默认对角渐变、弥散流彩、水波纹、琉璃透镜）在原生窗口层通知底层关闭 DWM 材质
+    // 软件渲染材质（默认对角渐变、弥散流彩、水波纹、极光漫染）在原生窗口层通知底层关闭 DWM 材质
     final bool isSoftwareMaterial =
         mode == WindowBackdropMode.defaultGradient ||
             mode == WindowBackdropMode.meshFlow ||

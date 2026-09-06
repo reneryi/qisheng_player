@@ -12,7 +12,7 @@ class AppTheme {
     required ColorScheme colorScheme,
     String? fontFamily,
     UiEffectsLevel effectsLevel = UiEffectsLevel.balanced,
-    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.solidCard,
+    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.borderless,
     WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient,
   }) {
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -216,7 +216,7 @@ class AppTheme {
 
   static ColorScheme applyChromeSurfaces(
     ColorScheme scheme, {
-    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.solidCard,
+    UiVisualStyleMode visualStyleMode = UiVisualStyleMode.borderless,
   }) {
     final isDark = scheme.brightness == Brightness.dark;
     final hsl = HSLColor.fromColor(scheme.primary);

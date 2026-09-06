@@ -26,7 +26,7 @@ enum WindowBackdropMode {
   /// 交互水波纹背景（鼠标轨迹波澜 + 点击激荡 + 低音节拍共振涟漪）
   waterRipple,
 
-  /// 琉璃透镜背景（SDF 凸透镜几何折射 + 动态流动高光）
+  /// 极光漫染背景（多点调和的静态高斯漫射光晕）
   prismaticGlass;
 
   static WindowBackdropMode? fromName(String? value) {
@@ -47,7 +47,11 @@ enum WindowBackdropMode {
     if (normalized == 'waterripple' || normalized == 'water_ripple' || normalized == 'ripple') {
       return WindowBackdropMode.waterRipple;
     }
-    if (normalized == 'prismaticglass' || normalized == 'prismatic_glass' || normalized == 'glass') {
+    if (normalized == 'prismaticglass' ||
+        normalized == 'prismatic_glass' ||
+        normalized == 'glass' ||
+        normalized == 'auroraglow' ||
+        normalized == 'aurora_glow') {
       return WindowBackdropMode.prismaticGlass;
     }
     for (final item in values) {
@@ -152,10 +156,10 @@ class AppSettings {
 
   Timer? _saveDebounce;
 
-  /// 主题模式：亮 / 鏆?/ 璺熼殢绯荤粺
+  /// 主题模式：亮 / 暗 / 跟随系统
   ThemeMode themeMode = getWindowsThemeMode();
 
-  /// 鍚姩鏃舵垨灏侀潰涓婚鑹蹭笉閫傚悎褰撲富棰樻椂鐨勪富鑹?
+  /// 启动时或封面主题色不适合当主题时的主色
   int defaultTheme = getWindowsTheme();
 
   /// 跟随歌曲封面的动态主题
@@ -164,9 +168,9 @@ class AppSettings {
   /// 是否让主题色（手动选择或动态取色）微弱浸润默认渐变背景
   /// true = 背景渐变带有极淡的主题色调倾向
   /// false = 背景为纯净中性渐变（夜间午夜蓝 / 日间哑光纸白）
-  bool themeColorTintBackground = true;
+  bool themeColorTintBackground = false;
 
-  /// 璺熼殢绯荤粺涓婚鑹?
+  /// 跟随系统主题色
   bool useSystemTheme = true;
 
   /// 跟随系统主题模式
@@ -182,11 +186,11 @@ class AppSettings {
   String? fontFamily;
   String? fontPath;
   String? backgroundImagePath;
-  double backgroundImageOpacity = 0.18;
+  double backgroundImageOpacity = 0.8;
   WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient;
   UiEffectsLevel uiEffectsLevel = UiEffectsLevel.visual;
   bool lyricDepthBlur = false;
-  UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.solidCard;
+  UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.borderless;
 
   /// 播放页沉浸模块化设置
 
@@ -242,9 +246,9 @@ class AppSettings {
 
   static UiVisualStyleMode parseUiVisualStyleMode(Object? value) {
     if (value is String) {
-      return UiVisualStyleMode.fromName(value) ?? UiVisualStyleMode.solidCard;
+      return UiVisualStyleMode.fromName(value) ?? UiVisualStyleMode.borderless;
     }
-    return UiVisualStyleMode.solidCard;
+    return UiVisualStyleMode.borderless;
   }
 
   static WindowBackdropMode parseWindowBackdropMode(Object? value) {
@@ -387,7 +391,7 @@ class AppSettings {
       }
       final bgOpacity = settingsMap["BackgroundImageOpacity"];
       if (bgOpacity is num) {
-        _instance.backgroundImageOpacity = bgOpacity.toDouble().clamp(0.0, 0.6);
+        _instance.backgroundImageOpacity = bgOpacity.toDouble().clamp(0.3, 1.0);
       }
       final windowBackdropMode = settingsMap["WindowBackdropMode"];
       if (windowBackdropMode is String) {
@@ -397,9 +401,7 @@ class AppSettings {
       }
       _instance.uiEffectsLevel = UiEffectsLevel.visual;
       _instance.lyricDepthBlur = settingsMap["LyricDepthBlur"] == true;
-      _instance.uiVisualStyleMode = parseUiVisualStyleMode(
-        settingsMap["UiVisualStyleMode"],
-      );
+      _instance.uiVisualStyleMode = UiVisualStyleMode.borderless;
       _instance.showSpectrumVisualizer =
           settingsMap["ShowSpectrumVisualizer"] ?? true;
       _instance.showKaraokeAnimation =

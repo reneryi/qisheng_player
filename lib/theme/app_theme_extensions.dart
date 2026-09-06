@@ -401,7 +401,7 @@ class AppAccentTokens extends ThemeExtension<AppAccentTokens> {
 @immutable
 class AppVisualTokens extends ThemeExtension<AppVisualTokens> {
   const AppVisualTokens({
-    this.styleMode = UiVisualStyleMode.solidCard,
+    this.styleMode = UiVisualStyleMode.borderless,
     required this.buttonGlowBlur,
     required this.buttonGlowSpread,
     required this.buttonGlowOpacity,

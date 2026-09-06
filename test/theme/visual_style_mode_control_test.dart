@@ -27,7 +27,6 @@ void main() {
             body: SingleChildScrollView(
               child: Column(
                 children: [
-                  VisualStyleModeControl(),
                   WindowBackdropModeControl(),
                 ],
               ),
@@ -37,10 +36,10 @@ void main() {
       ),
     );
 
-    expect(find.text('UI 视觉风格'), findsOneWidget);
-    expect(find.text('纯净卡片'), findsOneWidget);
-    expect(find.text('无界悬浮'), findsOneWidget);
-    expect(find.text('液态玻璃'), findsOneWidget);
+    expect(find.text('UI 视觉风格'), findsNothing);
+    expect(find.text('纯净卡片'), findsNothing);
+    expect(find.text('无界悬浮'), findsNothing);
+    expect(find.text('液态玻璃'), findsNothing);
 
     expect(find.text('窗口底座材质'), findsOneWidget);
     expect(find.text('默认渐变'), findsOneWidget);
@@ -48,6 +47,7 @@ void main() {
     expect(find.text('亚克力'), findsOneWidget);
     expect(find.text('弥散流彩'), findsOneWidget);
     expect(find.text('水波纹'), findsOneWidget);
-    expect(find.text('琉璃透镜'), findsOneWidget);
+    expect(find.text('极光漫染'), findsOneWidget);
+    expect(find.text('琉璃透镜'), findsNothing);
   });
 }

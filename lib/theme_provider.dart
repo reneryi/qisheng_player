@@ -408,6 +408,24 @@ class ThemeProvider extends ChangeNotifier {
     unawaited(_syncDesktopLyricTheme());
   }
 
+  Future<void> applyDynamicTheme(bool enabled) async {
+    AppSettings.instance.dynamicTheme = enabled;
+    if (!enabled) {
+      _resetDynamicTheme();
+      if (windowBackdropMode == WindowBackdropMode.meshFlow) {
+        await applyWindowBackdropMode(WindowBackdropMode.defaultGradient);
+      }
+      applyTheme(seedColor: Color(AppSettings.instance.defaultTheme));
+    } else {
+      final audio = PlayService.instance.playbackService.nowPlaying;
+      if (audio != null) {
+        applyThemeFromAudio(audio);
+      }
+    }
+    notifyListeners();
+    await AppSettings.instance.saveSettings();
+  }
+
   void applyThemeMode(ThemeMode themeMode) {
     this.themeMode = themeMode;
     notifyListeners();

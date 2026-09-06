@@ -21,11 +21,11 @@ void main() {
     );
     expect(
       AppSettings.parseUiVisualStyleMode(null),
-      UiVisualStyleMode.solidCard,
+      UiVisualStyleMode.borderless,
     );
     expect(
       AppSettings.parseUiVisualStyleMode('unknown'),
-      UiVisualStyleMode.solidCard,
+      UiVisualStyleMode.borderless,
     );
   });
 

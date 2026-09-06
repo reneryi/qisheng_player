@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/page/settings_page/theme_picker_dialog.dart';
-import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/rust/api/installed_font.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
@@ -61,11 +60,23 @@ class ThemeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+    final isMeshFlow =
+        theme.windowBackdropMode == WindowBackdropMode.meshFlow;
+
+    final hint = isMeshFlow
+        ? "弥散流彩由当前歌曲封面色彩实时驱动，手动选色在此模式下暂不生效。"
+        : "手动选择强调色；对默认与水波纹仅影响 UI 按钮，对极光漫染可改变背景渐变。";
+
     return SettingsTile(
       description: "主题颜色",
-      hint: "手动选择强调色；在背景层级变化时保持稳定。",
+      hint: hint,
       action: FilledButton.icon(
         onPressed: () async {
+          if (isMeshFlow) {
+            showTextOnSnackBar("弥散流彩模式由当前歌曲封面色彩实时驱动");
+            return;
+          }
           final seedColor = await showDialog<Color>(
             context: context,
             builder: (context) => const ThemePickerDialog(),
@@ -125,125 +136,27 @@ class _ThemeModeControlState extends State<ThemeModeControl> {
   }
 }
 
-class VisualStyleModeControl extends StatefulWidget {
-  const VisualStyleModeControl({super.key});
-
-  @override
-  State<VisualStyleModeControl> createState() => _VisualStyleModeControlState();
-}
-
-class _VisualStyleModeControlState extends State<VisualStyleModeControl> {
-  final settings = AppSettings.instance;
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsTile(
-      description: "UI 视觉风格",
-      hint: "在纯净实体卡片、无界极简悬浮与液态玻璃风格之间切换。",
-      action: SegmentedButton<UiVisualStyleMode>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.solidCard,
-            icon: Icon(Symbols.layers),
-            label: Text("纯净卡片"),
-          ),
-          ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.borderless,
-            icon: Icon(Symbols.crop_free),
-            label: Text("无界悬浮"),
-          ),
-          ButtonSegment<UiVisualStyleMode>(
-            value: UiVisualStyleMode.liquidGlass,
-            icon: Icon(Symbols.water_drop),
-            label: Text("液态玻璃"),
-          ),
-        ],
-        selected: {settings.uiVisualStyleMode},
-        onSelectionChanged: (selection) async {
-          final nextMode = selection.first;
-          if (nextMode == settings.uiVisualStyleMode) return;
-
-          setState(() {
-            settings.uiVisualStyleMode = nextMode;
-          });
-          await ThemeProvider.instance.applyVisualStyleMode(nextMode);
-          await settings.saveSettings();
-        },
-      ),
-    );
-  }
-}
-
-class DynamicThemeSwitch extends StatefulWidget {
+class DynamicThemeSwitch extends StatelessWidget {
   const DynamicThemeSwitch({super.key});
 
   @override
-  State<DynamicThemeSwitch> createState() => _DynamicThemeSwitchState();
-}
-
-class _DynamicThemeSwitchState extends State<DynamicThemeSwitch> {
-  final settings = AppSettings.instance;
-
-  @override
   Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+    final settings = AppSettings.instance;
+
     return SettingsTile(
       description: "动态主题",
-      hint: "使用当前封面颜色影响强调色和背景色。",
+      hint: "使用当前封面色彩影响强调色与支持的背景材质。",
       action: Switch(
         value: settings.dynamicTheme,
-        onChanged: (_) async {
-          setState(() {
-            settings.dynamicTheme = !settings.dynamicTheme;
-          });
-          if (!settings.dynamicTheme) {
-            ThemeProvider.instance.applyTheme(
-              seedColor: Color(settings.defaultTheme),
-            );
-          } else {
-            final audio = PlayService.instance.playbackService.nowPlaying;
-            if (audio != null) {
-              ThemeProvider.instance.applyThemeFromAudio(audio);
-            }
+        onChanged: (value) async {
+          final prevMode = theme.windowBackdropMode;
+          await ThemeProvider.instance.applyDynamicTheme(value);
+          if (!value &&
+              prevMode == WindowBackdropMode.meshFlow &&
+              context.mounted) {
+            showTextOnSnackBar("已关闭动态主题，背景材质已自动切换为默认");
           }
-          await settings.saveSettings();
-        },
-      ),
-    );
-  }
-}
-
-/// 控制主题色（手动选择或动态取色）是否微弱浸润默认渐变背景。
-/// 关闭时，默认渐变背景为纯净中性色（夜间午夜蓝 / 日间哑光纸白）。
-class ThemeColorTintBackgroundSwitch extends StatefulWidget {
-  const ThemeColorTintBackgroundSwitch({super.key});
-
-  @override
-  State<ThemeColorTintBackgroundSwitch> createState() =>
-      _ThemeColorTintBackgroundSwitchState();
-}
-
-class _ThemeColorTintBackgroundSwitchState
-    extends State<ThemeColorTintBackgroundSwitch> {
-  final settings = AppSettings.instance;
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsTile(
-      description: "主题色浸润背景",
-      hint: settings.themeColorTintBackground
-          ? "默认渐变背景会带有极淡的主题色调倾向。关闭后恢复纯净中性渐变。"
-          : "默认渐变背景为纯净中性色（夜间午夜蓝 / 日间哑光纸白）。",
-      action: Switch(
-        value: settings.themeColorTintBackground,
-        onChanged: (_) async {
-          setState(() {
-            settings.themeColorTintBackground =
-                !settings.themeColorTintBackground;
-          });
-          // 通知主题系统重新计算背景渐变
-          ThemeProvider.instance.refreshTheme();
-          await settings.saveSettings();
         },
       ),
     );
@@ -295,7 +208,7 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
       WindowBackdropMode.acrylic => "亚克力",
       WindowBackdropMode.meshFlow => "弥散流彩",
       WindowBackdropMode.waterRipple => "水波纹",
-      WindowBackdropMode.prismaticGlass => "琉璃透镜",
+      WindowBackdropMode.prismaticGlass => "极光漫染",
       null => mode,
     };
   }
@@ -342,7 +255,7 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
           _buildBackdropChip(WindowBackdropMode.acrylic, "亚克力"),
           _buildBackdropChip(WindowBackdropMode.meshFlow, "弥散流彩"),
           _buildBackdropChip(WindowBackdropMode.waterRipple, "水波纹"),
-          _buildBackdropChip(WindowBackdropMode.prismaticGlass, "琉璃透镜"),
+          _buildBackdropChip(WindowBackdropMode.prismaticGlass, "极光漫染"),
         ],
       ),
     );
@@ -688,7 +601,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
       children: [
         SettingsTile(
           description: "自定义背景",
-          hint: "选择图片作为背景，内容区域会自动加深遮罩以保证可读性。",
+          hint: "选择图片作为背景，已开启独立壁纸渲染与文字高对比度保真保护。",
           action: Wrap(
             spacing: 8,
             children: [
@@ -729,16 +642,16 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
         ),
         SettingsTile(
           description: "背景透明度",
-          hint: "建议使用 10% - 30%，避免背景图片影响文字阅读。",
+          hint: "支持 30% - 100% 调节。高透明度下已自动启用文字保真保护。",
           action: SizedBox(
             width: 260,
             child: Row(
               children: [
                 Expanded(
                   child: Slider(
-                    min: 0.0,
-                    max: 0.6,
-                    value: settings.backgroundImageOpacity,
+                    min: 0.3,
+                    max: 1.0,
+                    value: settings.backgroundImageOpacity.clamp(0.3, 1.0),
                     onChanged: hasBackground
                         ? (value) async {
                             setState(() {
@@ -753,7 +666,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
                 SizedBox(
                   width: 48,
                   child: Text(
-                    "${(settings.backgroundImageOpacity * 100).round()}%",
+                    "${(settings.backgroundImageOpacity.clamp(0.3, 1.0) * 100).round()}%",
                     textAlign: TextAlign.end,
                   ),
                 )

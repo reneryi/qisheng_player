@@ -182,19 +182,17 @@ class _SettingsPageState extends State<SettingsPage> {
         return const [
           AppSection(
             title: '窗口底座材质',
-            description: '控制物理画布材质（Windows 11 Mica / 亚克力 / 弥散流彩 / 水波纹 / 琉璃透镜）与自定义壁纸。',
+            description: '控制物理画布材质（Windows 11 Mica / 亚克力 / 弥散流彩 / 水波纹 / 极光漫染）与自定义壁纸。',
             children: [
               WindowBackdropModeControl(),
               BackgroundImageSettings(),
             ],
           ),
           AppSection(
-            title: 'UI 表面与色彩风格',
-            description: '纯净实体卡片、无界悬浮与液态玻璃等控件表面视觉语言。',
+            title: '主题与色彩风格',
+            description: '主题色彩、亮暗模式与全局字体配置。',
             children: [
-              VisualStyleModeControl(),
               DynamicThemeSwitch(),
-              ThemeColorTintBackgroundSwitch(),
               UseSystemThemeSwitch(),
               ThemeSelector(),
               UseSystemThemeModeSwitch(),
