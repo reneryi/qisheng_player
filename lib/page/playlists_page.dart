@@ -374,15 +374,19 @@ class _PlaylistFormDialogState extends State<_PlaylistFormDialog> {
                         color: scheme.onSurface,
                         fontSize: 18.0,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       widget.isEdit ? "为歌单指定一个更具辨识度的新名称" : "创建专属歌单，整理您的心仪音乐收藏",
                       style: TextStyle(
-                        color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                        color: scheme.onSurfaceVariant.withValues(
+                          alpha: isDark ? 0.82 : 0.90,
+                        ),
                         fontSize: 12.0,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
                       ),
                     ),
                   ],

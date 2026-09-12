@@ -124,22 +124,108 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
               showTextOnSnackBar("CUE 分轨不支持直接删除，请删除源文件。");
               return;
             }
-            final confirm = await showDialog<bool>(
+            final confirm = await showModernDialog<bool>(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text("删除歌曲"),
-                content: Text("确定删除“${nowPlaying.title}”？该操作会删除本地文件。"),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text("取消"),
+              builder: (context) {
+                final scheme = Theme.of(context).colorScheme;
+                final isDark = scheme.brightness == Brightness.dark;
+
+                return ModernDialogFrame(
+                  maxWidth: 400,
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: scheme.error.withValues(alpha: isDark ? 0.20 : 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: scheme.error.withValues(alpha: isDark ? 0.35 : 0.22),
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Icon(
+                              Symbols.delete_forever_rounded,
+                              color: scheme.error,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "删除歌曲",
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontSize: 17.0,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "此操作将永久删除本地音频源文件",
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant.withValues(
+                                      alpha: isDark ? 0.82 : 0.90,
+                                    ),
+                                    fontSize: 12.0,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: "关闭",
+                            icon: Icon(
+                              Symbols.close_rounded,
+                              size: 18,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            onPressed: () => Navigator.pop(context, false),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        "确定删除“${nowPlaying.title}”？",
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text("取消"),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: scheme.error,
+                              foregroundColor: scheme.onError,
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("删除"),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text("删除"),
-                  ),
-                ],
-              ),
+                );
+              },
             );
             if (confirm != true) return;
 

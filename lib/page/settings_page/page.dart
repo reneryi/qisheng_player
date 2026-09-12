@@ -93,24 +93,34 @@ class _SettingsPageState extends State<SettingsPage> {
                       children: [
                         Icon(
                           category.icon,
-                          size: 20,
+                          size: 21,
                           color: selected
                               ? scheme.primary
-                              : scheme.onSurface.withValues(alpha: 0.7),
+                              : scheme.onSurface.withValues(
+                                  alpha: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? 0.80
+                                      : 0.90,
+                                ),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           category.title,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 15.5,
                             fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
-                            letterSpacing: 0.22,
+                                selected ? FontWeight.w700 : FontWeight.w600,
+                            letterSpacing: 0,
                             height: 1.30,
                             leadingDistribution: TextLeadingDistribution.even,
                             color: selected
                                 ? scheme.primary
-                                : scheme.onSurface.withValues(alpha: 0.85),
+                                : scheme.onSurface.withValues(
+                                    alpha: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.90
+                                        : 0.98,
+                                  ),
                           ),
                         ),
                       ],
@@ -202,7 +212,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           AppSection(
             title: '主题与色彩风格',
-            description: '主题色彩、亮暗模式与全局字体配置。',
+            description: '主题色彩、亮暗模式、全局字体与界面缩放配置。',
             children: [
               DynamicThemeSwitch(),
               UseSystemThemeSwitch(),
@@ -210,6 +220,7 @@ class _SettingsPageState extends State<SettingsPage> {
               UseSystemThemeModeSwitch(),
               ThemeModeControl(),
               SelectFontCombobox(),
+              UiScaleControl(),
             ],
           ),
           AppSection(

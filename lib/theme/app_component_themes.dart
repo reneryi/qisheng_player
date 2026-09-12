@@ -324,6 +324,7 @@ class AppComponentThemes {
     ColorScheme scheme,
     AppSurfaceTokens surfaces,
   ) {
+    final isDark = scheme.brightness == Brightness.dark;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(surfaces.radiusXxl),
       borderSide: BorderSide(color: surfaces.strokeSubtle),
@@ -334,9 +335,13 @@ class AppComponentThemes {
       fillColor: surfaces.surfaceInset.withValues(alpha: surfaces.panelAlpha),
       // Input padding.
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      hintStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.58)),
-      prefixIconColor: scheme.onSurface.withValues(alpha: 0.72),
-      suffixIconColor: scheme.onSurface.withValues(alpha: 0.72),
+      hintStyle: TextStyle(
+        color: scheme.onSurface.withValues(alpha: isDark ? 0.65 : 0.76),
+        fontWeight: FontWeight.w400,
+        letterSpacing: 0,
+      ),
+      prefixIconColor: scheme.onSurface.withValues(alpha: isDark ? 0.75 : 0.85),
+      suffixIconColor: scheme.onSurface.withValues(alpha: isDark ? 0.75 : 0.85),
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
@@ -386,6 +391,65 @@ class AppComponentThemes {
               color: isDark
                   ? Colors.white.withValues(alpha: 0.08)
                   : Colors.black.withValues(alpha: 0.06),
+              width: 1.0,
+            ),
+          ),
+        ),
+        elevation: const WidgetStatePropertyAll(10),
+        shadowColor: WidgetStatePropertyAll(
+          Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
+        ),
+      ),
+    );
+  }
+
+  static PopupMenuThemeData popupMenuTheme(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+  ) {
+    final isDark = scheme.brightness == Brightness.dark;
+    return PopupMenuThemeData(
+      enableFeedback: false,
+      color: Color.alphaBlend(
+        scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+        surfaces.surfaceFloating.withValues(alpha: isDark ? 0.94 : 0.96),
+      ),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.black.withValues(alpha: 0.07),
+          width: 1.0,
+        ),
+      ),
+      elevation: 10,
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
+    );
+  }
+
+  static DropdownMenuThemeData dropdownMenuTheme(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+  ) {
+    final isDark = scheme.brightness == Brightness.dark;
+    return DropdownMenuThemeData(
+      menuStyle: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(
+          Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+            surfaces.surfaceFloating.withValues(alpha: isDark ? 0.94 : 0.96),
+          ),
+        ),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.black.withValues(alpha: 0.07),
               width: 1.0,
             ),
           ),

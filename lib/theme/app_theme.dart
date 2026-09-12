@@ -154,7 +154,9 @@ class AppTheme {
         accents,
         visuals,
       ),
-      popupMenuTheme: const PopupMenuThemeData(enableFeedback: false),
+      popupMenuTheme: AppComponentThemes.popupMenuTheme(colorScheme, surfaces),
+      dropdownMenuTheme:
+          AppComponentThemes.dropdownMenuTheme(colorScheme, surfaces),
       segmentedButtonTheme: AppComponentThemes.segmentedButtonTheme(
         colorScheme,
         surfaces,
@@ -182,13 +184,16 @@ class AppTheme {
     );
   }
 
-  // 优化全局排版体系：采用现代舒展的字阶、呼吸感行高与自然的字间距，彻底消除局促紧凑与笔画粘连，
+  // 优化全局排版体系：采用现代舒展的字阶、呼吸感行高，彻底消除局促紧凑与笔画粘连，
+  // 汉字字距清零（清除浮点 letterSpacing）杜绝 96 DPI 下 Skia 双向亚像素抗锯齿发虚模糊，
+  // 次级/二级文本在浅色日间模式下将对比度 alpha 提升至 0.88~0.94，微调基础字重至 w500 保证笔画扎实饱满，
   // 激活 OpenType 高级字形特性（calt 上下文交替字、liga 标准连字、kern 光学字偶间距调整）及对称行高分布
   static TextTheme _refineTextTheme(
     TextTheme textTheme,
     ColorScheme scheme,
     UiVisualStyleMode visualStyleMode,
   ) {
+    final isDark = scheme.brightness == Brightness.dark;
     const fontFeatures = [
       FontFeature.enable('calt'),
       FontFeature.enable('liga'),
@@ -198,81 +203,100 @@ class AppTheme {
     return textTheme.copyWith(
       displaySmall: textTheme.displaySmall?.copyWith(
         color: scheme.onSurface,
+        fontSize: 28,
         fontWeight: FontWeight.w700,
         height: 1.30,
-        letterSpacing: 0.38,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       headlineMedium: textTheme.headlineMedium?.copyWith(
         color: scheme.onSurface,
+        fontSize: 24,
         fontWeight: FontWeight.w700,
         height: 1.32,
-        letterSpacing: 0.35,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       titleLarge: textTheme.titleLarge?.copyWith(
         color: scheme.onSurface,
-        fontWeight: FontWeight.w600,
+        fontSize: 21,
+        fontWeight: FontWeight.w700,
         height: 1.32,
-        letterSpacing: 0.30,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       titleMedium: textTheme.titleMedium?.copyWith(
         color: scheme.onSurface,
+        fontSize: 17,
         fontWeight: FontWeight.w600,
         height: 1.34,
-        letterSpacing: 0.26,
+        letterSpacing: 0,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
+      ),
+      titleSmall: textTheme.titleSmall?.copyWith(
+        color: scheme.onSurface,
+        fontSize: 15.5,
+        fontWeight: FontWeight.w600,
+        height: 1.34,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       bodyLarge: textTheme.bodyLarge?.copyWith(
         color: scheme.onSurface,
+        fontSize: 16.5,
         fontWeight: FontWeight.w500,
         height: 1.40,
-        letterSpacing: 0.18,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       bodyMedium: textTheme.bodyMedium?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.88),
-        fontWeight: FontWeight.w400,
+        color: scheme.onSurface.withValues(alpha: isDark ? 0.90 : 0.98),
+        fontSize: 15.5,
+        fontWeight: FontWeight.w500,
         height: 1.40,
-        letterSpacing: 0.16,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       bodySmall: textTheme.bodySmall?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.72),
-        fontWeight: FontWeight.w400,
-        height: 1.38,
-        letterSpacing: 0.22,
+        color: scheme.onSurface.withValues(alpha: isDark ? 0.86 : 0.96),
+        fontSize: 14.0,
+        fontWeight: FontWeight.w500,
+        height: 1.40,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       labelLarge: textTheme.labelLarge?.copyWith(
         color: scheme.onSurface,
+        fontSize: 15,
         fontWeight: FontWeight.w600,
         height: 1.30,
-        letterSpacing: 0.22,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       labelMedium: textTheme.labelMedium?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.80),
+        color: scheme.onSurface.withValues(alpha: isDark ? 0.88 : 0.96),
+        fontSize: 14.0,
         fontWeight: FontWeight.w500,
         height: 1.30,
-        letterSpacing: 0.20,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),
       labelSmall: textTheme.labelSmall?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.68),
+        color: scheme.onSurface.withValues(alpha: isDark ? 0.82 : 0.92),
+        fontSize: 12.5,
         fontWeight: FontWeight.w500,
         height: 1.30,
-        letterSpacing: 0.22,
+        letterSpacing: 0,
         leadingDistribution: TextLeadingDistribution.even,
         fontFeatures: fontFeatures,
       ),

@@ -326,9 +326,12 @@ class _AudioGridTileState extends State<AudioGridTile> {
                               ? "播放 ${PlayCountStore.instance.get(audio)} 次"
                               : audio.artist,
                           style: TextStyle(
-                            color: textColor.withValues(alpha: 0.6),
+                            color: textColor.withValues(
+                              alpha: isDark ? 0.80 : 0.88,
+                            ),
                             fontSize: 12.0,
-                            fontWeight: FontWeight.normal,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

@@ -313,10 +313,13 @@ class _AudioTileState extends State<AudioTile> {
                                               ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
                                               : "${audio.artist} - ${audio.album}",
                                           style: TextStyle(
-                                            color: textColor.withValues(alpha: 0.78),
+                                            color: textColor.withValues(
+                                              alpha: isDark ? 0.82 : 0.90,
+                                            ),
                                             fontSize: 13,
-                                            fontWeight: FontWeight.w400,
+                                            fontWeight: FontWeight.w500,
                                             height: 1.25,
+                                            letterSpacing: 0,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,

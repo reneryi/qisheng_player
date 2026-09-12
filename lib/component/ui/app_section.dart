@@ -17,6 +17,7 @@ class AppSection extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final separatorColor = scheme.outlineVariant.withValues(alpha: 0.62);
 
+    final isDark = scheme.brightness == Brightness.dark;
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -28,16 +29,16 @@ class AppSection extends StatelessWidget {
             title,
             style: textTheme.titleLarge?.copyWith(
               color: scheme.onSurface,
-              fontSize: 19,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.35,
+              letterSpacing: 0,
               height: 1.30,
               leadingDistribution: TextLeadingDistribution.even,
             ) ?? TextStyle(
               color: scheme.onSurface,
-              fontSize: 19,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.35,
+              letterSpacing: 0,
               height: 1.30,
               leadingDistribution: TextLeadingDistribution.even,
             ),
@@ -47,18 +48,18 @@ class AppSection extends StatelessWidget {
             Text(
               description!,
               style: textTheme.bodySmall?.copyWith(
-                color: scheme.onSurface.withValues(alpha: 0.64),
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0.18,
-                height: 1.38,
+                color: scheme.onSurface.withValues(alpha: isDark ? 0.86 : 0.96),
+                fontSize: 14.0,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+                height: 1.40,
                 leadingDistribution: TextLeadingDistribution.even,
               ) ?? TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.64),
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0.18,
-                height: 1.38,
+                color: scheme.onSurface.withValues(alpha: isDark ? 0.86 : 0.96),
+                fontSize: 14.0,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+                height: 1.40,
                 leadingDistribution: TextLeadingDistribution.even,
               ),
             ),

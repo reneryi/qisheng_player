@@ -282,4 +282,64 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('UI scaling with FittedBox covers full window and delivers pointer events at far bounds', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    bool tapped = false;
+    const scale = 1.25;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final height = constraints.maxHeight;
+            final scaledWidth = width / scale;
+            final scaledHeight = height / scale;
+            return SizedBox(
+              width: width,
+              height: height,
+              child: FittedBox(
+                fit: BoxFit.fill,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: scaledWidth,
+                  height: scaledHeight,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: GestureDetector(
+                          onTap: () => tapped = true,
+                          child: const SizedBox(
+                            width: 50,
+                            height: 50,
+                            child: ColoredBox(color: Colors.blue),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap at bottom-right of 800x600 (e.g. 780, 580)
+    await tester.tapAt(const Offset(780, 580));
+    await tester.pumpAndSettle();
+
+    expect(tapped, isTrue);
+  });
 }

@@ -215,5 +215,38 @@ void main() {
       ]);
     });
   });
+
+  group('AppSettings uiScale persistence and parsing', () {
+    tearDown(() {
+      AppSettings.instance.uiScale = 1.0;
+    });
+
+    test('defaults to 1.0', () {
+      final settings = AppSettings.instance;
+      expect(settings.uiScale, equals(1.0));
+    });
+
+    test('parseSettingsMap loads and clamps uiScale correctly', () {
+      final settings = AppSettings.instance;
+
+      AppSettings.parseSettingsMap({
+        "Version": 2,
+        "UiScale": 1.25,
+      });
+      expect(settings.uiScale, equals(1.25));
+
+      AppSettings.parseSettingsMap({
+        "Version": 2,
+        "UiScale": 0.5,
+      });
+      expect(settings.uiScale, equals(0.8));
+
+      AppSettings.parseSettingsMap({
+        "Version": 2,
+        "UiScale": 3.0,
+      });
+      expect(settings.uiScale, equals(2.0));
+    });
+  });
 }
 

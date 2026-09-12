@@ -266,7 +266,7 @@ class _FluidGlowProgressSliderState extends State<FluidGlowProgressSlider>
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: colorScheme.onSurface,
-                                letterSpacing: 0.3,
+                                letterSpacing: 0,
                                 fontFeatures: const [
                                   FontFeature.tabularFigures(),
                                 ],

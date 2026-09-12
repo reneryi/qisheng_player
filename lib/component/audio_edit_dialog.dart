@@ -640,15 +640,19 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                           color: scheme.onSurface,
                           fontSize: 18.0,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2,
+                          letterSpacing: 0,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         "修改本地音频元数据标签，或检索匹配在线歌词与高清封面",
                         style: TextStyle(
-                          color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          color: scheme.onSurfaceVariant.withValues(
+                            alpha: isDark ? 0.82 : 0.90,
+                          ),
                           fontSize: 12.0,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0,
                         ),
                       ),
                     ],
@@ -1226,7 +1230,7 @@ class _SearchResultCardState extends State<SearchResultCard> {
                             color: widget.scheme.onSurface,
                             fontSize: 14.5,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.15,
+                            letterSpacing: 0,
                           ),
                         ),
                       ),
@@ -1427,7 +1431,7 @@ class _SearchResultCardState extends State<SearchResultCard> {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
+                      letterSpacing: 0,
                     ),
                   ),
                 ),
@@ -1469,7 +1473,7 @@ class _SearchResultCardState extends State<SearchResultCard> {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
+                      letterSpacing: 0,
                     ),
                   ),
                 ),
@@ -1506,7 +1510,7 @@ class _SearchResultCardState extends State<SearchResultCard> {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
+                      letterSpacing: 0,
                     ),
                   ),
                 ),

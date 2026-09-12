@@ -33,6 +33,7 @@ const String NOW_PLAYING_PAGE = "/nowplaying";
 
 const String SETTINGS_PAGE = "/settings";
 const String SETTINGS_ISSUE_PAGE = "/settings/issue";
+const String SETTINGS_UI_SCALE_PAGE = "/settings/ui-scale";
 
 const String WELCOMING_PAGE = "/welcoming";
 

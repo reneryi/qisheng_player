@@ -278,6 +278,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       WindowControls.lastBackdropResult;
   ThemeMode themeMode = AppSettings.instance.themeMode;
   String? fontFamily = AppSettings.instance.fontFamily;
+  double uiScale = AppSettings.instance.uiScale;
 
   ColorScheme get lightScheme =>
       _mergeAccent(_lightBaseScheme, _lightAccentColor, visualStyleMode);
@@ -578,6 +579,15 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     await AppSettings.instance.saveSettings();
     return result;
+  }
+
+  Future<void> applyUiScale(double scale) async {
+    final clamped = scale.clamp(0.8, 2.0);
+    if ((uiScale - clamped).abs() < 0.001) return;
+    uiScale = clamped;
+    AppSettings.instance.uiScale = clamped;
+    notifyListeners();
+    await AppSettings.instance.saveSettings();
   }
 
   void acceptInitialWindowBackdropResult(WindowBackdropModeResult result) {

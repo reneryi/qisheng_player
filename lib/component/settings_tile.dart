@@ -18,6 +18,7 @@ class SettingsTile extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 760;
+        final isDark = scheme.brightness == Brightness.dark;
         final textTheme = Theme.of(context).textTheme;
         final label = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -26,16 +27,16 @@ class SettingsTile extends StatelessWidget {
               description,
               style: textTheme.titleMedium?.copyWith(
                 color: scheme.onSurface,
-                fontSize: 15.5,
+                fontSize: 16.5,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.28,
+                letterSpacing: 0,
                 height: 1.32,
                 leadingDistribution: TextLeadingDistribution.even,
               ) ?? TextStyle(
                 color: scheme.onSurface,
-                fontSize: 15.5,
+                fontSize: 16.5,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.28,
+                letterSpacing: 0,
                 height: 1.32,
                 leadingDistribution: TextLeadingDistribution.even,
               ),
@@ -45,18 +46,18 @@ class SettingsTile extends StatelessWidget {
               Text(
                 hint!,
                 style: textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface.withValues(alpha: 0.74),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0.18,
-                  height: 1.38,
+                  color: scheme.onSurface.withValues(alpha: isDark ? 0.86 : 0.96),
+                  fontSize: 14.0,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                  height: 1.40,
                   leadingDistribution: TextLeadingDistribution.even,
                 ) ?? TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.74),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0.18,
-                  height: 1.38,
+                  color: scheme.onSurface.withValues(alpha: isDark ? 0.86 : 0.96),
+                  fontSize: 14.0,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                  height: 1.40,
                   leadingDistribution: TextLeadingDistribution.even,
                 ),
               ),

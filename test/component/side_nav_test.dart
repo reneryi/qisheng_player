@@ -165,4 +165,76 @@ void main() {
     expect(expandedOpacity.opacity, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('SideNav uses regular font weight for labels without bolding', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _buildApp(
+        collapsed: false,
+        initialLocation: app_paths.AUDIOS_PAGE,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final textWidgets = tester.widgetList<Text>(find.byType(Text)).where(
+          (t) => destinations.any((d) => d.label == t.data),
+        );
+    expect(textWidgets, isNotEmpty);
+
+    for (final destination in destinations) {
+      final labelFinder = find.descendant(
+        of: find.byKey(ValueKey('side-nav-label-${destination.desPath}')),
+        matching: find.byType(AnimatedDefaultTextStyle),
+      );
+      expect(labelFinder, findsOneWidget);
+      final styleWidget = tester.widget<AnimatedDefaultTextStyle>(labelFinder);
+      expect(styleWidget.style.fontWeight, equals(FontWeight.normal));
+    }
+  });
+
+  testWidgets('SideNav item maintains regular font weight and stable layout during press', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _buildApp(
+        collapsed: false,
+        initialLocation: app_paths.AUDIOS_PAGE,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final labelFinder = find.descendant(
+      of: find.byKey(const ValueKey('side-nav-label-${app_paths.AUDIOS_PAGE}')),
+      matching: find.byType(AnimatedDefaultTextStyle),
+    );
+
+    // Initial state: normal weight
+    var styleWidget = tester.widget<AnimatedDefaultTextStyle>(labelFinder);
+    expect(styleWidget.style.fontWeight, equals(FontWeight.normal));
+
+    // Press down
+    final gesture = await tester.startGesture(tester.getCenter(find.text('音乐')));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // During press: weight remains normal, no jitter
+    styleWidget = tester.widget<AnimatedDefaultTextStyle>(labelFinder);
+    expect(styleWidget.style.fontWeight, equals(FontWeight.normal));
+
+    // Release
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    styleWidget = tester.widget<AnimatedDefaultTextStyle>(labelFinder);
+    expect(styleWidget.style.fontWeight, equals(FontWeight.normal));
+    expect(tester.takeException(), isNull);
+  });
 }

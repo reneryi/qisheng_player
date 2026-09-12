@@ -257,6 +257,7 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
@@ -292,10 +293,13 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: compact ? TextAlign.left : TextAlign.center,
                   style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.64),
+                    color: scheme.onSurface.withValues(
+                      alpha: isDark ? 0.82 : 0.90,
+                    ),
                     fontSize: compact ? 14 : 16,
                     fontWeight: FontWeight.w400,
                     height: 1.18,
+                    letterSpacing: 0,
                     decoration: TextDecoration.none,
                     decorationColor: Colors.transparent,
                     decorationThickness: 0,
@@ -622,6 +626,7 @@ class _ImmersiveLyricStage extends StatelessWidget {
     } else {
       final lyricController = context.read<LyricController>();
       final scheme = Theme.of(context).colorScheme;
+      final isDark = scheme.brightness == Brightness.dark;
 
       content = ListenableBuilder(
         listenable: lyricController,
@@ -654,9 +659,12 @@ class _ImmersiveLyricStage extends StatelessWidget {
                     child: Text(
                       '暂无歌词',
                       style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.6),
+                        color: scheme.onSurface.withValues(
+                          alpha: isDark ? 0.75 : 0.88,
+                        ),
                         fontSize: compact ? 22 : 24,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
                       ),
                     ),
                   ),

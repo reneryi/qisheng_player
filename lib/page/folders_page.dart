@@ -214,7 +214,7 @@ class _FolderLibraryManagerDialogState
                           color: scheme.onSurface,
                           fontSize: 18.0,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2,
+                          letterSpacing: 0,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -223,8 +223,12 @@ class _FolderLibraryManagerDialogState
                             ? "选择并维护本地音乐文件夹，自动构建歌曲索引"
                             : "重新扫描并更新选定文件夹中的音频元数据",
                         style: TextStyle(
-                          color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          color: scheme.onSurfaceVariant.withValues(
+                            alpha: isDark ? 0.82 : 0.90,
+                          ),
                           fontSize: 12.0,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0,
                         ),
                       ),
                     ],
@@ -551,8 +555,12 @@ class _AudioFolderTileState extends State<AudioFolderTile> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.64),
+                              color: scheme.onSurface.withValues(
+                                alpha: isDark ? 0.82 : 0.90,
+                              ),
                               fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -561,8 +569,12 @@ class _AudioFolderTileState extends State<AudioFolderTile> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.48),
+                              color: scheme.onSurface.withValues(
+                                alpha: isDark ? 0.75 : 0.85,
+                              ),
                               fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
                             ),
                           ),
                         ],
@@ -679,8 +691,12 @@ class _CompactAudioFolderTileState extends State<_CompactAudioFolderTile> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.64),
+                              color: scheme.onSurface.withValues(
+                                alpha: isDark ? 0.82 : 0.90,
+                              ),
                               fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
                               height: 1.1,
                             ),
                           ),

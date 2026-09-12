@@ -80,7 +80,7 @@ class AudioFormatBadge extends StatelessWidget {
                     : Color.lerp(badgeTint, Colors.black, 0.4),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
+                letterSpacing: 0,
                 height: 1.1,
               ),
             ),
@@ -98,10 +98,13 @@ class AudioFormatBadge extends StatelessWidget {
               Text(
                 sampleRateText,
                 style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.6),
+                  color: scheme.onSurface.withValues(
+                    alpha: isDark ? 0.78 : 0.88,
+                  ),
                   fontSize: 9.5,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                   height: 1.1,
+                  letterSpacing: 0,
                 ),
               ),
             ],

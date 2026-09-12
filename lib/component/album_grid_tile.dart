@@ -127,9 +127,12 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.6),
+                        color: scheme.onSurface.withValues(
+                          alpha: isDark ? 0.80 : 0.88,
+                        ),
                         fontSize: 12.5,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
                       ),
                     ),
                   ),

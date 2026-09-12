@@ -272,6 +272,9 @@ class AppSettings {
   }
   UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.borderless;
 
+  /// 全局界面缩放倍率 (1.0 = 100%, 1.1 = 110%, 1.25 = 125% 等)
+  double uiScale = 1.0;
+
   /// 播放页沉浸模块化设置
 
   /// 是否显示实时音频频谱动效
@@ -420,6 +423,11 @@ class AppSettings {
     if (isMaximized != null) {
       _instance.isWindowMaximized = isMaximized == 1;
     }
+
+    final us = settingsMap["UiScale"];
+    if (us is num) {
+      _instance.uiScale = us.toDouble().clamp(0.8, 2.0);
+    }
   }
 
   static Future<void> readFromJson() async {
@@ -561,6 +569,10 @@ class AppSettings {
             ProgressBarType.fromName(progressBarTypeName) ??
                 ProgressBarType.fluidGlow;
       }
+      final us = settingsMap["UiScale"];
+      if (us is num) {
+        _instance.uiScale = us.toDouble().clamp(0.8, 2.0);
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -613,6 +625,7 @@ class AppSettings {
         "CoverBreathEffect": coverBreathEffect,
         "AutoHideControls": autoHideControls,
         "ProgressBarType": progressBarType.name,
+        "UiScale": uiScale,
       };
 
       // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸。

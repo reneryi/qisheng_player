@@ -237,7 +237,7 @@ class _WaveformSliderState extends State<WaveformSlider>
                                 color: Theme.of(context).colorScheme.onSurface,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
+                                letterSpacing: 0,
                               ),
                             ),
                           ),

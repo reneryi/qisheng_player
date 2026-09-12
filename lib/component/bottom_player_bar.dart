@@ -71,6 +71,7 @@ class BottomPlayerBar extends StatelessWidget {
     final childWidget = LayoutBuilder(
       builder: (context, constraints) {
         final layout = resolveBottomPlayerBarLayout(constraints.maxWidth);
+        final gap = constraints.maxWidth < 600 ? 8.0 : 24.0;
         return Row(
           children: [
             Expanded(
@@ -79,7 +80,7 @@ class BottomPlayerBar extends StatelessWidget {
                 disableHero: disableHero,
               ),
             ),
-            const SizedBox(width: 24),
+            SizedBox(width: gap),
             Expanded(
               flex: 2,
               child: _BottomBarCenterSection(
@@ -87,7 +88,7 @@ class BottomPlayerBar extends StatelessWidget {
                 dense: layout.dense,
               ),
             ),
-            const SizedBox(width: 24),
+            SizedBox(width: gap),
             Expanded(
               child: _BottomBarActionsSection(
                 compact: layout.compact,
@@ -146,40 +147,48 @@ class _BottomBarTrackSection extends StatelessWidget {
       selector: (_, playback) => playback.nowPlaying,
       builder: (context, audio, _) {
         final scheme = Theme.of(context).colorScheme;
+        final isDark = scheme.brightness == Brightness.dark;
 
         return Align(
           alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: dense ? 64.0 : 70.0,
-            ),
-            child: CpMotionPressable(
-              borderRadius: BorderRadius.circular(16),
-              padding: EdgeInsets.symmetric(
-                horizontal: dense ? 6 : 8,
-                vertical: dense ? 4 : 6,
-              ),
-              onTap: () {
-                if (isNowPlayingRoute(context)) {
-                  final navigation = AppNavigationState.instance;
-                  navigation.closeNowPlaying(
-                    context,
-                    fallback: navigation.lastShellLocation,
-                  );
-                  return;
-                }
-                openNowPlayingRoute(context);
-              },
-              child: Row(
-                children: [
-                  _TrackCover(
-                    size: dense ? 52 : 58,
-                    audio: audio,
-                    disableHero: disableHero,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isConstrained = constraints.maxWidth < 80;
+              final coverSize = isConstrained ? 38.0 : (dense ? 52.0 : 58.0);
+              final coverGap = isConstrained ? 6.0 : (dense ? 12.0 : 16.0);
+              final horizPadding = isConstrained ? 3.0 : (dense ? 6.0 : 8.0);
+
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: dense ? 64.0 : 70.0,
+                ),
+                child: CpMotionPressable(
+                  borderRadius: BorderRadius.circular(16),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: horizPadding,
+                    vertical: dense ? 4 : 6,
                   ),
-                  SizedBox(width: dense ? 12 : 16),
-                  Expanded(
-                    child: Column(
+                  onTap: () {
+                    if (isNowPlayingRoute(context)) {
+                      final navigation = AppNavigationState.instance;
+                      navigation.closeNowPlaying(
+                        context,
+                        fallback: navigation.lastShellLocation,
+                      );
+                      return;
+                    }
+                    openNowPlayingRoute(context);
+                  },
+                  child: Row(
+                    children: [
+                      _TrackCover(
+                        size: coverSize,
+                        audio: audio,
+                        disableHero: disableHero,
+                      ),
+                      SizedBox(width: coverGap),
+                      Expanded(
+                        child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -202,9 +211,12 @@ class _BottomBarTrackSection extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: scheme.onSurface.withValues(alpha: 0.6),
+                                  color: scheme.onSurface.withValues(
+                                    alpha: isDark ? 0.82 : 0.90,
+                                  ),
                                   fontSize: dense ? 12 : 13,
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0,
                                 ),
                               ),
                             ),
@@ -223,10 +235,12 @@ class _BottomBarTrackSection extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
+  },
+);
   }
 }
 
@@ -394,6 +408,7 @@ class _ProgressStripState extends State<_ProgressStrip> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
     final playback = context.read<PlaybackController>();
     final duration = context.select<PlaybackController, double>(
       (service) => service.length,
@@ -434,7 +449,9 @@ class _ProgressStripState extends State<_ProgressStrip> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.58),
+                            color: scheme.onSurface.withValues(
+                              alpha: isDark ? 0.78 : 0.88,
+                            ),
                             fontSize: 14.0,
                             fontWeight: FontWeight.w500,
                             fontFeatures: const [FontFeature.tabularFigures()],
@@ -523,7 +540,9 @@ class _ProgressStripState extends State<_ProgressStrip> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.58),
+                            color: scheme.onSurface.withValues(
+                              alpha: isDark ? 0.78 : 0.88,
+                            ),
                             fontSize: 14.0,
                             fontWeight: FontWeight.w500,
                             fontFeatures: const [FontFeature.tabularFigures()],
@@ -1052,7 +1071,7 @@ class _ExclusiveModeControl extends StatelessWidget {
                       fontSize: 12,
                       fontWeight: exclusive ? FontWeight.w700 : FontWeight.w600,
                       color: exclusive ? activeColor : inactiveColor,
-                      letterSpacing: 0.4,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],

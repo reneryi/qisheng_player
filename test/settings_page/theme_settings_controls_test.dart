@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/ui/modern_dropdown.dart';
 import 'package:qisheng_player/page/settings_page/theme_settings.dart';
+import 'package:qisheng_player/page/settings_page/ui_scale_settings.dart';
 import 'package:qisheng_player/src/rust/api/installed_font.dart';
 import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
@@ -1467,6 +1469,155 @@ void main() {
       expect(find.text('返回字体列表'), findsOneWidget);
       expect(find.text('应用全字重家族'), findsOneWidget);
       expect(find.text('取消'), findsOneWidget);
+    });
+
+    testWidgets('UiScaleControl renders display label and configuration entry', (tester) async {
+      final theme = ThemeProvider.instance;
+      await theme.applyUiScale(1.0);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ThemeProvider>.value(
+          value: theme,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: UiScaleControl(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('界面缩放 / UI Scale'), findsOneWidget);
+      expect(find.text('100% (标准) · 配置缩放'), findsOneWidget);
+    });
+
+    testWidgets('SettingsUiScalePage renders dropdown menu and updates uiScale on selection', (tester) async {
+      final theme = ThemeProvider.instance;
+      await theme.applyUiScale(1.0);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ThemeProvider>.value(
+          value: theme,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SettingsUiScalePage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('界面缩放 / UI Scale'), findsOneWidget);
+      expect(find.text('选择缩放比例'), findsOneWidget);
+      expect(find.text('显示适配指引'), findsOneWidget);
+
+      // Open DropdownMenu
+      await tester.tap(find.byType(ModernDropdown<double>));
+      await tester.pumpAndSettle();
+
+      // Tap 115% in dropdown
+      final optionFinder = find.text('115% (推荐)').first;
+      await tester.tap(optionFinder);
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.15));
+      expect(AppSettings.instance.uiScale, equals(1.15));
+
+      // Tap 125% chip
+      await tester.tap(find.text('125% (推荐)'));
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.25));
+      expect(AppSettings.instance.uiScale, equals(1.25));
+
+      // Tap 恢复 100%
+      await tester.tap(find.text('恢复 100%'));
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.0));
+      expect(AppSettings.instance.uiScale, equals(1.0));
+    });
+
+    testWidgets('SettingsUiScalePage works without overflow on compact viewport', (tester) async {
+      tester.view.physicalSize = const Size(500, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final theme = ThemeProvider.instance;
+      await theme.applyUiScale(1.25);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ThemeProvider>.value(
+          value: theme,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SettingsUiScalePage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('界面缩放 / UI Scale'), findsOneWidget);
+      expect(find.text('恢复 100%'), findsOneWidget);
+
+      await tester.tap(find.text('恢复 100%'));
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.0));
+    });
+
+    testWidgets('UiScaleControl opens modern dialog and updates scale from dropdown', (tester) async {
+      final theme = ThemeProvider.instance;
+      await theme.applyUiScale(1.0);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ThemeProvider>.value(
+          value: theme,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: UiScaleControl(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap 配置缩放 button
+      await tester.tap(find.text('100% (标准) · 配置缩放'));
+      await tester.pumpAndSettle();
+
+      // Verify modern dialog opened
+      expect(find.byType(UiScaleDialog), findsOneWidget);
+      expect(find.text('选择缩放比例'), findsOneWidget);
+
+      // Tap 115% in dropdown
+      await tester.tap(find.byType(ModernDropdown<double>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('115% (推荐)').first);
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.15));
+
+      // Tap 完成 to close dialog
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(UiScaleDialog), findsNothing);
+      expect(find.text('115% (推荐) · 配置缩放'), findsOneWidget);
+      expect(find.text('恢复 100%'), findsOneWidget);
+
+      // Test quick restore button on tile
+      await tester.tap(find.text('恢复 100%'));
+      await tester.pumpAndSettle();
+
+      expect(theme.uiScale, equals(1.0));
+      expect(find.text('100% (标准) · 配置缩放'), findsOneWidget);
+      expect(find.text('恢复 100%'), findsNothing);
     });
   });
 }

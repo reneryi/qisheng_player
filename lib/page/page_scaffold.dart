@@ -215,6 +215,7 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -231,7 +232,7 @@ class _TitleBlock extends StatelessWidget {
                   height: 1.25,
                   color: scheme.onSurface,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.38,
+                  letterSpacing: 0,
                   leadingDistribution: TextLeadingDistribution.even,
                 ),
               ),
@@ -249,11 +250,11 @@ class _TitleBlock extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14,
-              color: scheme.onSurface.withValues(alpha: 0.64),
-              fontWeight: FontWeight.w400,
-              height: 1.35,
-              letterSpacing: 0.18,
+              fontSize: 14.5,
+              color: scheme.onSurface.withValues(alpha: isDark ? 0.85 : 0.94),
+              fontWeight: FontWeight.w500,
+              height: 1.38,
+              letterSpacing: 0,
               leadingDistribution: TextLeadingDistribution.even,
             ),
           ),

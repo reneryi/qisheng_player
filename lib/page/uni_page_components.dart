@@ -50,25 +50,86 @@ class SortMethodComboBox<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return MenuAnchor(
+      clipBehavior: Clip.antiAlias,
       style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(
+          Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+            isDark
+                ? const Color(0xFF141923).withValues(alpha: 0.96)
+                : Colors.white.withValues(alpha: 0.96),
+          ),
+        ),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.09),
+              width: 1.0,
+            ),
+          ),
+        ),
+        elevation: const WidgetStatePropertyAll(12),
+        shadowColor: WidgetStatePropertyAll(
+          Colors.black.withValues(alpha: isDark ? 0.45 : 0.14),
         ),
       ),
       menuChildren: animatedMenuChildren(
         context,
         List.generate(
           sortMethods.length,
-          (i) => MenuItemButton(
-            style: const ButtonStyle(
-              padding: WidgetStatePropertyAll(EdgeInsets.all(12)),
-            ),
-            leadingIcon: Icon(sortMethods[i].icon),
-            child: Text(sortMethods[i].name),
-            onPressed: () => setSortMethod(sortMethods[i]),
-          ),
+          (i) {
+            final isSelected = sortMethods[i] == currSortMethod;
+            return MenuItemButton(
+              style: ButtonStyle(
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
+                backgroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (isSelected) {
+                    return scheme.primary.withValues(
+                      alpha: isDark ? 0.18 : 0.10,
+                    );
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return scheme.onSurface.withValues(
+                      alpha: isDark ? 0.08 : 0.05,
+                    );
+                  }
+                  return Colors.transparent;
+                }),
+              ),
+              leadingIcon: Icon(
+                sortMethods[i].icon,
+                color: isSelected ? scheme.primary : null,
+              ),
+              trailingIcon: isSelected
+                  ? Icon(Icons.check_rounded, color: scheme.primary, size: 18)
+                  : null,
+              child: Text(
+                sortMethods[i].name,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? scheme.primary : null,
+                ),
+              ),
+              onPressed: () => setSortMethod(sortMethods[i]),
+            );
+          },
         ),
       ),
       builder: (context, menuController, _) {
@@ -178,6 +239,10 @@ class AddAllToPlaylist extends StatelessWidget {
     );
   }
 
+  @visibleForTesting
+  Future<Playlist?> pickTargetPlaylistForTest(BuildContext context) =>
+      _pickTargetPlaylist(context);
+
   Future<Playlist?> _pickTargetPlaylist(BuildContext context) async {
     if (PLAYLISTS.isEmpty) {
       final createdName = await _showCreatePlaylistDialog(context);
@@ -193,52 +258,179 @@ class AddAllToPlaylist extends StatelessWidget {
       return playlist;
     }
 
-    return showDialog<Playlist>(
+    return showModernDialog<Playlist>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("选择歌单"),
-        content: SizedBox(
-          width: 360,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: PLAYLISTS.length,
-            itemBuilder: (context, index) {
-              final playlist = PLAYLISTS[index];
-              return ListTile(
-                leading: const Icon(Symbols.queue_music),
-                title: Text(playlist.name),
-                onTap: () => Navigator.pop(context, playlist),
-              );
-            },
-            separatorBuilder: (_, __) => const Divider(height: 1),
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        final isDark = scheme.brightness == Brightness.dark;
+
+        return ModernDialogFrame(
+          maxWidth: 420,
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: isDark ? 0.28 : 0.20),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Icon(
+                      Symbols.queue_music,
+                      color: scheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "选择歌单",
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 17.0,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "将选中的歌曲添加至歌单",
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant.withValues(
+                              alpha: isDark ? 0.82 : 0.90,
+                            ),
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: "关闭",
+                    icon: Icon(
+                      Symbols.close_rounded,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: PLAYLISTS.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final playlist = PLAYLISTS[index];
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => Navigator.pop(context, playlist),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? scheme.surfaceContainerHighest.withValues(alpha: 0.22)
+                                  : scheme.surfaceContainerHighest.withValues(alpha: 0.42),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.06),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Symbols.queue_music,
+                                  color: scheme.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    playlist.name,
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  formatMusicCount(playlist.audios.length),
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("取消"),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      final createdName = await _showCreatePlaylistDialog(context);
+                      final trimmed = createdName?.trim();
+                      if (trimmed == null || trimmed.isEmpty) return;
+                      if (PLAYLISTS.any((item) => item.name == trimmed)) {
+                        showTextOnSnackBar('歌单“$trimmed”已存在');
+                        return;
+                      }
+                      final playlist = Playlist(trimmed, {});
+                      PLAYLISTS.add(playlist);
+                      scheduleSavePlaylists();
+                      if (context.mounted) {
+                        Navigator.pop(context, playlist);
+                      }
+                    },
+                    icon: const Icon(Symbols.add, size: 16),
+                    label: const Text("创建歌单"),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          FilledButton.tonalIcon(
-            onPressed: () async {
-              final createdName = await _showCreatePlaylistDialog(context);
-              final trimmed = createdName?.trim();
-              if (trimmed == null || trimmed.isEmpty) return;
-              if (PLAYLISTS.any((item) => item.name == trimmed)) {
-                showTextOnSnackBar('歌单“$trimmed”已存在');
-                return;
-              }
-              final playlist = Playlist(trimmed, {});
-              PLAYLISTS.add(playlist);
-              scheduleSavePlaylists();
-              if (context.mounted) {
-                Navigator.pop(context, playlist);
-              }
-            },
-            icon: const Icon(Symbols.add),
-            label: const Text("创建歌单"),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -306,33 +498,134 @@ class DeleteSelectedAudios extends StatelessWidget {
     BuildContext context,
     int count,
   ) {
-    return showDialog<_DeleteSelectedMode>(
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return showModernDialog<_DeleteSelectedMode>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("删除选中歌曲"),
-        content: Text(
-          "已选择 $count 首歌曲。\n"
-          "删除源文件：会删除磁盘上的音乐文件。\n"
-          "仅从播放器移除：不会删除磁盘文件。",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          FilledButton.tonal(
-            onPressed: () =>
-                Navigator.pop(context, _DeleteSelectedMode.removeOnly),
-            child: const Text("仅从播放器移除"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              context,
-              _DeleteSelectedMode.removeAndDeleteSource,
+      builder: (context) => ModernDialogFrame(
+        maxWidth: 440,
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: scheme.error.withValues(alpha: isDark ? 0.20 : 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: scheme.error.withValues(alpha: isDark ? 0.35 : 0.22),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: Icon(
+                    Symbols.delete_forever_rounded,
+                    color: scheme.error,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "删除选中歌曲",
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "已选择 $count 首歌曲",
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant.withValues(
+                            alpha: isDark ? 0.82 : 0.90,
+                          ),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: "关闭",
+                  icon: Icon(
+                    Symbols.close_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
             ),
-            child: const Text("删除源文件"),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(
+                  alpha: isDark ? 0.35 : 0.50,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: scheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                "• 仅从播放器移除：不会删除磁盘上的音乐文件\n"
+                "• 删除源文件：将同步从磁盘彻底删除源音频文件",
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  color: scheme.onSurface.withValues(
+                    alpha: isDark ? 0.88 : 0.92,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("取消"),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.tonal(
+                      onPressed: () => Navigator.pop(
+                        context,
+                        _DeleteSelectedMode.removeOnly,
+                      ),
+                      child: const Text("仅从播放器移除"),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: scheme.error,
+                        foregroundColor: scheme.onError,
+                      ),
+                      onPressed: () => Navigator.pop(
+                        context,
+                        _DeleteSelectedMode.removeAndDeleteSource,
+                      ),
+                      child: const Text("删除源文件"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -572,7 +865,9 @@ class SharpCardDashboardHeader extends StatelessWidget {
                       Text(
                         "音乐库就绪",
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurface.withValues(alpha: 0.6),
+                          color: scheme.onSurface.withValues(
+                            alpha: isDark ? 0.78 : 0.88,
+                          ),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -609,7 +904,9 @@ class SharpCardDashboardHeader extends StatelessWidget {
                     "音频曲目",
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: scheme.onSurface.withValues(alpha: 0.6),
+                      color: scheme.onSurface.withValues(
+                        alpha: isDark ? 0.78 : 0.88,
+                      ),
                     ),
                   ),
                 ],
@@ -632,7 +929,9 @@ class SharpCardDashboardHeader extends StatelessWidget {
                     "无损音质引擎",
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: scheme.onSurface.withValues(alpha: 0.6),
+                      color: scheme.onSurface.withValues(
+                        alpha: isDark ? 0.78 : 0.88,
+                      ),
                     ),
                   ),
                 ],
@@ -664,6 +963,7 @@ class SharpCardPillChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
     final pillColor = color ?? scheme.primary;
 
     return Container(
@@ -703,7 +1003,10 @@ class SharpCardPillChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: scheme.onSurface.withValues(alpha: 0.6),
+                color: scheme.onSurface.withValues(
+                  alpha: isDark ? 0.78 : 0.88,
+                ),
+                letterSpacing: 0,
               ),
             ),
           ],

@@ -22,6 +22,7 @@ import 'package:qisheng_player/page/search_page/search_result_page.dart';
 import 'package:qisheng_player/page/settings_page/create_issue.dart';
 import 'package:qisheng_player/page/settings_page/check_update.dart';
 import 'package:qisheng_player/page/settings_page/page.dart';
+import 'package:qisheng_player/page/settings_page/ui_scale_settings.dart';
 import 'package:qisheng_player/page/updating_page.dart';
 import 'package:qisheng_player/page/welcoming_page.dart';
 import 'package:qisheng_player/library/playlist.dart';
@@ -368,8 +369,48 @@ class Entry extends StatelessWidget {
                 colorScheme: materialTheme.colorScheme,
                 fontFamily: theme.fontFamily,
               );
+              final scale = theme.uiScale;
+              final contentWidget = child ?? const SizedBox.shrink();
+              final scaledChild = (scale - 1.0).abs() < 0.001
+                  ? contentWidget
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final height = constraints.maxHeight;
+                        if (!width.isFinite ||
+                            !height.isFinite ||
+                            width <= 0 ||
+                            height <= 0) {
+                          return contentWidget;
+                        }
+                        final scaledWidth = width / scale;
+                        final scaledHeight = height / scale;
+                        final mediaQuery = MediaQuery.of(context);
+                        return SizedBox(
+                          width: width,
+                          height: height,
+                          child: FittedBox(
+                            fit: BoxFit.fill,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: scaledWidth,
+                              height: scaledHeight,
+                              child: MediaQuery(
+                                data: mediaQuery.copyWith(
+                                  size: Size(scaledWidth, scaledHeight),
+                                  padding: mediaQuery.padding / scale,
+                                  viewPadding: mediaQuery.viewPadding / scale,
+                                  viewInsets: mediaQuery.viewInsets / scale,
+                                ),
+                                child: contentWidget,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
               final routedChild = WindowResizeFrame(
-                child: child ?? const SizedBox.shrink(),
+                child: scaledChild,
               );
               return AnimatedTheme(
                 data: materialTheme,
@@ -547,7 +588,13 @@ class Entry extends StatelessWidget {
                   pageBuilder: (context, state) => const SlideTransitionPage(
                     child: SettingsIssuePage(),
                   ),
-                )
+                ),
+                GoRoute(
+                  path: "ui-scale",
+                  pageBuilder: (context, state) => const SlideTransitionPage(
+                    child: SettingsUiScalePage(),
+                  ),
+                ),
               ]),
         ],
       ),

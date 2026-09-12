@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
+import 'package:qisheng_player/page/settings_page/ui_scale_settings.dart';
 
 class _FontPreviewRegistry {
   const _FontPreviewRegistry._();
@@ -1115,8 +1116,11 @@ class _FontSelectorState extends State<_FontSelector> {
                   Text(
                     "选择粗细字重规格（共 ${family.variants.length} 种）",
                     style: TextStyle(
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
-                      fontSize: 12.0,
+                      color: scheme.onSurfaceVariant.withValues(
+                        alpha: scheme.brightness == Brightness.dark ? 0.82 : 0.92,
+                      ),
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -1386,8 +1390,11 @@ class _FontSelectorState extends State<_FontSelector> {
                   Text(
                     '当前字体：${theme.fontFamily ?? "系统默认"}',
                     style: TextStyle(
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
-                      fontSize: 12.0,
+                      color: scheme.onSurfaceVariant.withValues(
+                        alpha: scheme.brightness == Brightness.dark ? 0.82 : 0.92,
+                      ),
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -1565,6 +1572,7 @@ class _FontSelectorState extends State<_FontSelector> {
     FontFamilyGroup family, {
     required bool isImported,
   }) {
+    final isDark = scheme.brightness == Brightness.dark;
     final isCurrentFamily = family.variants.any((v) => v.font.fullName == theme.fontFamily);
     final activeVariant = isCurrentFamily
         ? family.variants.firstWhere((v) => v.font.fullName == theme.fontFamily)
@@ -1601,7 +1609,7 @@ class _FontSelectorState extends State<_FontSelector> {
           subtitleText,
           style: _previewStyle(
             previewFamily,
-            scheme.onSurface.withValues(alpha: 0.64),
+            scheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.88),
             fallbackFamily: family.primaryVariant.font.fullName,
             size: 12,
           ),
@@ -1870,6 +1878,52 @@ class ProgressBarTypeControl extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class UiScaleControl extends StatelessWidget {
+  const UiScaleControl({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+    final currentScale = theme.uiScale;
+    final percent = (currentScale * 100).round();
+    final String tag = switch (percent) {
+      100 => '标准',
+      115 || 125 => '推荐',
+      150 => '高分屏',
+      _ => '',
+    };
+    final displayLabel = tag.isNotEmpty ? '$percent% ($tag)' : '$percent%';
+
+    final isDefault = (currentScale - 1.0).abs() < 0.005;
+
+    return SettingsTile(
+      description: "界面缩放 / UI Scale",
+      hint: "当前缩放：$displayLabel。弹窗选择缩放比例，包含下拉菜单与屏幕推荐档位。",
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FilledButton.tonalIcon(
+            icon: const Icon(Symbols.aspect_ratio_rounded),
+            label: Text("$displayLabel · 配置缩放"),
+            onPressed: () => showUiScaleDialog(context),
+          ),
+          if (!isDefault)
+            TextButton.icon(
+              icon: const Icon(Symbols.restart_alt_rounded),
+              label: const Text("恢复 100%"),
+              onPressed: () async {
+                await ThemeProvider.instance.applyUiScale(1.0);
+              },
+            ),
+        ],
+      ),
     );
   }
 }

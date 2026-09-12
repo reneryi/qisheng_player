@@ -301,11 +301,12 @@ class _MetalNavIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
+    final isDark = scheme.brightness == Brightness.dark;
     final targetColor = selected
         ? accents.accent
         : (hovered
             ? scheme.onSurface
-            : scheme.onSurface.withValues(alpha: 0.55));
+            : scheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.88));
 
     // 使用颜色补间实现选中与未选中、悬停时的丝滑柔和色彩呼吸过渡
     return TweenAnimationBuilder<Color?>(
@@ -315,7 +316,7 @@ class _MetalNavIcon extends StatelessWidget {
       builder: (context, color, _) {
         return Icon(
           icon,
-          size: 21,
+          size: 22,
           color: color,
         );
       },
@@ -355,68 +356,71 @@ class _SideNavItemState extends State<_SideNavItem> {
     final accents = context.accents;
     final isDark = scheme.brightness == Brightness.dark;
 
-    // 悬浮与选中色彩交互：选中项的背景由外层连续滑行药丸呈现，自身在非选中且悬浮时呈现微光高亮
-    final highlightColor = (!widget.selected && (_hovered || _focused))
-        ? (isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.black.withValues(alpha: 0.035))
-        : Colors.transparent;
+    // 悬浮与选中色彩交互：选中项的背景由外层连续滑行药丸呈现，自身在悬浮与按下时提供层次分明的触觉深度反馈
+    final Color highlightColor;
+    if (widget.selected) {
+      highlightColor = _pressed
+          ? (isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.055))
+          : ((_hovered || _focused)
+              ? (isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.025))
+              : Colors.transparent);
+    } else {
+      highlightColor = _pressed
+          ? (isDark
+              ? Colors.white.withValues(alpha: 0.09)
+              : Colors.black.withValues(alpha: 0.065))
+          : ((_hovered || _focused)
+              ? (isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.035))
+              : Colors.transparent);
+    }
 
-    // 悬浮与选中文字颜色：平滑联动
+    // 悬浮与选中文字颜色：平滑联动，日间模式下保证清晰扎实的对比度
     final targetTextColor = widget.selected
         ? accents.accent
         : (_hovered || _focused
             ? scheme.onSurface
-            : scheme.onSurface.withValues(alpha: 0.72));
+            : scheme.onSurface.withValues(alpha: isDark ? 0.85 : 0.95));
 
-    final tile = MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _pressed = false;
-      }),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedScale(
-          // 彻底去除悬停时的放大（scale 1.02 是导致文字亚像素颤动和边界抖动的元凶）
-          // 仅在真实按下时给予极细腻自然的物理触觉微缩放（0.985）
-          scale: _pressed ? 0.985 : 1.0,
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            height: 48, // 简洁干练的 48px 高度
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: highlightColor,
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: FocusableActionDetector(
-                onShowFocusHighlight: (value) {
-                  if (_focused == value) return;
-                  setState(() => _focused = value);
-                },
-                child: InkWell(
-                  enableFeedback: false,
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: widget.onTap,
-                  child: _SideNavItemContent(
-                    expansionProgress: widget.expansionProgress,
-                    selected: widget.selected,
-                    hovered: _hovered || _focused,
-                    icon: widget.destination.icon,
-                    label: widget.destination.label,
-                    iconKey: widget.destination.desPath,
-                    centerIcon: widget.centerIcon,
-                    textColor: targetTextColor,
-                  ),
-                ),
-              ),
-            ),
+    final tile = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      height: 48, // 简洁干练的 48px 高度
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: highlightColor,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          enableFeedback: false,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: accents.accent.withValues(alpha: 0.12),
+          highlightColor: Colors.transparent,
+          onTap: widget.onTap,
+          onHover: (hovered) {
+            if (_hovered != hovered) setState(() => _hovered = hovered);
+          },
+          onHighlightChanged: (highlighted) {
+            if (_pressed != highlighted) setState(() => _pressed = highlighted);
+          },
+          onFocusChange: (focused) {
+            if (_focused != focused) setState(() => _focused = focused);
+          },
+          child: _SideNavItemContent(
+            expansionProgress: widget.expansionProgress,
+            selected: widget.selected,
+            hovered: _hovered || _focused,
+            icon: widget.destination.icon,
+            label: widget.destination.label,
+            iconKey: widget.destination.desPath,
+            centerIcon: widget.centerIcon,
+            textColor: targetTextColor,
           ),
         ),
       ),
@@ -501,13 +505,13 @@ class _SideNavItemContent extends StatelessWidget {
                     key: ValueKey('side-nav-label-$iconKey'),
                     opacity: labelOpacity,
                     child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 320),
+                      duration: const Duration(milliseconds: 240),
                       curve: Curves.easeOutCubic,
                       style: TextStyle(
                         color: textColor,
-                        fontSize: 15,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 15.0,
+                        fontWeight: FontWeight.normal, // 侧栏字体保持常规，绝不加粗
+                        letterSpacing: 0.1,
                       ),
                       child: Text(
                         label,
