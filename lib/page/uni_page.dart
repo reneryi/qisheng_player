@@ -67,12 +67,12 @@ const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
   crossAxisSpacing: 8.0,
 );
 
-// 封面网格委托：优化 childAspectRatio 为 0.65，为长专辑名与两行艺术家排版预留纵向安全缓冲，防止大字号溢出
+// 封面网格委托：优化 childAspectRatio 为 0.72，紧凑贴合专辑封面与文字排版，避免纵向空白过大
 const coverGridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
   maxCrossAxisExtent: 220,
   mainAxisSpacing: 16,
   crossAxisSpacing: 16,
-  childAspectRatio: 0.65,
+  childAspectRatio: 0.72,
 );
 
 double resolveUniPageGridOffset({
@@ -223,7 +223,7 @@ class _SideNavAnimatedCoverGrid extends StatelessWidget {
         reflowCollapsing: transition?.collapsing ?? false,
         shrinkHorizontally: true,
         maxCrossAxisExtent: 220,
-        childAspectRatio: 0.65,
+        childAspectRatio: 0.72,
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
       ),
@@ -755,7 +755,7 @@ class _UniPageState<T> extends State<UniPage<T>>
           maxCrossAxisExtent: 220,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          childAspectRatio: 0.65,
+          childAspectRatio: 0.72,
         ),
     };
     final position = scrollController.position;
@@ -922,7 +922,7 @@ class _UniPageState<T> extends State<UniPage<T>>
     const rightPaneGap = 14.0;
     final rightPaneRight =
         (hasSideIndex || hasLocateButton) ? sideRailWidth + 18.0 : 10.0;
-    const listPadding = EdgeInsets.fromLTRB(6, 0, 16, 32);
+    const listPadding = EdgeInsets.fromLTRB(6, 0, 16, 48);
 
     final listBody = KeyedSubtree(
       key: const ValueKey('uni-page-content-viewport'),
@@ -1137,7 +1137,7 @@ class _UniPageState<T> extends State<UniPage<T>>
                                     fontSize: fontSize,
                                     height: 1,
                                     fontWeight: selected
-                                        ? FontWeight.w800
+                                        ? FontWeight.w700
                                         : FontWeight.w500,
                                     color: selected
                                         ? scheme.onPrimary

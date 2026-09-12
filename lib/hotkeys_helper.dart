@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:qisheng_player/app_preference.dart';
-import 'package:qisheng_player/app_shutdown.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/utils.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +60,9 @@ class HotkeysHelper {
   static bool _windowListenerBound = false;
   static _HotkeyRegisterMode? _currentMode;
   static double _lastNonZeroVolume = 0.2;
+
+  @visibleForTesting
+  static Map<HotkeyAction, void Function(HotKey)> get handlers => _handlers;
 
   static final Map<HotkeyAction, void Function(HotKey)> _handlers = {
     HotkeyAction.playPause: (_) {
@@ -120,8 +122,7 @@ class HotkeysHelper {
       AppNavigationState.instance.navigateForward(routerContext);
     },
     HotkeyAction.quit: (_) async {
-      await appShutdownCoordinator.shutdown();
-      exit(0);
+      await WindowControls.exitApp();
     },
   };
 

@@ -215,8 +215,28 @@ List<Color> buildAuroraGlowGradient(
   ];
 }
 
-class ThemeProvider extends ChangeNotifier {
-  ThemeProvider._();
+class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
+  ThemeProvider._() {
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (themeMode == ThemeMode.system) {
+      notifyListeners();
+      unawaited(_syncDesktopLyricTheme(sendThemeMode: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    try {
+      WidgetsBinding.instance.removeObserver(this);
+    } catch (_) {}
+    super.dispose();
+  }
 
   static ThemeProvider? _instance;
 
@@ -241,6 +261,9 @@ class ThemeProvider extends ChangeNotifier {
   final Map<String, AlbumPalette> _paletteCache = {};
   int _dynamicThemeRequestId = 0;
   int _windowBackdropRequestId = 0;
+
+  Color _themeSeedColor = Color(AppSettings.instance.defaultTheme);
+  Color get themeSeedColor => _themeSeedColor;
 
   Color? _lightAccentColor;
   Color? _darkAccentColor;
@@ -295,8 +318,25 @@ class ThemeProvider extends ChangeNotifier {
     );
   }
 
-  AlbumPalette get albumPalette =>
+  /// 弥散流彩专属调色板：严格由歌曲封面色彩实时驱动（纯净动态取色）
+  AlbumPalette get meshFlowPalette =>
       _dynamicAlbumPalette ?? AlbumPalette.fallback(dominantColor);
+
+  /// 极光漫染专属调色板：
+  /// - 当开启动态取色且存在提取的专辑封面调色板时，由封面色彩驱动（极光漫染动态取色）
+  /// - 当关闭动态取色或无封面调色板时，由主题色（手动选择颜色或系统主题色）实时驱动
+  AlbumPalette get auroraPalette {
+    if (AppSettings.instance.dynamicTheme && _dynamicAlbumPalette != null) {
+      return _dynamicAlbumPalette!;
+    }
+    return AlbumPalette.fallback(_themeSeedColor);
+  }
+
+  /// 全局调色板（兼容历史调用）
+  AlbumPalette get albumPalette =>
+      effectiveWindowBackdropMode == WindowBackdropMode.prismaticGlass
+          ? auroraPalette
+          : meshFlowPalette;
 
   /// 根据当前窗口背景材质模式和色彩浸润设置，返回适合的背景渐变色列表。
   /// - defaultGradient：严格以文档纯净渐变为基调，仅在开关开启时极微弱浸润
@@ -310,7 +350,7 @@ class ThemeProvider extends ChangeNotifier {
     // 弥散流彩模式：需要带色彩的渐变作为着色器底色（保持原逻辑）
     if (mode == WindowBackdropMode.meshFlow) {
       return buildDynamicBackgroundGradient(
-        albumPalette.secondary,
+        meshFlowPalette.secondary,
         brightness,
       );
     }
@@ -393,8 +433,9 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void applyTheme({required Color seedColor}) {
+  void applyTheme({required Color seedColor, bool resetDynamicPalette = false}) {
     _dynamicThemeRequestId++;
+    _themeSeedColor = seedColor;
     _lightBaseScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: Brightness.light,
@@ -403,7 +444,12 @@ class ThemeProvider extends ChangeNotifier {
       seedColor: seedColor,
       brightness: Brightness.dark,
     );
-    _resetDynamicTheme(notify: false);
+    _lightAccentColor = null;
+    _darkAccentColor = null;
+    if (resetDynamicPalette) {
+      _dynamicDominantColor = null;
+      _dynamicAlbumPalette = null;
+    }
     notifyListeners();
     unawaited(_syncDesktopLyricTheme());
   }
@@ -411,15 +457,33 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> applyDynamicTheme(bool enabled) async {
     AppSettings.instance.dynamicTheme = enabled;
     if (!enabled) {
-      _resetDynamicTheme();
+      _dynamicThemeRequestId++;
+      _lightAccentColor = null;
+      _darkAccentColor = null;
+      _dynamicDominantColor = null;
       if (windowBackdropMode == WindowBackdropMode.meshFlow) {
         await applyWindowBackdropMode(WindowBackdropMode.defaultGradient);
       }
       applyTheme(seedColor: Color(AppSettings.instance.defaultTheme));
     } else {
-      final audio = PlayService.instance.playbackService.nowPlaying;
-      if (audio != null) {
-        applyThemeFromAudio(audio);
+      try {
+        final audio = PlayService.instance.playbackService.nowPlaying;
+        if (audio != null) {
+          final cacheKey = _paletteCacheKey(audio);
+          final cached = _paletteCache[cacheKey];
+          if (cached != null) {
+            _applyAlbumPalette(cached);
+          } else if (_dynamicAlbumPalette != null) {
+            _applyAlbumPalette(_dynamicAlbumPalette!);
+          }
+          applyThemeFromAudio(audio);
+        } else if (_dynamicAlbumPalette != null) {
+          _applyAlbumPalette(_dynamicAlbumPalette!);
+        }
+      } catch (_) {
+        if (_dynamicAlbumPalette != null) {
+          _applyAlbumPalette(_dynamicAlbumPalette!);
+        }
       }
     }
     notifyListeners();
@@ -434,8 +498,20 @@ class ThemeProvider extends ChangeNotifier {
 
   void applyThemeFromAudio(Audio audio) {
     if (!AppSettings.instance.dynamicTheme) {
-      _dynamicThemeRequestId++;
-      _resetDynamicTheme();
+      final requestId = ++_dynamicThemeRequestId;
+      final cacheKey = _paletteCacheKey(audio);
+      final cached = _paletteCache[cacheKey];
+      if (cached != null) {
+        _dynamicAlbumPalette = cached;
+      } else {
+        unawaited(_extractAlbumPalette(audio).then((palette) {
+          if (requestId != _dynamicThemeRequestId) return;
+          if (palette != null) {
+            _cachePalette(cacheKey, palette);
+            _dynamicAlbumPalette = palette;
+          }
+        }));
+      }
       return;
     }
     final requestId = ++_dynamicThemeRequestId;
@@ -443,6 +519,7 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   void changeFontFamily(String? fontFamily) {
+    if (this.fontFamily == fontFamily) return;
     this.fontFamily = fontFamily;
     notifyListeners();
   }
@@ -466,13 +543,28 @@ class ThemeProvider extends ChangeNotifier {
     WindowBackdropMode mode,
   ) async {
     final requestId = ++_windowBackdropRequestId;
-    if (mode == WindowBackdropMode.meshFlow &&
-        !AppSettings.instance.dynamicTheme) {
+    if (mode == WindowBackdropMode.meshFlow) {
       AppSettings.instance.dynamicTheme = true;
-      final audio = PlayService.instance.playbackService.nowPlaying;
-      if (audio != null) {
-        applyThemeFromAudio(audio);
-      }
+    } else if (mode == WindowBackdropMode.prismaticGlass &&
+        AppSettings.instance.useSystemTheme) {
+      AppSettings.instance.dynamicTheme = false;
+      applyTheme(seedColor: Color(AppSettings.instance.defaultTheme));
+    }
+
+    if (mode == WindowBackdropMode.meshFlow ||
+        (mode == WindowBackdropMode.prismaticGlass &&
+            AppSettings.instance.dynamicTheme)) {
+      try {
+        final audio = PlayService.instance.playbackService.nowPlaying;
+        if (audio != null) {
+          final cacheKey = _paletteCacheKey(audio);
+          final cached = _paletteCache[cacheKey];
+          if (cached != null && _dynamicAlbumPalette == null) {
+            _applyAlbumPalette(cached);
+          }
+          applyThemeFromAudio(audio);
+        }
+      } catch (_) {}
     }
     windowBackdropMode = mode;
     windowBackdropResult = null;
@@ -596,8 +688,8 @@ class ThemeProvider extends ChangeNotifier {
   Color _normalizeColor(Color color) {
     final hsl = HSLColor.fromColor(color);
     return hsl
-        .withSaturation(hsl.saturation.clamp(0.0, 0.82).toDouble())
-        .withLightness(hsl.lightness.clamp(0.32, 0.62).toDouble())
+        .withSaturation(hsl.saturation.clamp(0.0, 0.95).toDouble())
+        .withLightness(hsl.lightness.clamp(0.24, 0.70).toDouble())
         .toColor();
   }
 

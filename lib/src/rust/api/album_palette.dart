@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `assign_bins`, `cluster_histogram`, `cluster_sums`, `color_distance_sq`, `color`, `distance_sq`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `HistogramBin`, `RgbSample`, `WeightedColor`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `assign_bins`, `chroma`, `cluster_histogram`, `cluster_sums`, `color_distance_sq`, `color`, `distance_sq`, `relative_luminance`, `rgb_sample`, `rgb_saturation`, `srgb_to_linear`, `to_oklab`, `visual_salience_score`, `weighted_average_luminance`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `HistogramBin`, `OkLab`, `RgbSample`, `WeightedColor`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
 
 /// Extracts dominant RGB colors from encoded image bytes for Flutter.
 Future<Uint32List> extractDominantColors(

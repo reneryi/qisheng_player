@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' as material;
+import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 class AppShadcnTheme {
@@ -16,8 +17,14 @@ class AppShadcnTheme {
       radius: 0.72,
       scaling: 1.0,
       typography: shadcn.Typography.geist(
-        sans: material.TextStyle(fontFamily: fontFamily),
-        mono: material.TextStyle(fontFamily: fontFamily),
+        sans: material.TextStyle(
+          fontFamily: fontFamily,
+          fontFamilyFallback: AppTheme.fallbackList,
+        ),
+        mono: material.TextStyle(
+          fontFamily: fontFamily,
+          fontFamilyFallback: AppTheme.fallbackList,
+        ),
       ),
       surfaceOpacity: isDark ? 0.86 : 0.94,
       surfaceBlur: 18,

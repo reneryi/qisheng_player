@@ -13,7 +13,7 @@ class ThemePickerDialog extends StatefulWidget {
 }
 
 class _ThemePickerDialogState extends State<ThemePickerDialog> {
-  var selectedColor = Color(AppSettings.instance.defaultTheme);
+  var selectedColor = Color(AppSettings.instance.customTheme);
   late final rgbHexTextEditingController = TextEditingController(
     text: selectedColor.toRGBHexString(),
   );

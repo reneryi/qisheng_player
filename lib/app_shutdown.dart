@@ -2,6 +2,7 @@ import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/utils.dart';
 
@@ -28,6 +29,7 @@ class AppShutdownCoordinator {
         AppSettings.instance.saveSettings,
         PlayCountStore.instance.save,
         savePlaylists,
+        saveLyricSources,
       ],
     );
   }
@@ -48,7 +50,7 @@ class AppShutdownCoordinator {
   Future<void> _runSafely(String label, ShutdownOperation operation) async {
     try {
       // 增加单项操作超时机制，防止某个服务释放或写入卡死导致整个应用无法退出
-      await operation().timeout(const Duration(milliseconds: 1200));
+      await operation().timeout(const Duration(milliseconds: 2500));
     } catch (err, trace) {
       LOGGER.e('[shutdown] $label 保存或释放失败: $err', stackTrace: trace);
     }

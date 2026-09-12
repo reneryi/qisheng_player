@@ -28,7 +28,6 @@ dependencies:
   flex_color_picker: ^3.5.0
   filepicker_windows: ^2.1.4
   flutter_animate: ^4.5.2
-  google_fonts: ^6.2.1
   crypto: ^3.0.6
   desktop_lyric:
     path: third_party/desktop_lyric

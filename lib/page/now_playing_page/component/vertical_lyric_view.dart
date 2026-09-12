@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' show ImageFilter; // 引入 ImageFilter 用于毛玻璃背景渲染
 
-import 'package:qisheng_player/lyric/lrc.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_visibility.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
@@ -332,11 +332,9 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   late StreamSubscription lyricLineStreamSubscription;
   final scrollController = ScrollController();
 
-  List<LyricViewTile> lyricTiles = [
-    LyricViewTile(line: LrcLine.defaultLine, opacity: 1.0)
-  ];
+  late List<GlobalKey> _lineKeys;
+  List<Widget> lyricTiles = const [];
 
-  final currentLyricTileKey = GlobalKey();
   int? _lastSafeIndex;
   DateTime _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -344,9 +342,21 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   void initState() {
     super.initState();
 
+    _lineKeys = List.generate(widget.lyric.lines.length, (_) => GlobalKey());
     _initLyricView();
     lyricLineStreamSubscription =
         lyricService.lyricLineStream.listen(_updateNextLyricLine);
+    AppSettings.instance.lyricDepthBlurNotifier
+        .addListener(_onDepthBlurSettingChanged);
+  }
+
+  void _onDepthBlurSettingChanged() {
+    if (!mounted) return;
+    if (_lastSafeIndex != null) {
+      setState(() {
+        lyricTiles = _generateLyricTiles(_lastSafeIndex!);
+      });
+    }
   }
 
   void _initLyricView() {
@@ -355,7 +365,9 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
           element.start.inMilliseconds / 1000 > playbackService.position,
     );
     final nextLyricLine = next == -1 ? widget.lyric.lines.length : next;
-    lyricTiles = _generateLyricTiles(max(nextLyricLine - 1, 0));
+    final initialIndex = max(nextLyricLine - 1, 0);
+    _lastSafeIndex = initialIndex;
+    lyricTiles = _generateLyricTiles(initialIndex);
 
     _scrollCurrentLyricIntoView(animated: false);
   }
@@ -369,6 +381,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       }
       return;
     }
+    _lineKeys = List.generate(widget.lyric.lines.length, (_) => GlobalKey());
     _lastSafeIndex = null;
     _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
     _initLyricView();
@@ -377,11 +390,13 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   void _seekToLyricLine(int i) {
     playbackService.seek(widget.lyric.lines[i].start.inMilliseconds / 1000);
     setState(() {
+      _lastSafeIndex = i;
       lyricTiles = _generateLyricTiles(i);
     });
   }
 
-  List<LyricViewTile> _generateLyricTiles(int mainLine) {
+  List<Widget> _generateLyricTiles(int mainLine) {
+    final depthBlurEnabled = AppSettings.instance.lyricDepthBlur;
     return List.generate(
       widget.lyric.lines.length,
       (i) {
@@ -391,15 +406,18 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         final opacity = resolveLyricLineOpacity(
           distanceFromCurrent: distanceFromCurrent,
           isPastLine: isPast,
+          depthBlurEnabled: depthBlurEnabled,
         );
-        return LyricViewTile(
-          key: i == mainLine ? currentLyricTileKey : null,
-          line: widget.lyric.lines[i],
-          opacity: opacity,
-          isCurrentLine: isCurrent,
-          isPastLine: isPast,
-          distanceFromCurrent: distanceFromCurrent,
-          onTap: () => _seekToLyricLine(i),
+        return KeyedSubtree(
+          key: _lineKeys[i],
+          child: LyricViewTile(
+            line: widget.lyric.lines[i],
+            opacity: opacity,
+            isCurrentLine: isCurrent,
+            isPastLine: isPast,
+            distanceFromCurrent: distanceFromCurrent,
+            onTap: () => _seekToLyricLine(i),
+          ),
         );
       },
     );
@@ -440,7 +458,13 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         return;
       }
 
-      final targetContext = currentLyricTileKey.currentContext;
+      if (_lastSafeIndex == null ||
+          _lastSafeIndex! < 0 ||
+          _lastSafeIndex! >= _lineKeys.length) {
+        return;
+      }
+
+      final targetContext = _lineKeys[_lastSafeIndex!].currentContext;
       if (targetContext == null || !targetContext.mounted) {
         _retryScrollCurrentLyricIntoView(
           animated: animated,
@@ -484,30 +508,55 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: CustomScrollView(
-        key: LYRIC_VIEW_KEY,
-        controller: scrollController,
-        slivers: [
-          const SliverFillRemaining(),
-          SliverToBoxAdapter(
-            child: RepaintBoundary(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: lyricTiles,
-              ),
+    final scrollWidget = CustomScrollView(
+      key: LYRIC_VIEW_KEY,
+      controller: scrollController,
+      slivers: [
+        const SliverFillRemaining(),
+        SliverToBoxAdapter(
+          child: RepaintBoundary(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: lyricTiles,
             ),
           ),
-          const SliverFillRemaining(),
-        ],
-      ),
+        ),
+        const SliverFillRemaining(),
+      ],
+    );
+
+    final effectiveWidget = AppSettings.instance.uiEffectsLevel ==
+            UiEffectsLevel.performance
+        ? scrollWidget
+        : ShaderMask(
+            shaderCallback: (Rect rect) {
+              return const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black,
+                  Colors.black,
+                  Colors.transparent,
+                ],
+                stops: [0.0, 0.08, 0.92, 1.0],
+              ).createShader(rect);
+            },
+            blendMode: BlendMode.dstIn,
+            child: scrollWidget,
+          );
+
+    return RepaintBoundary(
+      child: effectiveWidget,
     );
   }
 
   @override
   void dispose() {
-    super.dispose();
+    AppSettings.instance.lyricDepthBlurNotifier
+        .removeListener(_onDepthBlurSettingChanged);
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();
+    super.dispose();
   }
 }

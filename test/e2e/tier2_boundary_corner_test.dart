@@ -5,6 +5,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/main_layout_frame.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
+import 'package:qisheng_player/component/fluid_glow_progress_slider.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/spectrum_progress_slider.dart';
 import 'package:qisheng_player/component/ui/audio_format_badge.dart';
@@ -864,7 +865,7 @@ void main() {
         );
         await tester.pumpAndAdvance();
 
-        expect(find.byType(SpectrumProgressSlider), findsOneWidget);
+        expect(find.byType(FluidGlowProgressSlider), findsOneWidget);
       });
     });
 

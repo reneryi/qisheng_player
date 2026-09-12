@@ -32,7 +32,6 @@ import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme.dart';
 import 'package:qisheng_player/theme/app_shadcn_theme.dart';
-import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -49,86 +48,102 @@ Widget _buildAppRouteTransition(
   Widget child, {
   bool provideNowPlayingScope = false,
 }) {
-  final motion = context.motion;
+  // 入场采用优雅舒展的流体减速贝塞尔曲线，初段响应敏捷，后段极其柔和缓停
   final curvedAnim = CurvedAnimation(
     parent: animation,
-    curve: motion.emphasized,
-    reverseCurve: motion.fast,
+    curve: const Cubic(0.08, 0.92, 0.16, 1.0),
+    reverseCurve: Curves.easeInCubic,
   );
+  // 入场透明度平滑渐显，在中后段（76%）即达到饱和，确保视觉清透自然无闪烁
   final contentReveal = CurvedAnimation(
     parent: animation,
-    curve: const Interval(0.0, 1.0, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 1.0, curve: Curves.easeInCubic),
+    curve: const Interval(0.0, 0.76, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 0.76, curve: Curves.easeInCubic),
   );
   final secondaryCurvedAnim = CurvedAnimation(
     parent: secondaryAnimation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
+  // 退场内容在前 40% 周期内柔和融化消失，彻底避免新旧两页网格在半透明状态下重叠混杂
   final outgoingContent = CurvedAnimation(
     parent: secondaryAnimation,
-    // 旧页面在新页面覆盖到中段前完成退场，避免半透明详情面板中
-    // 继续看到旧列表的头像、文字和卡片轮廓。
-    curve: const Interval(0.0, 0.72, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.72, curve: Curves.easeInCubic),
+    curve: const Interval(0.0, 0.40, curve: Curves.easeInCubic),
+    reverseCurve: const Interval(0.0, 0.40, curve: Curves.easeOutCubic),
   );
   final transitionedChild = provideNowPlayingScope
       ? NowPlayingRouteTransitionScope(animation: curvedAnim, child: child)
       : child;
 
-  return FadeTransition(
-    opacity: Tween<double>(begin: 0.0, end: 1.0).animate(contentReveal),
-    child: ListenableBuilder(
-      listenable: AppNavigationState.instance,
-      builder: (context, _) {
-        final isNowPlayingAbove =
-            AppNavigationState.instance.nowPlayingPageActive;
-        return AnimatedBuilder(
-          animation: secondaryCurvedAnim,
-          child: transitionedChild,
-          builder: (context, child) {
-            final progress = secondaryCurvedAnim.value;
-            final outgoingProgress = outgoingContent.value;
+  // 新页面入场：纵向微距柔和浮升 (18px -> 0) + 空间呼吸微缩放 (0.988 -> 1.0) + 柔光渐显
+  final incomingVisual = SlideTransition(
+    position: Tween<Offset>(
+      begin: const Offset(0.0, 0.022),
+      end: Offset.zero,
+    ).animate(curvedAnim),
+    child: ScaleTransition(
+      scale: Tween<double>(begin: 0.988, end: 1.0).animate(curvedAnim),
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0.0, end: 1.0).animate(contentReveal),
+        child: transitionedChild,
+      ),
+    ),
+  );
 
-            if (isNowPlayingAbove) {
-              final underlayFactor = const Interval(
-                0.0,
-                0.48,
-                curve: Curves.easeOutCubic,
-              ).transform(secondaryAnimation.value);
-              final underlayScale = 1.0 - 0.04 * underlayFactor;
-              final underlayOpacity = 1.0 - underlayFactor;
-              return IgnorePointer(
-                key: const ValueKey('now-playing-underlay-pointer'),
-                ignoring: progress > 0.001,
-                child: Transform.scale(
-                  key: const ValueKey('now-playing-underlay-scale'),
-                  scale: underlayScale.clamp(0.96, 1.0),
-                  child: TickerMode(
-                    enabled: underlayOpacity > 0.001,
-                    child: Opacity(
-                      key: const ValueKey('now-playing-underlay-opacity'),
-                      opacity: underlayOpacity.clamp(0.0, 1.0),
-                      child: child,
-                    ),
+  return ListenableBuilder(
+    listenable: AppNavigationState.instance,
+    builder: (context, _) {
+      final isNowPlayingAbove =
+          AppNavigationState.instance.nowPlayingPageActive;
+      return AnimatedBuilder(
+        animation: secondaryCurvedAnim,
+        child: incomingVisual,
+        builder: (context, child) {
+          final progress = secondaryCurvedAnim.value;
+          final outgoingProgress = outgoingContent.value;
+
+          if (isNowPlayingAbove) {
+            final underlayFactor = const Interval(
+              0.0,
+              0.48,
+              curve: Curves.easeOutCubic,
+            ).transform(secondaryAnimation.value);
+            final underlayScale = 1.0 - 0.04 * underlayFactor;
+            final underlayOpacity = 1.0 - underlayFactor;
+            return IgnorePointer(
+              key: const ValueKey('now-playing-underlay-pointer'),
+              ignoring: progress > 0.001,
+              child: Transform.scale(
+                key: const ValueKey('now-playing-underlay-scale'),
+                scale: underlayScale.clamp(0.96, 1.0),
+                child: TickerMode(
+                  enabled: underlayOpacity > 0.001,
+                  child: Opacity(
+                    key: const ValueKey('now-playing-underlay-opacity'),
+                    opacity: underlayOpacity.clamp(0.0, 1.0),
+                    child: child,
                   ),
                 ),
-              );
-            } else {
-              // 侧栏页面与详情子路由的层级过渡：旧页面完整淡出，
-              // 让半透明的新详情面板不会把旧内容叠在上面。
-              return Transform.translate(
-                offset: Offset(-12.0 * outgoingProgress, 0),
+              ),
+            );
+          } else {
+            // 侧栏页面间切换与向子页面过渡：旧页面微向上漂移并柔和融化，
+            // 彻底消除与固定左侧栏的生硬横向拉扯与页面重叠粘连
+            final outgoingOpacity = (1.0 - outgoingProgress).clamp(0.0, 1.0);
+            return Transform.translate(
+              offset: Offset(0.0, -8.0 * outgoingProgress),
+              child: Transform.scale(
+                scale: (1.0 - 0.008 * outgoingProgress).clamp(0.99, 1.0),
                 child: Opacity(
-                  opacity: (1.0 - outgoingProgress).clamp(0.0, 1.0),
+                  opacity: outgoingOpacity,
                   child: child,
                 ),
-              );
-            }
-          },
-        );
-      },
-    ),
+              ),
+            );
+          }
+        },
+      );
+    },
   );
 }
 
@@ -247,8 +262,8 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 260),
-          reverseTransitionDuration: const Duration(milliseconds: 220),
+          transitionDuration: const Duration(milliseconds: 360),
+          reverseTransitionDuration: const Duration(milliseconds: 260),
         );
 
   static Widget _transitionsBuilder(

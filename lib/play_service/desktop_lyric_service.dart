@@ -1,4 +1,4 @@
-﻿// ignore_for_file: annotate_overrides
+// ignore_for_file: annotate_overrides
 
 import 'dart:async';
 import 'dart:convert';
@@ -9,6 +9,8 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_line_parser.dart';
+import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
@@ -42,17 +44,52 @@ abstract class DesktopLyricController extends ChangeNotifier {
 }
 
 class DesktopLyricService extends DesktopLyricController {
-  final PlayService playService;
-  DesktopLyricService(this.playService);
+  final PlayService? _playService;
+  final PlaybackController? _testPlaybackService;
+  final LyricController? _testLyricService;
 
-  PlaybackService get _playbackService => playService.playbackService;
+  DesktopLyricService(PlayService playService)
+      : _playService = playService,
+        _testPlaybackService = null,
+        _testLyricService = null;
+
+  @visibleForTesting
+  DesktopLyricService.forTest({
+    PlaybackController? playbackService,
+    LyricController? lyricService,
+  })  : _playService = null,
+        _testPlaybackService = playbackService,
+        _testLyricService = lyricService;
+
+  PlayService get playService => _playService!;
+
+  PlaybackController get _playbackService =>
+      _testPlaybackService ?? _playService!.playbackService;
 
   Future<Process?> desktopLyric = Future.value(null);
   StreamSubscription? _desktopLyricSubscription;
+  StreamSubscription? _desktopLyricStderrSubscription;
   Timer? _positionSyncTimer;
   bool _isStarting = false;
   int? _desktopLyricPid;
   String _desktopLyricStdoutPending = "";
+
+  @visibleForTesting
+  Future<Process> Function(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+  }) processStarter = Process.start;
+
+  @visibleForTesting
+  List<String> Function()? candidatesResolverOverride;
+
+  @visibleForTesting
+  int? get desktopLyricPid => _desktopLyricPid;
+
+  @visibleForTesting
+  bool get isPositionSyncTimerActive =>
+      _positionSyncTimer != null && _positionSyncTimer!.isActive;
 
   bool isLocked = false;
 
@@ -106,6 +143,9 @@ class DesktopLyricService extends DesktopLyricController {
   }
 
   List<String> _resolveDesktopLyricCandidates() {
+    if (candidatesResolverOverride != null) {
+      return candidatesResolverOverride!();
+    }
     final exeDir = path.dirname(Platform.resolvedExecutable);
     final repoRoot = _findAncestorContaining(exeDir, "pubspec.yaml");
     final workspaceRoot = repoRoot == null ? null : path.dirname(repoRoot);
@@ -192,21 +232,21 @@ class DesktopLyricService extends DesktopLyricController {
 
   Future<void> _syncDesktopLyricWindowPosition({bool forceSave = false}) async {
     if (!Platform.isWindows) return;
-    Map<String, int>? rect;
-    if (_desktopLyricPid != null) {
-      rect = await WindowControls.getDesktopLyricRect(pid: _desktopLyricPid);
-      if (rect == null) {
-        if (forceSave) {
-          LOGGER.i(
-            "[desktop lyric position] sync miss by pid: $_desktopLyricPid",
-          );
-        }
-        return;
-      }
-    } else {
-      rect = await WindowControls.getDesktopLyricRect();
+    if (_desktopLyricPid == null) {
+      _stopPositionSyncTimer();
+      return;
     }
-    if (rect == null) return;
+    final pid = _desktopLyricPid!;
+    final rect = await WindowControls.getDesktopLyricRect(pid: pid);
+    if (_desktopLyricPid != pid) return;
+    if (rect == null) {
+      if (forceSave) {
+        LOGGER.i(
+          "[desktop lyric position] sync miss by pid: $pid",
+        );
+      }
+      return;
+    }
 
     final left = rect["left"]?.toDouble();
     final top = rect["top"]?.toDouble();
@@ -229,9 +269,19 @@ class DesktopLyricService extends DesktopLyricController {
 
   void _startPositionSyncTimer() {
     _positionSyncTimer?.cancel();
+    if (_desktopLyricPid == null) {
+      LOGGER.i("[desktop lyric] skipping position sync timer: pid is null");
+      return;
+    }
     _positionSyncTimer = Timer.periodic(
       const Duration(milliseconds: 300),
-      (_) => unawaited(_syncDesktopLyricWindowPosition()),
+      (_) {
+        if (_desktopLyricPid == null) {
+          _stopPositionSyncTimer();
+          return;
+        }
+        unawaited(_syncDesktopLyricWindowPosition());
+      },
     );
   }
 
@@ -279,32 +329,38 @@ class DesktopLyricService extends DesktopLyricController {
     return true;
   }
 
-  Future<bool> _restoreDesktopLyricWindowPosition() async {
+  Future<bool> _restoreDesktopLyricWindowPosition({int? targetPid}) async {
     if (!Platform.isWindows) return false;
+    final expectedPid = targetPid ?? _desktopLyricPid;
+    if (expectedPid == null) return false;
 
     final pref = AppPreference.instance.desktopLyricPref;
     final left = pref.windowLeft?.round();
     final top = pref.windowTop?.round();
     if (left == null || top == null) return false;
     LOGGER.i(
-      "[desktop lyric position] restore target left=$left top=$top pid=$_desktopLyricPid",
+      "[desktop lyric position] restore target left=$left top=$top pid=$expectedPid",
     );
 
     for (var attempt = 0; attempt < 20; attempt++) {
-      Map<String, int>? currentRect;
-      int? routePid;
-
-      if (_desktopLyricPid != null) {
-        currentRect =
-            await WindowControls.getDesktopLyricRect(pid: _desktopLyricPid);
-        if (currentRect != null) {
-          routePid = _desktopLyricPid;
-        }
+      if (_desktopLyricPid == null || _desktopLyricPid != expectedPid) {
+        LOGGER.i(
+          "[desktop lyric position] restore aborted: process closed or pid mismatch (expected: $expectedPid, current: $_desktopLyricPid)",
+        );
+        return false;
       }
 
-      if (currentRect == null && (_desktopLyricPid == null || attempt >= 10)) {
+      Map<String, int>? currentRect =
+          await WindowControls.getDesktopLyricRect(pid: expectedPid);
+      int? routePid = expectedPid;
+
+      if (currentRect == null && attempt >= 10) {
         currentRect = await WindowControls.getDesktopLyricRect();
         routePid = null;
+      }
+
+      if (_desktopLyricPid == null || _desktopLyricPid != expectedPid) {
+        return false;
       }
 
       final currentLeft = currentRect?["left"];
@@ -333,9 +389,9 @@ class DesktopLyricService extends DesktopLyricController {
         }
         return true;
       }
-      if (_desktopLyricPid != null) {
+      if (_desktopLyricPid != null && _desktopLyricPid == expectedPid) {
         final movedByPid = await WindowControls.setDesktopLyricPosition(
-          pid: _desktopLyricPid,
+          pid: expectedPid,
           left: left,
           top: top,
         );
@@ -346,7 +402,8 @@ class DesktopLyricService extends DesktopLyricController {
           return true;
         }
       }
-      if (_desktopLyricPid == null || attempt >= 10) {
+      if ((_desktopLyricPid == null || attempt >= 10) &&
+          _desktopLyricPid == expectedPid) {
         final movedByTitle = await WindowControls.setDesktopLyricPosition(
           left: left,
           top: top,
@@ -361,12 +418,12 @@ class DesktopLyricService extends DesktopLyricController {
       await Future.delayed(const Duration(milliseconds: 120));
     }
     LOGGER.i(
-      "[desktop lyric position] restore failed left=$left top=$top pid=$_desktopLyricPid",
+      "[desktop lyric position] restore failed left=$left top=$top pid=$expectedPid",
     );
     return false;
   }
 
-  Future<void> _setDesktopLyricClosed() async {
+  Future<void> _cleanupDesktopLyricProcess() async {
     _stopPositionSyncTimer();
     _desktopLyricPid = null;
     unawaited(WindowControls.setDesktopLyricProcess());
@@ -375,6 +432,13 @@ class DesktopLyricService extends DesktopLyricController {
     final subscription = _desktopLyricSubscription;
     _desktopLyricSubscription = null;
     await subscription?.cancel();
+    final stderrSubscription = _desktopLyricStderrSubscription;
+    _desktopLyricStderrSubscription = null;
+    await stderrSubscription?.cancel();
+  }
+
+  Future<void> _setDesktopLyricClosed() async {
+    await _cleanupDesktopLyricProcess();
     _isStarting = false;
     isLocked = false;
     notifyListeners();
@@ -454,103 +518,168 @@ class DesktopLyricService extends DesktopLyricController {
 
   Future<void> startDesktopLyric() async {
     if (_isStarting) return;
-    if (await desktopLyric != null) return;
-    final candidates = _resolveDesktopLyricCandidates();
-    if (candidates.isEmpty) {
-      _saveDesktopLyricPreference(enabled: false, locked: false);
-      showTextOnSnackBar("桌面歌词未找到");
-      return;
-    }
     _isStarting = true;
     notifyListeners();
 
-    final nowPlaying = _playbackService.nowPlaying;
-    final currScheme = ThemeProvider.instance.currScheme;
-    final isDarkMode = ThemeProvider.instance.themeMode == ThemeMode.dark;
-    final desktopLyricPref = AppPreference.instance.desktopLyricPref;
-    final initialPrimary =
-        desktopLyricPref.primary ?? currScheme.primary.toARGB32();
-    final initialSurfaceContainer = desktopLyricPref.surfaceContainer ??
-        currScheme.surfaceContainer.toARGB32();
-    final initialOnSurface =
-        desktopLyricPref.onSurface ?? currScheme.onSurface.toARGB32();
-    Object? lastErr;
-    StackTrace? lastTrace;
-    for (final desktopLyricPath in candidates) {
-      try {
-        desktopLyric = Process.start(
-            desktopLyricPath,
-            [
-              json.encode(msg.InitArgsMessage(
-                _playbackService.playerState == PlayerState.playing,
-                nowPlaying?.title ?? "旀",
-                nowPlaying?.artist ?? "旀",
-                nowPlaying?.album ?? "旀",
-                isDarkMode,
-                initialPrimary,
-                initialSurfaceContainer,
-                initialOnSurface,
-              ).toJson())
-            ],
-            workingDirectory: path.dirname(desktopLyricPath));
+    try {
+      if (await desktopLyric != null) {
+        _isStarting = false;
+        notifyListeners();
+        return;
+      }
+      final candidates = _resolveDesktopLyricCandidates();
+      if (candidates.isEmpty) {
+        _isStarting = false;
+        _saveDesktopLyricPreference(enabled: false, locked: false);
+        showTextOnSnackBar("桌面歌词未找到");
+        notifyListeners();
+        return;
+      }
 
-        final process = await desktopLyric;
-        _desktopLyricPid = process?.pid;
-        if (process != null) {
+      final nowPlaying = _playbackService.nowPlaying;
+      final currScheme = ThemeProvider.instance.currScheme;
+      final isDarkMode = ThemeProvider.instance.themeMode == ThemeMode.dark;
+      final desktopLyricPref = AppPreference.instance.desktopLyricPref;
+      final initialPrimary =
+          desktopLyricPref.primary ?? currScheme.primary.toARGB32();
+      final initialSurfaceContainer = desktopLyricPref.surfaceContainer ??
+          currScheme.surfaceContainer.toARGB32();
+      final initialOnSurface =
+          desktopLyricPref.onSurface ?? currScheme.onSurface.toARGB32();
+      Object? lastErr;
+      StackTrace? lastTrace;
+      for (final desktopLyricPath in candidates) {
+        if (!_isStarting) return;
+        try {
+          desktopLyric = processStarter(
+              desktopLyricPath,
+              [
+                json.encode(msg.InitArgsMessage(
+                  _playbackService.playerState == PlayerState.playing,
+                  nowPlaying?.title ?? "旀",
+                  nowPlaying?.artist ?? "旀",
+                  nowPlaying?.album ?? "旀",
+                  isDarkMode,
+                  initialPrimary,
+                  initialSurfaceContainer,
+                  initialOnSurface,
+                ).toJson())
+              ],
+              workingDirectory: path.dirname(desktopLyricPath));
+
+          final process = await desktopLyric;
+          if (!_isStarting) {
+            try {
+              process?.kill(ProcessSignal.sigkill);
+            } catch (_) {}
+            await _cleanupDesktopLyricProcess();
+            return;
+          }
+          if (process == null) {
+            throw StateError("Process.start returned null for $desktopLyricPath");
+          }
+
+          _desktopLyricPid = process.pid;
           await WindowControls.setDesktopLyricProcess(
             pid: process.pid,
             executablePath: desktopLyricPath,
           );
+
+          process.exitCode.then((exitCode) async {
+            if (_desktopLyricPid == null || _desktopLyricPid != process.pid) {
+              LOGGER.i(
+                "[desktop lyric] ignoring exit of superseded process (pid: ${process.pid}, activePid: $_desktopLyricPid, exitCode: $exitCode)",
+              );
+              return;
+            }
+            final activeProc = await desktopLyric;
+            if (activeProc != process) {
+              LOGGER.i(
+                "[desktop lyric] ignoring exit of mismatched process instance (pid: ${process.pid}, exitCode: $exitCode)",
+              );
+              return;
+            }
+            unawaited(_setDesktopLyricClosed());
+          });
+
+          _desktopLyricStderrSubscription =
+              process.stderr.transform(utf8.decoder).listen((event) {
+            LOGGER.e("[desktop lyric] $event");
+          });
+
+          _desktopLyricSubscription =
+              process.stdout.transform(utf8.decoder).listen(
+                    _parseDesktopLyricStdout,
+                  );
+          await _sendInstalledFontsToDesktopLyric();
+
+          await _restoreDesktopLyricWindowPosition(targetPid: process.pid);
+
+          if (!_isStarting || _desktopLyricPid == null || _desktopLyricPid != process.pid) {
+            LOGGER.i(
+              "[desktop lyric start] aborted after position restore (pid: ${process.pid}, activePid: $_desktopLyricPid)",
+            );
+            return;
+          }
+          final activeCheck = await desktopLyric;
+          if (activeCheck != process) {
+            return;
+          }
+
+          _startPositionSyncTimer();
+          await _syncDesktopLyricWindowPosition(forceSave: true);
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (_desktopLyricPid == process.pid) {
+              final testLyricService = _testLyricService;
+              if (testLyricService != null) {
+                testLyricService.refreshCurrentLyricLine();
+              } else {
+                _playService?.lyricService.refreshCurrentLyricLine();
+              }
+            }
+          });
+
+          _isStarting = false;
+          _saveDesktopLyricPreference(
+            enabled: true,
+            locked: isLocked,
+            primary: initialPrimary,
+            surfaceContainer: initialSurfaceContainer,
+            onSurface: initialOnSurface,
+          );
+          notifyListeners();
+          return;
+        } catch (err, trace) {
+          lastErr = err;
+          lastTrace = trace;
+          LOGGER.e(
+            "[desktop lyric start] candidate failed: $desktopLyricPath, $err",
+            stackTrace: trace,
+          );
+          try {
+            final proc = await desktopLyric;
+            proc?.kill(ProcessSignal.sigkill);
+          } catch (_) {}
+          await _cleanupDesktopLyricProcess();
         }
-        process?.exitCode.then((_) {
-          unawaited(_setDesktopLyricClosed());
-        });
-
-        process?.stderr.transform(utf8.decoder).listen((event) {
-          LOGGER.e("[desktop lyric] $event");
-        });
-
-        _desktopLyricSubscription =
-            process?.stdout.transform(utf8.decoder).listen(
-                  _parseDesktopLyricStdout,
-                );
-        await _sendInstalledFontsToDesktopLyric();
-
-        _isStarting = false;
-        _saveDesktopLyricPreference(
-          enabled: true,
-          locked: isLocked,
-          primary: initialPrimary,
-          surfaceContainer: initialSurfaceContainer,
-          onSurface: initialOnSurface,
-        );
-        await _restoreDesktopLyricWindowPosition();
-        _startPositionSyncTimer();
-        await _syncDesktopLyricWindowPosition(forceSave: true);
-        Future.delayed(const Duration(milliseconds: 250), () {
-          playService.lyricService.refreshCurrentLyricLine();
-        });
-
-        notifyListeners();
-        return;
-      } catch (err, trace) {
-        lastErr = err;
-        lastTrace = trace;
-        LOGGER.e(
-          "[desktop lyric start] candidate failed: $desktopLyricPath, $err",
-          stackTrace: trace,
-        );
       }
-    }
 
-    _isStarting = false;
-    _saveDesktopLyricPreference(enabled: false, locked: false);
-    notifyListeners();
-    if (lastErr != null) {
-      LOGGER.e("[desktop lyric start] all candidates failed: $lastErr",
-          stackTrace: lastTrace);
+      _isStarting = false;
+      await _setDesktopLyricClosed();
+      _saveDesktopLyricPreference(enabled: false, locked: false);
+      notifyListeners();
+      if (lastErr != null) {
+        LOGGER.e("[desktop lyric start] all candidates failed: $lastErr",
+            stackTrace: lastTrace);
+      }
+      showTextOnSnackBar("桌面歌词启动失败");
+    } catch (e, st) {
+      LOGGER.e("[desktop lyric start] unexpected exception: $e", stackTrace: st);
+      _isStarting = false;
+      await _setDesktopLyricClosed();
+      _saveDesktopLyricPreference(enabled: false, locked: false);
+      notifyListeners();
     }
-    showTextOnSnackBar("桌面歌词启动失败");
   }
 
   Future<bool> get canSendMessage => desktopLyric.then(
@@ -666,12 +795,11 @@ class DesktopLyricService extends DesktopLyricController {
         showTranslation ? line.translation : null,
       ));
     } else if (line is LrcLine) {
-      final splitted = line.content.split("\u2503");
-      final content = splitted.first;
+      final parsed = LyricLineParser.parse(line.content);
       final translation =
-          showTranslation && splitted.length > 1 ? splitted[1] : null;
+          showTranslation && !parsed.isCredit ? parsed.translation : null;
       sendMessage(msg.LyricLineChangedMessage(
-        content,
+        parsed.primary,
         line.length,
         translation,
       ));

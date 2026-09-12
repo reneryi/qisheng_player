@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/entry.dart';
+import 'package:qisheng_player/font_loader_helper.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/library_reload_service.dart';
@@ -15,7 +16,6 @@ import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> initWindow() async {
@@ -43,20 +43,17 @@ Future<void> initWindow() async {
 
 Future<void> loadPrefFont() async {
   final settings = AppSettings.instance;
+  final family = settings.fontFamily ?? 'MiSans';
+  try {
+    await FontLoaderHelper.loadFontFamily(
+      familyName: family,
+      fontPath: settings.fontPath,
+    );
+  } catch (err, trace) {
+    LOGGER.e(err, stackTrace: trace);
+  }
   if (settings.fontFamily != null) {
-    try {
-      final fontLoader = FontLoader(settings.fontFamily!);
-
-      fontLoader.addFont(
-        File(settings.fontPath!).readAsBytes().then((value) {
-          return ByteData.sublistView(value);
-        }),
-      );
-      await fontLoader.load();
-      ThemeProvider.instance.changeFontFamily(settings.fontFamily!);
-    } catch (err, trace) {
-      LOGGER.e(err, stackTrace: trace);
-    }
+    ThemeProvider.instance.changeFontFamily(settings.fontFamily!);
   }
 }
 
@@ -99,7 +96,22 @@ Future<void> main() async {
   if (File("$supportPath\\settings.json").existsSync()) {
     await AppSettings.readFromJson();
     await loadPrefFont();
+  } else {
+    if (AppSettings.instance.useSystemTheme) {
+      AppSettings.instance.defaultTheme = AppSettings.getWindowsTheme();
+    } else {
+      AppSettings.instance.defaultTheme = AppSettings.instance.customTheme;
+    }
+    if (AppSettings.instance.useSystemThemeMode) {
+      AppSettings.instance.themeMode = ThemeMode.system;
+    }
   }
+
+  final startupSettings = AppSettings.instance;
+  ThemeProvider.instance.applyTheme(
+    seedColor: Color(startupSettings.defaultTheme),
+  );
+  ThemeProvider.instance.applyThemeMode(startupSettings.themeMode);
   if (File("$supportPath\\app_preference.json").existsSync()) {
     await AppPreference.read();
   }

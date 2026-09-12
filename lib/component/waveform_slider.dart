@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter; // 引入 ImageFilter 支持气泡毛玻璃�
 import 'package:qisheng_player/utils.dart'; // 引入 utils 以使用 duration 格式化扩展
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+export 'package:qisheng_player/component/adaptive_waveform_slider.dart';
 
 const int waveformBarCount = 52;
 const double waveformBarWidth = 3.5;
@@ -61,10 +62,11 @@ class _WaveformSliderState extends State<WaveformSlider>
     super.initState();
     // 拖拽阻尼过渡：按下时以 curves.easeOut 变扁，松开时用物理弹簧效果进行回弹
     // 由 CustomPainter(repaint: ...) 直接驱动，彻底告别在每帧触发全局 setState
-    _dragController = AnimationController(
+    _dragController = AnimationController.unbounded(
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
+    _dragController.value = 0.0;
 
     // 悬停引力过渡：悬停淡入 150ms，移出淡出 150ms，以防柱子形变瞬间闪现
     _hoverController = AnimationController(

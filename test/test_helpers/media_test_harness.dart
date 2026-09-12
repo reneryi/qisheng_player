@@ -32,6 +32,7 @@ class TestAudio extends Audio {
     String? composer,
     String? arranger,
     required String path,
+    String? sourcePath,
   }) : super(
           title,
           artist,
@@ -44,7 +45,7 @@ class TestAudio extends Audio {
           320,
           48000,
           null,
-          null,
+          sourcePath,
           null,
           null,
           path,
@@ -258,6 +259,17 @@ class FakePlaybackController extends PlaybackController {
   void start() {
     _playerState = PlayerState.playing;
     _stateController.add(_playerState);
+  }
+
+  final ValueNotifier<bool> _wasapiExclusive = ValueNotifier<bool>(false);
+
+  @override
+  ValueListenable<bool> get wasapiExclusive => _wasapiExclusive;
+
+  @override
+  void useExclusiveMode(bool exclusive) {
+    _wasapiExclusive.value = exclusive;
+    notifyListeners();
   }
 
   void setNowPlaying(Audio? audio, {List<Audio>? queue}) {

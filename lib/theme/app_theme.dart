@@ -3,10 +3,49 @@ import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/theme/app_component_themes.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   const AppTheme._();
+
+  static const List<String> fallbackList = [
+    'MiSans',
+    'HarmonyOS Sans SC',
+    'OPPO Sans',
+    'Segoe UI Variable Text',
+    'Segoe UI Variable Display',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans CJK SC',
+    'SimSun',
+    'SimHei',
+    'Segoe UI Emoji',
+  ];
+
+  static List<String> extractFamilyFallbacks(String? fontFamily) {
+    if (fontFamily == null || fontFamily.trim().isEmpty) {
+      return fallbackList;
+    }
+    final trimmed = fontFamily.trim();
+    final fallbacks = <String>[];
+
+    final styleSuffix = RegExp(
+      r'\s+(Regular|Bold\s+Italic|Bold|Italic|Light|Medium|Black|Heavy|Thin|SemiBold|ExtraLight|ExtraBold|DemiBold|常规|粗体|细体|粗斜体)$',
+      caseSensitive: false,
+    );
+    if (styleSuffix.hasMatch(trimmed)) {
+      final base = trimmed.replaceAll(styleSuffix, '').trim();
+      if (base.isNotEmpty && base != trimmed) {
+        fallbacks.add(base);
+      }
+    }
+    for (final fb in fallbackList) {
+      if (!fallbacks.contains(fb)) {
+        fallbacks.add(fb);
+      }
+    }
+    return fallbacks;
+  }
 
   static ThemeData build({
     required ColorScheme colorScheme,
@@ -15,7 +54,6 @@ class AppTheme {
     UiVisualStyleMode visualStyleMode = UiVisualStyleMode.borderless,
     WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient,
   }) {
-    GoogleFonts.config.allowRuntimeFetching = false;
     final surfaces = _surfaceTokens(
       colorScheme,
       effectsLevel,
@@ -33,6 +71,7 @@ class AppTheme {
     final motion = _motionTokens();
     final player = _playerTokens(visualStyleMode);
 
+    final effectiveFallbacks = extractFamilyFallbacks(fontFamily);
     final baseTheme = ThemeData(
       useMaterial3: true,
       brightness: colorScheme.brightness,
@@ -42,27 +81,26 @@ class AppTheme {
       cardColor: surfaces.surfaceRaised,
       splashFactory: InkRipple.splashFactory,
       fontFamily: fontFamily,
-      fontFamilyFallback: const [
-        'MiSans',
-        'HarmonyOS Sans SC',
-        'OPPO Sans',
-        'Segoe UI Variable Text',
-        'Segoe UI Variable Display',
-        'Microsoft YaHei UI',
-        'Microsoft YaHei',
-        'PingFang SC',
-        'Noto Sans CJK SC',
-        'SimSun',
-        'SimHei',
-        'Segoe UI Emoji',
-      ],
+      fontFamilyFallback: effectiveFallbacks,
     );
     TextTheme textTheme = baseTheme.textTheme;
     TextTheme primaryTextTheme = baseTheme.primaryTextTheme;
-    if (fontFamily == null && _hasWidgetsBinding()) {
-      textTheme = GoogleFonts.notoSansScTextTheme(baseTheme.textTheme);
-      primaryTextTheme =
-          GoogleFonts.notoSansScTextTheme(baseTheme.primaryTextTheme);
+    if (fontFamily != null) {
+      textTheme = textTheme.apply(
+        fontFamily: fontFamily,
+        fontFamilyFallback: effectiveFallbacks,
+      );
+      primaryTextTheme = primaryTextTheme.apply(
+        fontFamily: fontFamily,
+        fontFamilyFallback: effectiveFallbacks,
+      );
+    } else {
+      textTheme = textTheme.apply(
+        fontFamilyFallback: effectiveFallbacks,
+      );
+      primaryTextTheme = primaryTextTheme.apply(
+        fontFamilyFallback: effectiveFallbacks,
+      );
     }
     textTheme = _refineTextTheme(textTheme, colorScheme, visualStyleMode);
     primaryTextTheme =
@@ -144,72 +182,99 @@ class AppTheme {
     );
   }
 
-  // 优化全局排版体系：注入等宽数字与现代字阶层级，避免播放进度、时间跳动时文字晃动
+  // 优化全局排版体系：采用现代舒展的字阶、呼吸感行高与自然的字间距，彻底消除局促紧凑与笔画粘连，
+  // 激活 OpenType 高级字形特性（calt 上下文交替字、liga 标准连字、kern 光学字偶间距调整）及对称行高分布
   static TextTheme _refineTextTheme(
     TextTheme textTheme,
     ColorScheme scheme,
     UiVisualStyleMode visualStyleMode,
   ) {
-    const tabularFeatures = [FontFeature.tabularFigures()];
+    const fontFeatures = [
+      FontFeature.enable('calt'),
+      FontFeature.enable('liga'),
+      FontFeature.enable('kern'),
+    ];
 
     return textTheme.copyWith(
       displaySmall: textTheme.displaySmall?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w700,
-        height: 1.04,
-        letterSpacing: -0.5,
-        fontFeatures: tabularFeatures,
+        height: 1.30,
+        letterSpacing: 0.38,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       headlineMedium: textTheme.headlineMedium?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w700,
-        height: 1.06,
-        letterSpacing: -0.3,
-        fontFeatures: tabularFeatures,
+        height: 1.32,
+        letterSpacing: 0.35,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       titleLarge: textTheme.titleLarge?.copyWith(
         color: scheme.onSurface,
-        fontWeight: FontWeight.w700,
-        height: 1.08,
-        letterSpacing: -0.2,
-        fontFeatures: tabularFeatures,
+        fontWeight: FontWeight.w600,
+        height: 1.32,
+        letterSpacing: 0.30,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       titleMedium: textTheme.titleMedium?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w600,
-        letterSpacing: -0.1,
-        fontFeatures: tabularFeatures,
+        height: 1.34,
+        letterSpacing: 0.26,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       bodyLarge: textTheme.bodyLarge?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w500,
-        fontFeatures: tabularFeatures,
+        height: 1.40,
+        letterSpacing: 0.18,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       bodyMedium: textTheme.bodyMedium?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.84),
+        color: scheme.onSurface.withValues(alpha: 0.88),
         fontWeight: FontWeight.w400,
-        fontFeatures: tabularFeatures,
+        height: 1.40,
+        letterSpacing: 0.16,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       bodySmall: textTheme.bodySmall?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.62),
+        color: scheme.onSurface.withValues(alpha: 0.72),
         fontWeight: FontWeight.w400,
-        fontFeatures: tabularFeatures,
+        height: 1.38,
+        letterSpacing: 0.22,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       labelLarge: textTheme.labelLarge?.copyWith(
         color: scheme.onSurface,
         fontWeight: FontWeight.w600,
-        fontFeatures: tabularFeatures,
+        height: 1.30,
+        letterSpacing: 0.22,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       labelMedium: textTheme.labelMedium?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.75),
+        color: scheme.onSurface.withValues(alpha: 0.80),
         fontWeight: FontWeight.w500,
-        fontFeatures: tabularFeatures,
+        height: 1.30,
+        letterSpacing: 0.20,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
       labelSmall: textTheme.labelSmall?.copyWith(
-        color: scheme.onSurface.withValues(alpha: 0.6),
+        color: scheme.onSurface.withValues(alpha: 0.68),
         fontWeight: FontWeight.w500,
-        letterSpacing: 0.2,
-        fontFeatures: tabularFeatures,
+        height: 1.30,
+        letterSpacing: 0.22,
+        leadingDistribution: TextLeadingDistribution.even,
+        fontFeatures: fontFeatures,
       ),
     );
   }
@@ -327,7 +392,7 @@ class AppTheme {
       sideNavExpandedWidth: 160, // 稍微收窄左侧栏避免占比过大
       sideNavCollapsedWidth: 76,
       titleBarHeight: 56,
-      dockHeight: 92,
+      dockHeight: 116.0,
       shellGap: 10,
       shellContentMaxWidth: 2400,
       backdropBlurSigma: backdropSigma * backdropSigmaScale,
@@ -671,14 +736,5 @@ class AppTheme {
           modeSwitchDuration: Duration(milliseconds: 360),
         ),
     };
-  }
-
-  static bool _hasWidgetsBinding() {
-    try {
-      WidgetsBinding.instance;
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 }

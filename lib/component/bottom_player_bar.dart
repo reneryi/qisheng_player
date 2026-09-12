@@ -4,7 +4,9 @@ import 'package:flutter/gestures.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_brand.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
-import 'package:qisheng_player/component/spectrum_progress_slider.dart';
+import 'package:qisheng_player/component/fluid_glow_progress_slider.dart';
+import 'package:qisheng_player/component/adaptive_waveform_slider.dart';
+import 'package:qisheng_player/component/dual_layer_rhythm_slider.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/now_playing_navigation.dart';
@@ -145,71 +147,82 @@ class _BottomBarTrackSection extends StatelessWidget {
       builder: (context, audio, _) {
         final scheme = Theme.of(context).colorScheme;
 
-        return CpMotionPressable(
-          borderRadius: BorderRadius.circular(20),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          onTap: () {
-            if (isNowPlayingRoute(context)) {
-              final navigation = AppNavigationState.instance;
-              navigation.closeNowPlaying(
-                context,
-                fallback: navigation.lastShellLocation,
-              );
-              return;
-            }
-            openNowPlayingRoute(context);
-          },
-          child: Row(
-            children: [
-              _TrackCover(
-                size: dense ? 52 : 58,
-                audio: audio,
-                disableHero: disableHero,
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: dense ? 64.0 : 70.0,
+            ),
+            child: CpMotionPressable(
+              borderRadius: BorderRadius.circular(16),
+              padding: EdgeInsets.symmetric(
+                horizontal: dense ? 6 : 8,
+                vertical: dense ? 4 : 6,
               ),
-              SizedBox(width: dense ? 12 : 16),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    MarqueeText(
-                      text: audio?.displayTitle ?? AppBrand.displayName,
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: dense ? 14 : 16,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+              onTap: () {
+                if (isNowPlayingRoute(context)) {
+                  final navigation = AppNavigationState.instance;
+                  navigation.closeNowPlaying(
+                    context,
+                    fallback: navigation.lastShellLocation,
+                  );
+                  return;
+                }
+                openNowPlayingRoute(context);
+              },
+              child: Row(
+                children: [
+                  _TrackCover(
+                    size: dense ? 52 : 58,
+                    audio: audio,
+                    disableHero: disableHero,
+                  ),
+                  SizedBox(width: dense ? 12 : 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            audio?.displayArtist ?? '暂无播放',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.6),
-                              fontSize: dense ? 12 : 13,
-                              fontWeight: FontWeight.w400,
-                            ),
+                        MarqueeText(
+                          text: audio?.displayTitle ?? AppBrand.displayName,
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: dense ? 14 : 16,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
                           ),
                         ),
-                        if (audio != null && !dense) ...[
-                          const SizedBox(width: 8),
-                          AudioFormatBadge(
-                            audio: audio,
-                            compact: true,
-                          ),
-                        ],
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                audio?.displayArtist ?? '暂无播放',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: scheme.onSurface.withValues(alpha: 0.6),
+                                  fontSize: dense ? 12 : 13,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                            if (audio != null && !dense) ...[
+                              const SizedBox(width: 8),
+                              AudioFormatBadge(
+                                audio: audio,
+                                compact: true,
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -339,9 +352,9 @@ class _BottomBarCenterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final progressHeight = dense ? 14.0 : 20.0;
+        final progressHeight = dense ? 22.0 : 36.0;
         final controlsHeight = dense ? 52.0 : 56.0;
-        final preferredGap = dense ? 2.0 : 2.0;
+        final preferredGap = dense ? 2.0 : 4.0;
         final availableGap = constraints.hasBoundedHeight
             ? constraints.maxHeight - progressHeight - controlsHeight
             : preferredGap;
@@ -413,7 +426,7 @@ class _ProgressStripState extends State<_ProgressStrip> {
                     if (showLabels)
                       // 已经过播放时间标签
                       SizedBox(
-                        width: 48,
+                        width: 62.0,
                         child: Text(
                           Duration(
                             milliseconds: (clampedValue * 1000).round(),
@@ -422,39 +435,78 @@ class _ProgressStripState extends State<_ProgressStrip> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: scheme.onSurface.withValues(alpha: 0.58),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.w500,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),
                       ),
                     Expanded(
-                      child: ValueListenableBuilder<double>(
-                        valueListenable: playback.volumeDspNotifier,
-                        builder: (context, volume, _) {
-                          return SpectrumProgressSlider(
-                            spectrum: playback.audioSpectrum,
-                            value: clampedValue,
-                            max: clampedDuration,
-                            height: widget.dense ? 14.0 : 20.0,
-                            spectrumActive: isPlaying &&
-                                hasTrack &&
-                                volume > 0 &&
-                                context.surfaces.effectsLevel !=
-                                    UiEffectsLevel.performance,
-                            onChanged: hasTrack
-                                ? (value) {
-                                    setState(() {
-                                      _dragging = true;
-                                      _dragValue = value;
-                                    });
-                                  }
-                                : null,
-                            onChangeEnd: hasTrack
-                                ? (value) {
-                                    setState(() => _dragging = false);
-                                    playback.seek(value);
-                                  }
-                                : null,
+                      child: ValueListenableBuilder<ProgressBarType>(
+                        valueListenable:
+                            AppSettings.instance.progressBarTypeNotifier,
+                        builder: (context, progressType, _) {
+                          return ValueListenableBuilder<double>(
+                            valueListenable: playback.volumeDspNotifier,
+                            builder: (context, volume, _) {
+                              final sliderHeight = widget.dense ? 22.0 : 36.0;
+                              final onChangedCallback = hasTrack
+                                  ? (double value) {
+                                      setState(() {
+                                        _dragging = true;
+                                        _dragValue = value;
+                                      });
+                                    }
+                                  : null;
+                              final onChangeEndCallback = hasTrack
+                                  ? (double value) {
+                                      setState(() => _dragging = false);
+                                      playback.seek(value);
+                                    }
+                                  : null;
+
+                              switch (progressType) {
+                                case ProgressBarType.fluidGlow:
+                                  return FluidGlowProgressSlider(
+                                    value: clampedValue,
+                                    max: clampedDuration,
+                                    height: sliderHeight,
+                                    onChanged: onChangedCallback,
+                                    onChangeEnd: onChangeEndCallback,
+                                  );
+                                case ProgressBarType.adaptiveWaveform:
+                                  return AdaptiveWaveformSlider(
+                                    spectrum: playback.audioSpectrum,
+                                    spectrumActive: isPlaying &&
+                                        hasTrack &&
+                                        volume > 0 &&
+                                        context.surfaces.effectsLevel !=
+                                            UiEffectsLevel.performance,
+                                    value: clampedValue,
+                                    max: clampedDuration,
+                                    height: sliderHeight,
+                                    audio: playback.nowPlaying,
+                                    isPlaying: isPlaying,
+                                    onChanged: onChangedCallback,
+                                    onChangeEnd: onChangeEndCallback,
+                                  );
+                                case ProgressBarType.dualLayerRhythm:
+                                  return DualLayerRhythmSlider(
+                                    spectrum: playback.audioSpectrum,
+                                    value: clampedValue,
+                                    max: clampedDuration,
+                                    height: sliderHeight,
+                                    isPlaying: isPlaying,
+                                    spectrumActive: isPlaying &&
+                                        hasTrack &&
+                                        volume > 0 &&
+                                        context.surfaces.effectsLevel !=
+                                            UiEffectsLevel.performance,
+                                    onChanged: onChangedCallback,
+                                    onChangeEnd: onChangeEndCallback,
+                                  );
+                              }
+                            },
                           );
                         },
                       ),
@@ -462,7 +514,7 @@ class _ProgressStripState extends State<_ProgressStrip> {
                     if (showLabels)
                       // 音频总时长标签
                       SizedBox(
-                        width: 48,
+                        width: 62.0,
                         child: Text(
                           Duration(
                             milliseconds: (duration * 1000).round(),
@@ -472,8 +524,9 @@ class _ProgressStripState extends State<_ProgressStrip> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: scheme.onSurface.withValues(alpha: 0.58),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.w500,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),
                       ),
@@ -945,26 +998,69 @@ class _ExclusiveModeControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = context.watch<PlaybackController>();
-    if (playback is! PlaybackService) {
-      return const SizedBox.shrink();
-    }
+
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ValueListenableBuilder<bool>(
       valueListenable: playback.wasapiExclusive,
-      builder: (context, exclusive, _) => CpIconButton(
-        variant: CpButtonVariant.immersive,
-        tooltip: "独占模式：${exclusive ? '已启用' : '已禁用'}",
-        onPressed: () => playback.useExclusiveMode(!exclusive),
-        icon: Center(
-          child: Text(
-            exclusive ? '独占' : '共享',
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+      builder: (context, exclusive, _) {
+        final activeColor = scheme.primary;
+        final inactiveColor = scheme.onSurface.withValues(alpha: 0.70);
+
+        return Tooltip(
+          message: "音频输出模式：${exclusive ? 'WASAPI 独占（高保真源码输出）' : '系统共享（常规音频混合）'}",
+          child: CpMotionPressable(
+            onTap: () => playback.useExclusiveMode(!exclusive),
+            borderRadius: BorderRadius.circular(10),
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            border: false,
+            hoverScale: 1.05,
+            pressScale: 0.95,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5.5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: exclusive
+                    ? activeColor.withValues(alpha: isDark ? 0.22 : 0.14)
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.05)),
+                border: Border.all(
+                  color: exclusive
+                      ? activeColor.withValues(alpha: isDark ? 0.55 : 0.40)
+                      : (isDark
+                          ? Colors.white.withValues(alpha: 0.15)
+                          : Colors.black.withValues(alpha: 0.12)),
+                  width: 1.0,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    exclusive ? Symbols.lock_outline : Symbols.graphic_eq,
+                    size: 15,
+                    color: exclusive ? activeColor : inactiveColor,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    exclusive ? '独占' : '共享',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: exclusive ? FontWeight.w700 : FontWeight.w600,
+                      color: exclusive ? activeColor : inactiveColor,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -1288,7 +1384,7 @@ class _QueueEntryButton extends StatelessWidget {
                                   style: TextStyle(
                                     color: scheme.onSurface,
                                     fontSize: 20,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),

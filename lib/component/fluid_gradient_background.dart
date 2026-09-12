@@ -102,7 +102,10 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final theme = Provider.of<ThemeProvider>(context);
-    final targetPalette = theme.albumPalette;
+    final targetPalette = theme.effectiveWindowBackdropMode ==
+            WindowBackdropMode.prismaticGlass
+        ? theme.auroraPalette
+        : theme.meshFlowPalette;
 
     // 关键优化：明暗模式切换直接响应 ThemeProvider 的真实 effectiveBrightness，
     // 彻底消除上层 AnimatedTheme 的 250ms 半程跳变延迟，实现立即可见、同频无痕的 350ms 平滑融化。
@@ -251,7 +254,9 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
       ]),
       builder: (context, _) {
         final mode = theme.effectiveWindowBackdropMode;
-        final targetPalette = theme.albumPalette;
+        final targetPalette = mode == WindowBackdropMode.prismaticGlass
+            ? theme.auroraPalette
+            : theme.meshFlowPalette;
 
         final double transitionProgress = Curves.easeInOutCubic.transform(
           _paletteController.value,
@@ -527,7 +532,7 @@ class _MeshFlowPainter extends CustomPainter {
     const warpStrength = 1.0;
     const blobScale = 1.0;
     const layerMix = 0.55;
-    const luminanceLimit = 0.40;
+    const luminanceLimit = 0.54;
     shader.setFloat(39, warpStrength);
     shader.setFloat(40, blobScale);
     shader.setFloat(41, layerMix);

@@ -184,21 +184,8 @@ class LyricService extends LyricController {
     final version = ++_lyricLoadVersion;
     _nextLyricLine = 0;
 
-    if (nowPlaying.isCueTrack) {
-      currLyricFuture = _getLocalLyric(nowPlaying);
-      currLyricFuture.then((value) {
-        if (version != _lyricLoadVersion) return;
-        _findAndNotifyCurrentLyricLine(value, version: version);
-      });
-      notifyListeners();
-      return;
-    }
-
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
-    if (lyricSource == null) {
-      currLyricFuture =
-          _getDefaultLyric(nowPlaying, AppSettings.instance.localLyricFirst);
-    } else {
+    if (lyricSource != null) {
       if (lyricSource.source == LyricSourceType.local) {
         currLyricFuture = _getLocalLyric(nowPlaying);
       } else {
@@ -208,6 +195,11 @@ class LyricService extends LyricController {
           neteaseSongId: lyricSource.neteaseSongId,
         );
       }
+    } else if (nowPlaying.isCueTrack) {
+      currLyricFuture = _getLocalLyric(nowPlaying);
+    } else {
+      currLyricFuture =
+          _getDefaultLyric(nowPlaying, AppSettings.instance.localLyricFirst);
     }
 
     currLyricFuture.then((value) {
@@ -253,7 +245,16 @@ class LyricService extends LyricController {
       return;
     }
 
-    currLyricFuture = _getOnlineDefaultLyric(nowPlaying);
+    final lyricSource = LYRIC_SOURCES[nowPlaying.path];
+    if (lyricSource != null && lyricSource.source != LyricSourceType.local) {
+      currLyricFuture = getOnlineLyric(
+        qqSongId: lyricSource.qqSongId,
+        kugouSongHash: lyricSource.kugouSongHash,
+        neteaseSongId: lyricSource.neteaseSongId,
+      );
+    } else {
+      currLyricFuture = _getOnlineDefaultLyric(nowPlaying);
+    }
     currLyricFuture.then((value) {
       if (version != _lyricLoadVersion) return;
       _findAndNotifyCurrentLyricLine(value, version: version);

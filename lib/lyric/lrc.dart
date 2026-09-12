@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_file_helper.dart';
 import 'package:qisheng_player/src/rust/api/tag_reader.dart';
 
 class LrcLine extends UnsyncLyricLine {
@@ -214,12 +217,72 @@ class Lrc extends Lyric {
     return Lrc(clippedLines, lyric.source);
   }
 
-  /// 鍙敮鎸佽鍙?ID3V2, VorbisComment, Mp4Ilst 瀛樺偍鐨勫唴宓屾瓕璇?
-  /// 以及相同目录相同文件名的 .lrc 澶栨寕姝岃瘝锛坲tf-8 or utf-16锛?
+  /// 安全读取本地歌词文件，支持 UTF-8 及 UTF-16 (LE / BE) 编码格式
+  static Future<String?> _readLrcFileSafely(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+        // UTF-16 LE
+        final units = <int>[];
+        for (var i = 2; i < bytes.length - 1; i += 2) {
+          units.add(bytes[i] | (bytes[i + 1] << 8));
+        }
+        return String.fromCharCodes(units);
+      } else if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+        // UTF-16 BE
+        final units = <int>[];
+        for (var i = 2; i < bytes.length - 1; i += 2) {
+          units.add((bytes[i] << 8) | bytes[i + 1]);
+        }
+        return String.fromCharCodes(units);
+      }
+      return utf8.decode(bytes, allowMalformed: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
+  /// 以及相同目录相同文件名的 .lrc 外挂歌词（utf-8 or utf-16）
   static Future<Lrc?> fromAudioPath(
     Audio belongTo, {
     String? separator = "─",
   }) async {
+    // 若为 CUE 分轨，优先在母带同目录下探测分轨专属外挂 .lrc 文件
+    if (belongTo.isCueTrack) {
+      final motherDir = File(belongTo.mediaPath).parent.path;
+      final separatorChar = Platform.pathSeparator;
+      final safeTitle = LyricFileHelper.sanitizeFileName(belongTo.title);
+      final primaryLrcPath = LyricFileHelper.getLrcFilePath(belongTo);
+
+      final candidates = <String>{
+        primaryLrcPath,
+        '$motherDir$separatorChar$safeTitle.lrc',
+      };
+      if (belongTo.track > 0) {
+        candidates.add('$motherDir$separatorChar${belongTo.track}. $safeTitle.lrc');
+        final pad = belongTo.track.toString().padLeft(2, '0');
+        candidates.add('$motherDir$separatorChar$pad - $safeTitle.lrc');
+      }
+
+      for (final candidate in candidates) {
+        final file = File(candidate);
+        if (file.existsSync()) {
+          final content = await _readLrcFileSafely(file);
+          if (content != null && content.trim().isNotEmpty) {
+            final lrc = Lrc.fromLrcText(
+              content,
+              LrcSource.local,
+              separator: separator,
+            );
+            if (lrc != null && lrc.lines.isNotEmpty) {
+              return lrc;
+            }
+          }
+        }
+      }
+    }
+
     Lrc? lyric = await getLyricFromPath(path: belongTo.mediaPath).then((value) {
       if (value == null) {
         return null;

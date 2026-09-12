@@ -35,35 +35,11 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
           menuChildren: [
             MenuItemButton(
               onPressed: () async {
-                final controller = TextEditingController();
-                final name = await showDialog<String>(
+                final existingNames = PLAYLISTS.map((e) => e.name).toList();
+                final name = await showModernDialog<String>(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("新建歌单"),
-                    content: TextField(
-                      controller: controller,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: "歌单名称",
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (value) {
-                        Navigator.pop(context, value);
-                      },
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("取消"),
-                      ),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.pop(context, controller.text);
-                        },
-                        child: const Text("创建"),
-                      ),
-                    ],
-                  ),
+                  builder: (context) =>
+                      NewPlaylistDialog(existingNames: existingNames),
                 );
                 final trimmed = name?.trim();
                 if (trimmed == null || trimmed.isEmpty) return;
@@ -173,7 +149,10 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
                 await file.delete();
               }
               AudioLibrary.instance.removeAudioByPath(nowPlaying.path);
-              OnlineCoverStore.instance.removeByPath(nowPlaying.path);
+              OnlineCoverStore.instance.removeByPath(nowPlaying.mediaPath);
+              if (nowPlaying.path != nowPlaying.mediaPath) {
+                OnlineCoverStore.instance.removeByPath(nowPlaying.path);
+              }
               removeAudioFromAllPlaylistsByPath(nowPlaying.path);
               playbackService.removeAudioFromPlaylistByPath(nowPlaying.path);
               showTextOnSnackBar("已删除“${nowPlaying.title}”");

@@ -1,4 +1,4 @@
-﻿// ignore_for_file: non_constant_identifier_names
+// ignore_for_file: non_constant_identifier_names
 
 import 'dart:async';
 import 'dart:convert';
@@ -55,6 +55,8 @@ Future<void> readPlaylists() async {
 }
 
 Future<void> savePlaylists() async {
+  _playlistSaveDebounce?.cancel();
+  _playlistSaveDebounce = null;
   try {
     final supportPath = (await getAppDataDir()).path;
     final playlistsPath = "$supportPath\\playlists.json";

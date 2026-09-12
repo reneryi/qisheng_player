@@ -4,6 +4,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -99,12 +100,22 @@ class _LyricHorizontalScrollAreaState
     final showTranslation =
         AppPreference.instance.nowPlayingPagePref.showTranslation;
     if (line is LrcLine) {
-      if (showTranslation) return line.content;
-      return line.content.split("─").first;
+      final parsed = LyricLineParser.parse(line.content);
+      if (!showTranslation ||
+          parsed.isCredit ||
+          parsed.translation == null ||
+          parsed.translation!.trim().isEmpty) {
+        return parsed.primary;
+      }
+      return "${parsed.primary}  ·  ${parsed.translation}";
     }
     if (line is SyncLyricLine) {
-      if (!showTranslation || line.translation == null) return line.content;
-      return "${line.content}─${line.translation}";
+      if (!showTranslation ||
+          line.translation == null ||
+          line.translation!.trim().isEmpty) {
+        return line.content;
+      }
+      return "${line.content}  ·  ${line.translation}";
     }
     return "开始播放音乐";
   }
@@ -220,20 +231,30 @@ class _LyricHorizontalScrollAreaState
                   ),
                 );
               },
-              child: Text(
-                currContent,
-                key: ValueKey(currContent),
-                style: TextStyle(
-                  color:
-                      scheme.onSurface, // 前景色调整为 onSurface 确保沉浸式对比度
-                  fontWeight: FontWeight.w700,
-                  shadows: [
-                    Shadow(
-                      color: scheme.primary.withValues(alpha: 0.22),
-                      blurRadius: 12,
+              child: Builder(
+                builder: (context) {
+                  final isCredit = LyricLineParser.parse(currContent).isCredit;
+                  return Text(
+                    currContent,
+                    key: ValueKey(currContent),
+                    style: TextStyle(
+                      color: isCredit
+                          ? scheme.onSurface.withValues(alpha: 0.68)
+                          : scheme.onSurface,
+                      fontSize: 14,
+                      fontWeight: isCredit ? FontWeight.w400 : FontWeight.w600,
+                      letterSpacing: 0,
+                      shadows: isCredit
+                          ? null
+                          : [
+                              Shadow(
+                                color: scheme.primary.withValues(alpha: 0.16),
+                                blurRadius: 4,
+                              ),
+                            ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),

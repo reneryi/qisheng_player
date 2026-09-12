@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/page/playlists_page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/utils.dart';
@@ -169,35 +171,10 @@ class AddAllToPlaylist extends StatelessWidget {
   final MultiSelectController<Audio> multiSelectController;
 
   Future<String?> _showCreatePlaylistDialog(BuildContext context) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
+    final existingNames = PLAYLISTS.map((e) => e.name).toList();
+    return showModernDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("创建歌单"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: "歌单名称",
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (value) {
-            Navigator.pop(context, value);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context, controller.text);
-            },
-            child: const Text("创建"),
-          ),
-        ],
-      ),
+      builder: (context) => NewPlaylistDialog(existingNames: existingNames),
     );
   }
 
@@ -372,10 +349,10 @@ class DeleteSelectedAudios extends StatelessWidget {
 
     final pathsToRemove = <String>{};
     final failedMediaPaths = <String>{};
+    final deletedMediaPaths = <String>{};
 
     if (mode == _DeleteSelectedMode.removeAndDeleteSource) {
       final mediaPaths = selected.map((audio) => audio.mediaPath).toSet();
-      final deletedMediaPaths = <String>{};
       for (final mediaPath in mediaPaths) {
         try {
           final file = File(mediaPath);
@@ -404,6 +381,16 @@ class DeleteSelectedAudios extends StatelessWidget {
         showTextOnSnackBar("删除失败，${failedMediaPaths.length} 个源文件无法删除");
       }
       return;
+    }
+
+    final mediaPathsToRemove = <String>{};
+    if (mode == _DeleteSelectedMode.removeAndDeleteSource) {
+      mediaPathsToRemove.addAll(deletedMediaPaths);
+    } else {
+      mediaPathsToRemove.addAll(selected.map((audio) => audio.mediaPath));
+    }
+    for (final mediaPath in mediaPathsToRemove) {
+      OnlineCoverStore.instance.removeByPath(mediaPath);
     }
 
     AudioLibrary.instance.removeAudiosByPaths(pathsToRemove);
@@ -567,8 +554,8 @@ class SharpCardDashboardHeader extends StatelessWidget {
                   Text(
                     title,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
                     ),
                   ),
                   Row(
@@ -613,8 +600,8 @@ class SharpCardDashboardHeader extends StatelessWidget {
                     "$totalAudiosCount",
                     style: theme.textTheme.displaySmall?.copyWith(
                       fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.8,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -635,9 +622,9 @@ class SharpCardDashboardHeader extends StatelessWidget {
                     "FLAC / HR",
                     style: theme.textTheme.displaySmall?.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: scheme.primary,
-                      letterSpacing: -0.4,
+                      letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -703,9 +690,9 @@ class SharpCardPillChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: pillColor,
-                letterSpacing: -0.2,
+                letterSpacing: 0,
               ),
             ),
           ),

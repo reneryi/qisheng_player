@@ -43,3 +43,14 @@ impl SystemTheme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_system_theme() {
+        let theme = SystemTheme::get_system_theme();
+        println!("fore: {:?}, accent: {:?}", theme.fore, theme.accent);
+    }
+}

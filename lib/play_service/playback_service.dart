@@ -34,6 +34,8 @@ enum PlayMode {
 
 final ValueListenable<List<double>> _emptyAudioSpectrum =
     ValueNotifier<List<double>>(const <double>[]);
+final ValueListenable<bool> _defaultWasapiExclusive =
+    ValueNotifier<bool>(false);
 
 @visibleForTesting
 List<Audio> rebindAudiosToLibrary(
@@ -46,6 +48,36 @@ List<Audio> rebindAudiosToLibrary(
   return audios
       .map((audio) => canonicalByPath[audio.path] ?? audio)
       .toList(growable: false);
+}
+
+@visibleForTesting
+double calculateCueDisplayPosition({
+  required Audio? audio,
+  required double rawPosition,
+  double? playerLength,
+}) {
+  if (audio == null || !audio.isCueTrack) return rawPosition;
+  final startSec = (audio.cueStartMs ?? 0) / 1000.0;
+  final localPosition = rawPosition - startSec;
+  final trackLength = resolveCueTrackLength(
+    audio: audio,
+    playerLength: playerLength,
+  );
+  return localPosition.clamp(0.0, trackLength);
+}
+
+@visibleForTesting
+double resolveCueTrackLength({
+  required Audio? audio,
+  double? playerLength,
+}) {
+  if (audio == null || !audio.isCueTrack) return playerLength ?? 0.0;
+  final startSec = (audio.cueStartMs ?? 0) / 1000.0;
+  final endSec = (audio.cueEndMs ?? 0) / 1000.0;
+  final segmentLength = (endSec - startSec).clamp(0.0, double.infinity);
+  if (segmentLength > 0) return segmentLength;
+  if (audio.duration > 0) return audio.duration.toDouble();
+  return playerLength ?? 0.0;
 }
 
 /// 鎾斁鐩稿叧鐘舵€佷笌鎺у埗鎺ュ彛锛屼究浜庢闈?UI 鍜屾祴璇曞叡鐢ㄣ€?
@@ -64,7 +96,9 @@ abstract class PlaybackController extends ChangeNotifier {
   double get volumeDsp;
   ValueNotifier<PlayMode> get playMode;
   ValueListenable<List<double>> get audioSpectrum => _emptyAudioSpectrum;
+  ValueListenable<bool> get wasapiExclusive => _defaultWasapiExclusive;
 
+  void useExclusiveMode(bool exclusive) {}
   void setPlayMode(PlayMode playMode);
   void setVolumeDsp(double volume);
   void seek(double position);
@@ -123,6 +157,8 @@ class PlaybackService extends PlaybackController {
   );
   bool _cueAutoNextTriggered = false;
   DateTime _lastSessionSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _lastSmtcProgressMs = -1;
+  DateTime _lastSmtcProgressUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
   Future<void>? _closeFuture;
 
   late final _wasapiExclusive = ValueNotifier(_player.wasapiExclusive);
@@ -205,26 +241,16 @@ class PlaybackService extends PlaybackController {
     shuffle.value = flag;
   }
 
-  double _resolveNowPlayingLength() {
-    final audio = nowPlaying;
-    if (audio == null || !audio.isCueTrack) return _player.length;
+  double _resolveNowPlayingLength() => resolveCueTrackLength(
+        audio: nowPlaying,
+        playerLength: _player.length,
+      );
 
-    final startSec = (audio.cueStartMs ?? 0) / 1000.0;
-    final endSec = (audio.cueEndMs ?? 0) / 1000.0;
-    final segmentLength = (endSec - startSec).clamp(0.0, double.infinity);
-    if (segmentLength > 0) return segmentLength;
-    if (audio.duration > 0) return audio.duration.toDouble();
-    return _player.length;
-  }
-
-  double _toDisplayPosition(double rawPosition) {
-    final audio = nowPlaying;
-    if (audio == null || !audio.isCueTrack) return rawPosition;
-
-    final startSec = (audio.cueStartMs ?? 0) / 1000.0;
-    final localPosition = rawPosition - startSec;
-    return localPosition.clamp(0.0, _resolveNowPlayingLength());
-  }
+  double _toDisplayPosition(double rawPosition) => calculateCueDisplayPosition(
+        audio: nowPlaying,
+        rawPosition: rawPosition,
+        playerLength: _player.length,
+      );
 
   bool _shouldAutoNextCue(double rawPosition) {
     final audio = nowPlaying;
@@ -263,8 +289,20 @@ class PlaybackService extends PlaybackController {
     _cueAutoNextTriggered = false;
     final displayPosition = _toDisplayPosition(rawPosition);
     _positionStreamController.add(displayPosition);
-    _smtc.updateTimeProperties(progress: (displayPosition * 1000).floor());
+    _updateSmtcTimePropertiesThrottled((displayPosition * 1000).floor());
     _rememberPlaybackSessionThrottled();
+  }
+
+  void _updateSmtcTimePropertiesThrottled(int progressMs, {bool force = false}) {
+    final now = DateTime.now();
+    final elapsedMs = now.difference(_lastSmtcProgressUpdateAt).inMilliseconds;
+    final diffMs = (progressMs - _lastSmtcProgressMs).abs();
+
+    if (force || diffMs >= 1000 || (elapsedMs >= 250 && diffMs >= 200)) {
+      _lastSmtcProgressMs = progressMs;
+      _lastSmtcProgressUpdateAt = now;
+      _smtc.updateTimeProperties(progress: progressMs);
+    }
   }
 
   /// 在窗口从托盘/最小化状态恢复后补发一次播放与歌词快照。
@@ -276,6 +314,10 @@ class PlaybackService extends PlaybackController {
     try {
       _player.resyncPlaybackSnapshot();
       _handleRawPosition(_player.position);
+      _updateSmtcTimePropertiesThrottled(
+        (_toDisplayPosition(_player.position) * 1000).floor(),
+        force: true,
+      );
       playService.lyricService.findCurrLyricLine();
       unawaited(_smtc.updateState(
         state: playerState == PlayerState.playing
@@ -370,6 +412,7 @@ class PlaybackService extends PlaybackController {
         duration: (length * 1000).floor(),
         path: nowPlaying!.mediaPath,
       );
+      _updateSmtcTimePropertiesThrottled(0, force: true);
       _rememberPlaybackSession(save: true);
 
       final loadedAudio = nowPlaying!;
@@ -457,6 +500,9 @@ class PlaybackService extends PlaybackController {
 
     if (_playlistIndex! < playlist.value.length - 1) {
       _loadAndPlay(_playlistIndex! + 1, playlist.value);
+    } else {
+      pause();
+      notifyListeners();
     }
   }
 
@@ -613,8 +659,14 @@ class PlaybackService extends PlaybackController {
   /// 暂停
   void pause() {
     try {
-      _player.pause();
+      if (playerState == PlayerState.playing) {
+        _player.pause();
+      }
       _smtc.updateState(state: SMTCState.paused);
+      _updateSmtcTimePropertiesThrottled(
+        (position * 1000).floor(),
+        force: true,
+      );
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
 
@@ -638,6 +690,10 @@ class PlaybackService extends PlaybackController {
       }
       _player.start();
       _smtc.updateState(state: SMTCState.playing);
+      _updateSmtcTimePropertiesThrottled(
+        (position * 1000).floor(),
+        force: true,
+      );
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
 
@@ -706,6 +762,14 @@ class PlaybackService extends PlaybackController {
     }
     playService.lyricService.findCurrLyricLine();
     _rememberPlaybackSession(save: true);
+    _updateSmtcTimePropertiesThrottled(
+      (this.position * 1000).floor(),
+      force: true,
+    );
+  }
+
+  void rememberPlaybackSession({bool save = false}) {
+    _rememberPlaybackSession(save: save);
   }
 
   void _rememberPlaybackSession({bool save = false}) {
@@ -787,6 +851,10 @@ class PlaybackService extends PlaybackController {
         album: nowPlaying!.displayAlbum,
         duration: (length * 1000).floor(),
         path: nowPlaying!.mediaPath,
+      );
+      _updateSmtcTimePropertiesThrottled(
+        (position * 1000).floor(),
+        force: true,
       );
     } catch (err, trace) {
       LOGGER.e("[restore playback session] $err", stackTrace: trace);

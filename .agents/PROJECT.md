@@ -1,41 +1,33 @@
-# Project: qisheng_player UX & Animation Enhancement (Iteration 4)
+# Project: Audio Progress Bar Suite & Dynamic Theming (三种音频进度条重塑与底栏等比放大)
 
 ## Architecture
-- Flutter / Dart 桌面音乐播放器客户端
-- 动效与转场核心层：
-  - 路由转场系统 (`lib/entry.dart`)：NowPlayingTransitionPage, SlideTransitionPage, DetailTransitionPage
-  - App 容器框架 (`lib/component/app_shell.dart`): Shell 页面平滑淡化切换
-  - 封面 Hero 动效系统 (`lib/component/now_playing_artwork_hero.dart`): RectTween & HeroFrame
-  - 播放详情页控制器 (`lib/page/now_playing_page/page.dart`): 详情页展开联动与底栏显隐
-  - 设置页二级切换 (`lib/page/settings_page/page.dart`): 内部分类平滑过渡
-  - 上下文菜单与二级菜单 (`lib/theme/app_component_themes.dart`, `lib/component/animated_menu_content.dart`, `lib/component/audio_context_menu.dart`, `lib/component/album_context_menu.dart`): 毛玻璃/圆角/阴影/悬停胶囊/级联展开
-  - 内容详情页路由体系 (`lib/entry.dart`, 各详情页): 8% 横向平滑推入 + 视差退场 + 阻尼返回
+- **前端架构**：Flutter / Dart 桌面端音乐播放器
+- **底栏播控子系统 (`lib/component/bottom_player_bar.dart`, `lib/theme/app_theme.dart`)**：
+  - `dockHeight` 统一升级为 `108.0px`，`MainLayoutFrame` 底部避让 `dockInset` 自动自适应扩大为 `108 + shellGap * 2`（零遮挡、保留标准悬浮间隙）；
+  - `_BottomBarCenterSection` 进度条交互区域由 20px 提升至 `30.0px`（dense 模式为 20.0px），间距舒展扩大至 4.0px；
+  - 两端已播与总时长时间文本外层容器扩宽至 `62.0px`（在 MiSans Medium w500 14px 下留有 3.54px 裕量，彻底杜绝 >1h 及 99:59:59 格式省略截断），字号放大至 `14.0px`，字重加粗为 `FontWeight.w500`。
+- **进度条子系统 (`lib/component/`)**：
+  - **方案一 (Fluid Laser Beam Slider)**：`FluidGlowProgressSlider`。未悬停常态平直无圆圈凸起，基准有效粗细提至 5.5px，播放头处绘制 2.5px 纯白高亮光核（Focus Core），并向左投射一段自适应衰减流光束（Beam/Comet Trail，长 64px，5 段非线性渐变 0.0->0.95 白光电光）；悬停态 180ms 平滑展开至 7.5px 浮现 6.5px 双层发光 Thumb 与 12px 毛玻璃时间气泡（`Stack(clipBehavior: Clip.none)` 悬空 0 溢出）；保留滚轮 5 秒微调与 40ms 防抖。
+  - **方案二 (Adaptive Waveform Rhythm Slider)**：`AdaptiveWaveformSlider`。接入底栏 `playback.audioSpectrum` 与 `spectrumActive`；采用【复合行波与能量谐振场】模型（512-LUT 乐曲特征基底 + Bass 重低音冲程 + 空间行波微澜 + 播放头光斑激发）；一阶阻尼低通滤波与频谱解算彻底迁移入 `AnimatedBuilder.builder` 内部，音频暂停时借助比例衰减与 -0.04 线性底垫，在 183ms（<200ms）内精准平滑衰减归零，并正确触发 `_rhythmController.stop()`，彻底消除 60fps Ticker 调度泄漏；`_AdaptiveWaveformPainter` 声明 `static final Paint` 零 GC；保持全宽严丝合缝对齐几何公式 $w = W / [N + k(N-1)]$ 与 SpringSimulation 欠阻尼果冻回弹。
+  - **方案三 (Dual-Layer Ambient Aurora Slider)**：`DualLayerRhythmSlider`。双层解耦架构，顶层纯时间域线性控制轨（常态 5.0px、悬停 7.0px、拖拽 8.5px，滑块 7.5~9.5px）；底层四阶极光径向光雾（$R_x=54\sim 100\text{px}, R_y=18\sim 34\text{px}$，高斯模糊 14px）与双层平滑微波（主波振幅 5~15px，次波 3.5~11px，32 段正弦平滑拟合 + 发光光织描边）；独立 `RepaintBoundary` 重绘隔离。
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | R1 NowPlayingPage 展开/收起动效丝滑化 | 移除整页 ScaleTransition 避免 Hero 坐标跳跃，优化 RectTween 曲线，同步底栏平滑渐显 | M1 | ORIGINAL_REQUEST §R1 |
-| 2 | R2 侧栏主导航与设置二级切换平滑淡化 | 移除侧栏 8px 垂直位移颠簸，重构为 Cross-Fade；设置页分类切换引入 AnimatedSwitcher 淡化 | M2 | ORIGINAL_REQUEST §R2 |
-| 3 | R3 右键菜单与二级子菜单视觉与悬停重构 | 消除黑边缝隙，配置 10px 圆角、毛玻璃与柔和阴影，8px 胶囊悬停高亮，Submenu 级联进场动画 | M3 | ORIGINAL_REQUEST §R3 |
-| 4 | R4 内容详情页横向平滑推入与阻尼返回 | 重构 DetailTransitionPage 为 8% 横向推入淡化 (280ms/220ms) + 次级视差景深 (-3%) | M4 | ORIGINAL_REQUEST §R4 |
-| 5 | M5 全量测试、静态分析与司法审计 | 确保 `flutter analyze` 零报错，单元/集成测试全绿，通过司法完整性与防作弊审计 | M5 | ORIGINAL_REQUEST Acceptance |
+| 1 | R1: 底栏整体扩容与等比例放大 | dockHeight 提升至 108px，MainLayoutFrame 避让联动，进度条容器提至 30px，时间字号放大至 14px w500 且 62px 容器防截断 | M2 | ORIGINAL_REQUEST §R1 |
+| 2 | R2: 方案一（流体激光）强光束重塑 | 常态平直无圆圈凸起，播放头焦点纯白光核，向左 64px 彗星衰减强光束；悬停展开浮现发光 Thumb 与时间气泡 | M2 | ORIGINAL_REQUEST §R2 |
+| 3 | R3: 方案二（动态声波）实时音频律动 | 接入 playback.audioSpectrum，复合行波与谐振场起伏律动，200ms 内平滑归零且停机，类级 static final Paint 60fps 零 GC | M2 | ORIGINAL_REQUEST §R3 |
+| 4 | R4: 方案三（灵动呼吸）光雾视觉强化 | 四阶极光径向光雾（模糊 14px，Ry 18~34px），32 段微波光织，加粗主轨与晶体滑块，通透极光呼吸律动 | M2 | ORIGINAL_REQUEST §R4 |
+| 5 | R5: 自动化测试与工程一致性 | 更新底栏与进度条尺寸变动影响的旧测试，新增光束、声波律动数据流及停机校验自动化测试，analyze 0 issues，全工程 954 测试 100% 通过 | M2 | ORIGINAL_REQUEST §R5 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 0 | Survey & Architecture Mapping | 3 Explorers 深入调研 R1, R2, R3, R4 源码与成因 | none | DONE |
-| 1 | M1234: 全面实施 R1, R2, R3, R4 | Worker 实施 R1 (NowPlaying 展开), R2 (侧栏/设置淡化), R3 (右键菜单/级联), R4 (详情页推入) | M0 | IN_PROGRESS |
-| 2 | M5: 多维评审与对抗性验证 | Reviewers, Challengers, Forensic Auditor 独立并行验证与静态分析 | M1234 | PLANNED |
-| 3 | M6: 最终门禁聚合与交付汇报 | 聚合 Gate 结果并向 Parent 发送结构化完成报告 | M5 | PLANNED |
+| 0 | M1: 探索与现状差距分析 | 3 名 Explorer 深度勘测 R1~R5 并形成完整技术规格 | none | DONE |
+| 1 | M2: 代码重塑与整改实施 | Worker 实施底栏扩容、三种进度条重塑及缺陷闭环 | M1 | DONE |
+| 2 | M3: 严格多维对抗审查与合规审计 | 2 名 Reviewer、2 名 Challenger、1 名 Forensic Auditor 全票通过 | M2 | DONE |
+| 3 | M4: 门禁裁决与向父级交付汇报 | 聚合门禁判定并向 Sentinel / parent 汇报成果 | M3 | DONE |
 
-## Code Layout
-- `lib/entry.dart`: 路由构建器与全套 PageTransition (`_buildNowPlayingRouteTransition`, `_buildAppRouteTransition`, `_buildDetailRouteTransition`)
-- `lib/component/app_shell.dart`: AppShell 页面切换过渡 (`_ShellPageTransition`)
-- `lib/component/now_playing_artwork_hero.dart`: Hero 飞行插值与 HeroFrame
-- `lib/page/now_playing_page/`: NowPlaying 播放页与底栏联动 (`page.dart`, `component_views.dart`, `top_actions.dart`)
-- `lib/page/settings_page/page.dart`: 设置页分类切换动效
-- `lib/theme/app_component_themes.dart`: MenuThemeData 与 MenuButtonThemeData 现代视觉定义
-- `lib/component/animated_menu_content.dart`: 菜单级联展开动效
-- `lib/component/audio_context_menu.dart` & `lib/component/album_context_menu.dart`: 歌曲/专辑右键菜单
-- `lib/page/uni_page_components.dart`: 清洗局部菜单覆盖样式
-- `test/`: 包含 entry_transition_test, app_shell_test, now_playing_artwork_hero_test 等测试套件
+## Gate Verdict
+- Gate Iteration 1: FAIL (Reviewer 2 REQUEST_CHANGES & Challenger 1 REJECT)
+- Gate Iteration 2: **PASS** (Reviewer 1 APPROVE, Reviewer 2 APPROVE, Challenger 1 APPROVE, Challenger 2 APPROVE, Forensic Auditor CLEAN)

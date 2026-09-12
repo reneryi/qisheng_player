@@ -264,7 +264,7 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
@@ -414,8 +414,8 @@ class _UniDetailPageHeader extends StatelessWidget {
                     style: TextStyle(
                       color: scheme.onSurface,
                       fontSize: compact ? 22 : 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1.05,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
                     ),
                   ),
                   const SizedBox(height: 8),

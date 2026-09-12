@@ -17,6 +17,8 @@ class AppSection extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final separatorColor = scheme.outlineVariant.withValues(alpha: 0.62);
 
+    final textTheme = Theme.of(context).textTheme;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 34),
       child: Column(
@@ -24,19 +26,40 @@ class AppSection extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: textTheme.titleLarge?.copyWith(
               color: scheme.onSurface,
-              fontSize: 20,
+              fontSize: 19,
               fontWeight: FontWeight.w700,
+              letterSpacing: 0.35,
+              height: 1.30,
+              leadingDistribution: TextLeadingDistribution.even,
+            ) ?? TextStyle(
+              color: scheme.onSurface,
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.35,
+              height: 1.30,
+              leadingDistribution: TextLeadingDistribution.even,
             ),
           ),
           if (description != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
               description!,
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.62),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurface.withValues(alpha: 0.64),
                 fontSize: 13,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.18,
+                height: 1.38,
+                leadingDistribution: TextLeadingDistribution.even,
+              ) ?? TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.64),
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.18,
+                height: 1.38,
+                leadingDistribution: TextLeadingDistribution.even,
               ),
             ),
           ],

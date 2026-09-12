@@ -52,3 +52,8 @@ dist/*
 !dist/windows/
 dist/windows/*
 !dist/windows/.gitignore
+
+# Local runtime preferences and agent session folders
+qisheng_player/
+.agents/*/
+

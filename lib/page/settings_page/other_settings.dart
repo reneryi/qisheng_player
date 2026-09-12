@@ -56,6 +56,65 @@ class _DefaultLyricSourceControlState extends State<DefaultLyricSourceControl> {
   }
 }
 
+class LyricSaveOptionsControl extends StatefulWidget {
+  const LyricSaveOptionsControl({super.key});
+
+  @override
+  State<LyricSaveOptionsControl> createState() =>
+      _LyricSaveOptionsControlState();
+}
+
+class _LyricSaveOptionsControlState extends State<LyricSaveOptionsControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "设歌词默认保存方式",
+      action: Wrap(
+        spacing: 8.0,
+        runSpacing: 4.0,
+        children: [
+          FilterChip(
+            label: const Text("写入内嵌标签"),
+            avatar: const Icon(Symbols.save_rounded, size: 16),
+            selected: settings.lyricSaveWriteTag,
+            onSelected: (val) {
+              setState(() {
+                settings.lyricSaveWriteTag = val;
+              });
+              settings.saveSettings();
+            },
+          ),
+          FilterChip(
+            label: const Text("保存同级 .lrc"),
+            avatar: const Icon(Symbols.description_rounded, size: 16),
+            selected: settings.lyricSaveExportLrc,
+            onSelected: (val) {
+              setState(() {
+                settings.lyricSaveExportLrc = val;
+              });
+              settings.saveSettings();
+            },
+          ),
+          FilterChip(
+            label: const Text("应用到播放器"),
+            avatar: const Icon(Symbols.play_circle_rounded, size: 16),
+            selected: settings.lyricSaveApplyPlayer,
+            onSelected: (val) {
+              setState(() {
+                settings.lyricSaveApplyPlayer = val;
+              });
+              settings.saveSettings();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class AudioLibraryEditor extends StatelessWidget {
   const AudioLibraryEditor({super.key});
 

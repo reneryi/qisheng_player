@@ -7,6 +7,8 @@ const int BASS_WASAPI_EXCLUSIVE = 1;
 
 const int BASS_WASAPI_EVENT = 16;
 
+const int BASS_WASAPI_AUTOFORMAT = 256;
+
 const int BASS_ERROR_WASAPI = 5000;
 
 const int BASS_ERROR_WASAPI_BUFFER = 5001;

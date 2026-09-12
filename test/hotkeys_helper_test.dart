@@ -40,4 +40,9 @@ void main() {
     expect(binding.keyId, PhysicalKeyboardKey.browserForward.usbHidUsage);
     expect(binding.modifiers, isEmpty);
   });
+
+  test('HotkeyAction.quit handler is registered', () {
+    expect(HotkeysHelper.handlers.containsKey(HotkeyAction.quit), isTrue);
+    expect(HotkeysHelper.handlers[HotkeyAction.quit], isNotNull);
+  });
 }

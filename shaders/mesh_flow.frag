@@ -241,19 +241,17 @@ void main() {
   vec3 base = srgbToOklab(u_base_color.rgb);
 
   // 暗色模式：保留深邃沉浸底色，流体光斑柔和绚烂但不眩目过曝
-  float darkIntensity = clamp(u_blend_intensity * 0.58, 0.35, 0.68);
+  float blobEnergy = mix(totalA, totalB, layerMixFactor);
+  float fluidEnergy = smoothstep(0.35, 2.2, blobEnergy);
+  float darkIntensity = mix(0.38, 0.86, fluidEnergy) * clamp(u_blend_intensity, 0.0, 1.0);
   vec3 darkOutputLab = mix(base, blended, darkIntensity);
-  float maxDarkLum = min(u_luminance_limit, 0.42);
-  if (darkOutputLab.x > maxDarkLum) {
-    float lumScale = maxDarkLum / max(darkOutputLab.x, 0.001);
-    darkOutputLab.yz *= clamp(lumScale, 0.65, 1.0);
-    darkOutputLab.x = maxDarkLum;
-  }
+  float maxDarkLum = min(u_luminance_limit, 0.54);
+  darkOutputLab.x = min(darkOutputLab.x, maxDarkLum);
 
   // 明亮模式：水彩晕染质感，保留饱满色度，与 135° 哑光纸白底座自然浸润且杜绝死白
   vec3 lightPastel = blended;
   lightPastel.x = clamp(lightPastel.x * 0.88 + 0.09, 0.65, 0.86);
-  lightPastel.yz *= 0.82;
+  lightPastel.yz *= 0.92;
   float lightIntensity = clamp(u_blend_intensity * 0.58, 0.35, 0.68);
   vec3 lightOutputLab = mix(base, lightPastel, lightIntensity);
   lightOutputLab.x = clamp(lightOutputLab.x, 0.72, 0.92);

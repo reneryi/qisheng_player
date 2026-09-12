@@ -293,8 +293,9 @@ class WindowControls {
         result = WindowBackdropModeResult(
           requestedMode: mode,
           appliedMode: mode,
-          nativeBackdropSupported: true,
-          nativeApplySucceeded: true,
+          nativeBackdropSupported: result.nativeBackdropSupported,
+          nativeApplySucceeded: result.nativeApplySucceeded,
+          fallbackReason: result.fallbackReason,
         );
       }
 
@@ -433,10 +434,10 @@ class WindowControls {
     _isExiting = true;
 
     try {
-      // 执行应用状态与播放器资源持久化与释放（限时 1.5 秒兜底）
+      // 执行应用状态与播放器资源持久化与释放（限时 5 秒兜底，允许播放器释放后完整完成状态持久化）
       await appShutdownCoordinator
           .shutdown()
-          .timeout(const Duration(milliseconds: 1500));
+          .timeout(const Duration(milliseconds: 5000));
     } catch (err, trace) {
       LOGGER.e('[exitApp] 应用退出释放异常: $err', stackTrace: trace);
     }

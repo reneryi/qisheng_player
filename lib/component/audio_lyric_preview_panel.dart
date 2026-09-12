@@ -1,8 +1,10 @@
-﻿import 'dart:async';
+import 'dart:async';
 
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -48,8 +50,8 @@ class AudioLyricPreviewPanel extends StatelessWidget {
                   style: TextStyle(
                     color: scheme.onSurface,
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    height: 1.08,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -60,8 +62,8 @@ class AudioLyricPreviewPanel extends StatelessWidget {
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.7),
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    height: 1.25,
+                    fontWeight: FontWeight.w400,
+                    height: 1.3,
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -270,7 +272,7 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
             ? (constraints.maxHeight * 0.42).clamp(24.0, 160.0).toDouble()
             : 24.0;
 
-        return SingleChildScrollView(
+        final scrollWidget = SingleChildScrollView(
           controller: _scrollController,
           padding: EdgeInsets.only(
             top: verticalPadding,
@@ -281,9 +283,13 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
             children: List.generate(widget.lyric.lines.length, (index) {
               final entry = _LyricLineEntry.from(widget.lyric.lines[index]);
               final active = index == _activeLine;
+              final isCredit = entry.isCredit;
+
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == widget.lyric.lines.length - 1 ? 0 : 10,
+                  bottom: index == widget.lyric.lines.length - 1
+                      ? 0
+                      : (isCredit ? 6 : 10),
                 ),
                 child: KeyedSubtree(
                   key: _lineKeys[index],
@@ -291,34 +297,42 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
                     duration: context.motion.controlTransitionDuration,
                     curve: context.motion.normal,
                     style: TextStyle(
-                      color: active
-                          ? scheme.onSurface
-                          : scheme.onSurface.withValues(alpha: 0.58),
-                      fontSize: active ? 15 : 13,
-                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                      height: 1.4,
+                      color: isCredit
+                          ? scheme.onSurface.withValues(
+                              alpha: active ? 0.70 : 0.42,
+                            )
+                          : (active
+                              ? scheme.onSurface
+                              : scheme.onSurface.withValues(alpha: 0.58)),
+                      fontSize: isCredit
+                          ? 13
+                          : (active ? 15 : 13),
+                      fontWeight: isCredit
+                          ? FontWeight.w400
+                          : (active ? FontWeight.w700 : FontWeight.w400),
+                      height: isCredit ? 1.35 : 1.45,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           entry.primary,
-                          maxLines: 2,
+                          maxLines: isCredit ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (entry.secondary != null) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
                             entry.secondary!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: active
-                                  ? scheme.onSurface.withValues(alpha: 0.62)
-                                  : scheme.onSurface.withValues(alpha: 0.42),
-                              fontSize: active ? 11.5 : 10.5,
-                              fontWeight: FontWeight.w500,
-                              height: 1.35,
+                                  ? scheme.onSurface.withValues(alpha: 0.72)
+                                  : scheme.onSurface.withValues(alpha: 0.45),
+                              fontSize: active ? 12 : 11,
+                              fontWeight: FontWeight.w400,
+                              height: 1.3,
                             ),
                           ),
                         ],
@@ -329,6 +343,28 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
               );
             }),
           ),
+        );
+
+        if (AppSettings.instance.uiEffectsLevel == UiEffectsLevel.performance) {
+          return scrollWidget;
+        }
+
+        return ShaderMask(
+          shaderCallback: (Rect rect) {
+            return const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.08, 0.92, 1.0],
+            ).createShader(rect);
+          },
+          blendMode: BlendMode.dstIn,
+          child: scrollWidget,
         );
       },
     );
@@ -346,29 +382,30 @@ class _LyricLineEntry {
   const _LyricLineEntry({
     required this.primary,
     this.secondary,
+    this.isCredit = false,
   });
 
   final String primary;
   final String? secondary;
+  final bool isCredit;
 
   factory _LyricLineEntry.from(LyricLine line) {
-    if (line is LrcLine) {
-      final parts = line.content.split('─');
-      final primary = parts.first.trim();
-      final secondary =
-          parts.length > 1 ? parts.sublist(1).join('─').trim() : null;
-      return _LyricLineEntry(
-        primary: primary.isEmpty ? '...' : primary,
-        secondary: secondary?.isEmpty ?? true ? null : secondary,
-      );
-    }
-
     if (line is SyncLyricLine) {
       return _LyricLineEntry(
         primary: line.content.trim().isEmpty ? '...' : line.content.trim(),
         secondary: line.translation?.trim().isEmpty ?? true
             ? null
             : line.translation!.trim(),
+        isCredit: false,
+      );
+    }
+
+    if (line is LrcLine) {
+      final parsed = LyricLineParser.parse(line.content);
+      return _LyricLineEntry(
+        primary: parsed.primary.isEmpty ? '...' : parsed.primary,
+        secondary: parsed.translation,
+        isCredit: parsed.isCredit,
       );
     }
 

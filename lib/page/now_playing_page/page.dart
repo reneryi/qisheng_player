@@ -23,6 +23,7 @@ import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/vertical_lyric_view.dart';
@@ -37,6 +38,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
+import 'package:qisheng_player/page/playlists_page.dart';
 
 part 'small_page.dart';
 part 'large_page.dart';

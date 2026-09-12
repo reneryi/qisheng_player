@@ -13,10 +13,10 @@ void main() {
     const nowPlayingPage =
         NowPlayingTransitionPage<void>(child: SizedBox.shrink());
 
-    expect(slidePage.transitionDuration, const Duration(milliseconds: 260));
+    expect(slidePage.transitionDuration, const Duration(milliseconds: 360));
     expect(
       slidePage.reverseTransitionDuration,
-      const Duration(milliseconds: 220),
+      const Duration(milliseconds: 260),
     );
     expect(detailPage.transitionDuration, const Duration(milliseconds: 400));
     expect(

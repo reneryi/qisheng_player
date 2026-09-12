@@ -35,8 +35,14 @@ class _MarqueeTextState extends State<MarqueeText>
   }
 
   void _measure(BoxConstraints constraints) {
+    final defaultStyle = DefaultTextStyle.of(context).style;
+    final effectiveStyle = widget.style.inherit
+        ? defaultStyle.merge(widget.style)
+        : widget.style;
+
     final painter = TextPainter(
-      text: TextSpan(text: _text, style: widget.style),
+      text: TextSpan(text: _text, style: effectiveStyle),
+      textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
       textDirection: Directionality.of(context),
     )..layout();
@@ -50,19 +56,29 @@ class _MarqueeTextState extends State<MarqueeText>
     if (shouldScroll != _scrolling) {
       _scrolling = shouldScroll;
       if (_scrolling) {
-        final distance = _textWidth + widget.gap;
-        // 每滚动 1 像素约需 32ms，加上首尾停留 3000ms
-        final scrollMs = (distance * 32).round();
-        final totalDuration = Duration(
-          milliseconds: (scrollMs + 3000).clamp(widget.minDuration.inMilliseconds, 30000),
-        );
-        _controller
-          ..duration = totalDuration
-          ..repeat();
+        _updateAnimationDuration();
+        _controller.repeat();
       } else {
         _controller
           ..stop()
           ..value = 0;
+      }
+    } else if (_scrolling) {
+      _updateAnimationDuration();
+    }
+  }
+
+  void _updateAnimationDuration() {
+    final distance = _textWidth + widget.gap;
+    // 每滚动 1 像素约需 32ms，加上首尾停留 3000ms
+    final scrollMs = (distance * 32).round();
+    final totalDuration = Duration(
+      milliseconds: (scrollMs + 3000).clamp(widget.minDuration.inMilliseconds, 30000),
+    );
+    if (_controller.duration != totalDuration) {
+      _controller.duration = totalDuration;
+      if (_controller.isAnimating) {
+        _controller.repeat();
       }
     }
   }
@@ -113,14 +129,14 @@ class _MarqueeTextState extends State<MarqueeText>
         final distance = _textWidth + widget.gap;
         final cachedContent = OverflowBox(
           alignment: Alignment.centerLeft,
-          minWidth: distance * 2,
-          maxWidth: distance * 2,
+          minWidth: 0,
+          maxWidth: double.infinity,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_text, maxLines: 1, style: widget.style),
+              Text(_text, maxLines: 1, softWrap: false, style: widget.style),
               SizedBox(width: widget.gap),
-              Text(_text, maxLines: 1, style: widget.style),
+              Text(_text, maxLines: 1, softWrap: false, style: widget.style),
             ],
           ),
         );

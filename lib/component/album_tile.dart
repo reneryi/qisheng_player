@@ -46,10 +46,27 @@ class _AlbumTileState extends State<AlbumTile> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final placeholder = Icon(
-      Symbols.broken_image,
-      size: 48,
-      color: scheme.onSurface,
+    final placeholder = Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10.0),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.primaryContainer.withValues(alpha: 0.55),
+            scheme.surfaceContainerHighest,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Symbols.album_rounded,
+          size: 26,
+          color: scheme.onPrimaryContainer.withValues(alpha: 0.72),
+        ),
+      ),
     );
     return AlbumContextMenu(
       album: widget.album,

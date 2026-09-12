@@ -2,6 +2,7 @@ import 'package:qisheng_player/component/audio_context_menu.dart';
 import 'package:qisheng_player/component/cover_fade_image.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/scroll_aware_future_builder.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/page/uni_page.dart';
@@ -114,7 +115,7 @@ class _AudioGridTileState extends State<AudioGridTile> {
           audio: audio,
           playlist: widget.playlist,
           audioIndex: widget.audioIndex,
-          onEdit: () => showDialog(
+          onEdit: () => showModernDialog(
             context: context,
             builder: (context) => AudioEditDialog(audio: audio),
           ),
@@ -145,6 +146,10 @@ class _AudioGridTileState extends State<AudioGridTile> {
                   onFocusChanged: _handleFocusChanged,
                   padding: const EdgeInsets.all(8.0),
                   onTap: () {
+                    if (AudioContextMenuManager.hasActive) {
+                      AudioContextMenuManager.closeActive();
+                      return;
+                    }
                     if (controller.isOpen) {
                       controller.close();
                       return;
@@ -170,6 +175,9 @@ class _AudioGridTileState extends State<AudioGridTile> {
                         true) {
                       return;
                     }
+                    AudioContextMenuManager.closeActive(
+                      except: controller,
+                    );
                     // 在鼠标右键点击处弹出菜单
                     controller.open(
                       position: details.localPosition,

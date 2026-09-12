@@ -21,9 +21,10 @@ use crate::frb_generated::StreamSink;
 
 use super::{logger::log_to_dart, tag_reader};
 
+#[frb(opaque)]
 pub struct SMTCFlutter {
-    _smtc: SystemMediaTransportControls,
-    _player: MediaPlayer,
+    _smtc: Option<SystemMediaTransportControls>,
+    _player: Option<MediaPlayer>,
 }
 
 pub enum SMTCControlEvent {
@@ -43,31 +44,58 @@ pub enum SMTCState {
 impl SMTCFlutter {
     #[frb(sync)]
     pub fn new() -> Self {
-        Self::_new().unwrap()
+        match Self::_new() {
+            Ok(smtc) => smtc,
+            Err(err) => {
+                log_to_dart(format!("Failed to initialize Windows SMTC: {}", err));
+                Self {
+                    _smtc: None,
+                    _player: None,
+                }
+            }
+        }
     }
 
     pub fn subscribe_to_control_events(&self, sink: StreamSink<SMTCControlEvent>) {
-        self._smtc
-            .ButtonPressed(&TypedEventHandler::<
-                SystemMediaTransportControls,
-                SystemMediaTransportControlsButtonPressedEventArgs,
-            >::new(move |_, event| {
-                let event = event.as_ref().unwrap().Button().unwrap();
-                let event = match event {
-                    SystemMediaTransportControlsButton::Play => SMTCControlEvent::Play,
-                    SystemMediaTransportControlsButton::Pause => SMTCControlEvent::Pause,
-                    SystemMediaTransportControlsButton::Next => SMTCControlEvent::Next,
-                    SystemMediaTransportControlsButton::Previous => SMTCControlEvent::Previous,
-                    _ => SMTCControlEvent::Unknown,
-                };
-                sink.add(event).unwrap();
+        let Some(smtc) = &self._smtc else {
+            return;
+        };
+        let res = smtc.ButtonPressed(&TypedEventHandler::<
+            SystemMediaTransportControls,
+            SystemMediaTransportControlsButtonPressedEventArgs,
+        >::new(move |_, event| {
+            let Some(event_args) = event.as_ref() else {
+                return Ok(());
+            };
+            let button = match event_args.Button() {
+                Ok(b) => b,
+                Err(err) => {
+                    log_to_dart(format!("SMTC get button error: {}", err));
+                    return Ok(());
+                }
+            };
+            let event = match button {
+                SystemMediaTransportControlsButton::Play => SMTCControlEvent::Play,
+                SystemMediaTransportControlsButton::Pause => SMTCControlEvent::Pause,
+                SystemMediaTransportControlsButton::Next => SMTCControlEvent::Next,
+                SystemMediaTransportControlsButton::Previous => SMTCControlEvent::Previous,
+                _ => SMTCControlEvent::Unknown,
+            };
+            if let Err(err) = sink.add(event) {
+                log_to_dart(format!("SMTC sink.add error: {}", err));
+            }
 
-                Ok(())
-            }))
-            .unwrap();
+            Ok(())
+        }));
+        if let Err(err) = res {
+            log_to_dart(format!("Failed to register SMTC button listener: {}", err));
+        }
     }
 
     pub fn update_state(&self, state: SMTCState) {
+        if self._smtc.is_none() {
+            return;
+        }
         if let Err(err) = self._update_state(state) {
             log_to_dart(format!("fail to update state: {}", err));
         }
@@ -75,6 +103,9 @@ impl SMTCFlutter {
 
     /// progress, duration: ms
     pub fn update_time_properties(&self, progress: u32) {
+        if self._smtc.is_none() {
+            return;
+        }
         if let Err(err) = self._update_time_properties(progress) {
             log_to_dart(format!("fail to update state: {}", err));
         }
@@ -88,6 +119,9 @@ impl SMTCFlutter {
         duration: u32,
         path: String,
     ) {
+        if self._smtc.is_none() {
+            return;
+        }
         if let Err(err) = self._update_display(
             HSTRING::from(title),
             HSTRING::from(artist),
@@ -100,7 +134,9 @@ impl SMTCFlutter {
     }
 
     pub fn close(self) {
-        self._player.Close().unwrap();
+        if let Some(player) = self._player {
+            let _ = player.Close();
+        }
     }
 }
 
@@ -119,30 +155,39 @@ impl SMTCFlutter {
     }
 
     fn _new() -> Result<Self, windows::core::Error> {
-        let _player = MediaPlayer::new()?;
-        _player.CommandManager()?.SetIsEnabled(false)?;
+        let player = MediaPlayer::new()?;
+        player.CommandManager()?.SetIsEnabled(false)?;
 
-        let _smtc = _player.SystemMediaTransportControls()?;
-        Self::_init_controls(&_smtc)?;
+        let smtc = player.SystemMediaTransportControls()?;
+        Self::_init_controls(&smtc)?;
 
-        Ok(Self { _smtc, _player })
+        Ok(Self {
+            _smtc: Some(smtc),
+            _player: Some(player),
+        })
     }
 
     fn _update_state(&self, state: SMTCState) -> Result<(), windows::core::Error> {
+        let Some(smtc) = &self._smtc else {
+            return Ok(());
+        };
         let state = match state {
             SMTCState::Playing => MediaPlaybackStatus::Playing,
             SMTCState::Paused => MediaPlaybackStatus::Paused,
         };
-        self._smtc.SetPlaybackStatus(state)?;
+        smtc.SetPlaybackStatus(state)?;
 
         Ok(())
     }
 
     /// progress, duration: ms
     fn _update_time_properties(&self, progress: u32) -> Result<(), windows::core::Error> {
+        let Some(smtc) = &self._smtc else {
+            return Ok(());
+        };
         let time_properties = SystemMediaTransportControlsTimelineProperties::new()?;
         time_properties.SetPosition(TimeSpan::from(Duration::from_millis(progress.into())))?;
-        self._smtc.UpdateTimelineProperties(&time_properties)?;
+        smtc.UpdateTimelineProperties(&time_properties)?;
 
         Ok(())
     }
@@ -166,6 +211,34 @@ impl SMTCFlutter {
         RandomAccessStreamReference::CreateFromStream(&stream)
     }
 
+    fn _load_thumbnail(path: &HSTRING) -> Option<RandomAccessStreamReference> {
+        if let Some(pic_data) = tag_reader::get_picture_from_path(path.to_string(), 256, 256) {
+            match Self::_ras_ref_from_pic_data(&pic_data) {
+                Ok(stream_ref) => return Some(stream_ref),
+                Err(err) => {
+                    log_to_dart(format!("Failed to create stream from embedded picture: {}", err));
+                }
+            }
+        } else {
+            log_to_dart(format!("no embedded picture found for file: {}", path));
+        }
+
+        // Fallback to Windows Shell StorageFile thumbnail with local error isolation
+        match (|| -> Result<RandomAccessStreamReference, windows::core::Error> {
+            let file = StorageFile::GetFileFromPathAsync(path)?.get()?;
+            let thumbnail = file
+                .GetThumbnailAsyncOverloadDefaultSizeDefaultOptions(ThumbnailMode::MusicView)?
+                .get()?;
+            RandomAccessStreamReference::CreateFromStream(&thumbnail)
+        })() {
+            Ok(stream_ref) => Some(stream_ref),
+            Err(err) => {
+                log_to_dart(format!("Failed to load StorageFile thumbnail for {}: {}", path, err));
+                None
+            }
+        }
+    }
+
     fn _update_display(
         &self,
         title: HSTRING,
@@ -174,7 +247,10 @@ impl SMTCFlutter {
         duration: u32,
         path: HSTRING,
     ) -> Result<(), windows::core::Error> {
-        let updater = self._smtc.DisplayUpdater()?;
+        let Some(smtc) = &self._smtc else {
+            return Ok(());
+        };
+        let updater = smtc.DisplayUpdater()?;
         updater.SetType(MediaPlaybackType::Music)?;
 
         let time_properties = SystemMediaTransportControlsTimelineProperties::new()?;
@@ -182,31 +258,23 @@ impl SMTCFlutter {
         time_properties.SetEndTime(TimeSpan::from(Duration::from_millis(duration.into())))?;
         time_properties.SetMinSeekTime(TimeSpan { Duration: 0 })?;
         time_properties.SetMaxSeekTime(TimeSpan::from(Duration::from_millis(duration.into())))?;
-        self._smtc.UpdateTimelineProperties(&time_properties)?;
+        smtc.UpdateTimelineProperties(&time_properties)?;
 
         let music_properties = updater.MusicProperties()?;
         music_properties.SetTitle(&title)?;
         music_properties.SetArtist(&artist)?;
         music_properties.SetAlbumTitle(&album)?;
 
-        let pic_stream_ref =
-            if let Some(pic_data) = tag_reader::get_picture_from_path(path.to_string(), 256, 256) {
-                Self::_ras_ref_from_pic_data(&pic_data)?
-            } else {
-                log_to_dart(format!("no embedded picture found for file: {}", path));
-                let file = StorageFile::GetFileFromPathAsync(&path)?.get()?;
-                let thumbnail = file
-                    .GetThumbnailAsyncOverloadDefaultSizeDefaultOptions(ThumbnailMode::MusicView)?
-                    .get()?;
-                RandomAccessStreamReference::CreateFromStream(&thumbnail)?
-            };
-
-        updater.SetThumbnail(&pic_stream_ref)?;
+        if let Some(pic_stream_ref) = Self::_load_thumbnail(&path) {
+            if let Err(err) = updater.SetThumbnail(&pic_stream_ref) {
+                log_to_dart(format!("Failed to set SMTC thumbnail: {}", err));
+            }
+        }
 
         updater.Update()?;
 
-        if !(self._smtc.IsEnabled()?) {
-            self._smtc.SetIsEnabled(true)?;
+        if !(smtc.IsEnabled()?) {
+            smtc.SetIsEnabled(true)?;
         }
 
         Ok(())

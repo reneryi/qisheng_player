@@ -1609,6 +1609,61 @@ pub fn write_cover_to_file(path: String, cover_data: Vec<u8>) -> bool {
     }
 }
 
+/// for Flutter
+/// 将歌词文本写入音乐文件的元数据标签
+/// 支持 ID3v2 (MP3 USLT), VorbisComments (FLAC/OGG LYRICS), MP4Ilst (M4A) 等格式
+pub fn write_lyric_to_file(path: String, lyric_text: String) -> bool {
+    use lofty::prelude::*;
+
+    let path_ref = Path::new(&path);
+    let mut tagged_file = match lofty::read_from_path(path_ref) {
+        Ok(val) => val,
+        Err(err) => {
+            log_to_dart(format!(
+                "write_lyric_to_file: 无法读取文件 {:?}: {}",
+                path, err
+            ));
+            return false;
+        }
+    };
+
+    let tag_type = tagged_file.file_type().primary_tag_type();
+
+    let tag = if tagged_file.primary_tag().is_some() {
+        tagged_file.primary_tag_mut().unwrap()
+    } else if tagged_file.first_tag().is_some() {
+        tagged_file.first_tag_mut().unwrap()
+    } else {
+        tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
+        if tagged_file.primary_tag().is_some() {
+            tagged_file.primary_tag_mut().unwrap()
+        } else if tagged_file.first_tag().is_some() {
+            tagged_file.first_tag_mut().unwrap()
+        } else {
+            log_to_dart("write_lyric_to_file: 无法创建标签".to_string());
+            return false;
+        }
+    };
+
+    tag.remove_key(&ItemKey::Lyrics);
+    let trimmed = lyric_text.trim();
+    if !trimmed.is_empty() {
+        tag.insert_text(ItemKey::Lyrics, lyric_text);
+    }
+
+    match tag.save_to_path(path_ref, lofty::config::WriteOptions::default()) {
+        Ok(_) => {
+            log_to_dart(format!("write_lyric_to_file: 歌词写入成功 {:?}", path));
+            true
+        }
+        Err(err) => {
+            log_to_dart(format!("write_lyric_to_file: 写入失败: {}", err));
+            false
+        }
+    }
+}
+
+
 /// for Flutter  
 /// 扫描给定路径下所有子文件夹（包括自己）的音乐文件并把索引保存在 index_path/index.json。
 pub fn build_index_from_folders_recursively(
@@ -1956,5 +2011,44 @@ mod tests {
         assert_eq!(index["folders"][0]["audios"][0]["title"], "new title");
         assert_eq!(index["folders"][0]["audios"][1]["title"], "other");
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn write_lyric_to_file_and_read_back() {
+        let wav_src = Path::new(r"C:\Windows\Media\ding.wav");
+        if !wav_src.exists() {
+            return;
+        }
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("test_lyric_{}", unique));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let target_file = temp_dir.join("test.wav");
+        fs::copy(wav_src, &target_file).unwrap();
+
+        let target_str = target_file.to_string_lossy().to_string();
+        let lyric_content = "[00:01.00]Hello world\n[00:02.00]Test lyric";
+        let ok = write_lyric_to_file(target_str.clone(), lyric_content.to_string());
+        assert!(ok, "write_lyric_to_file should return true for valid audio file");
+
+        let read_lyric = get_lyric_from_path(target_str.clone());
+        assert_eq!(read_lyric.as_deref(), Some(lyric_content));
+
+        // 验证写入空字符串能够清除歌词标签
+        let ok_clear = write_lyric_to_file(target_str.clone(), "".to_string());
+        assert!(ok_clear);
+        let read_cleared = get_lyric_from_path(target_str);
+        assert_eq!(read_cleared, None);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+
+    #[test]
+    fn write_lyric_to_file_fails_gracefully_on_missing_file() {
+        let ok = write_lyric_to_file("non_existent_file.mp3".to_string(), "lyrics".to_string());
+        assert!(!ok);
     }
 }

@@ -105,6 +105,61 @@ enum UiVisualStyleMode {
   }
 }
 
+enum ProgressBarType {
+  /// 全宽流体微光交互轨 (Fluid Ambient Glow Slider)
+  fluidGlow,
+
+  /// 自适应动态果冻声波轨 (Adaptive Jelly Waveform Slider)
+  adaptiveWaveform,
+
+  /// 双层灵动呼吸光轨 (Dual-Layer Ambient Rhythm Slider)
+  dualLayerRhythm;
+
+  static ProgressBarType? fromName(String? value) {
+    if (value == null) return null;
+    final normalized = value.toLowerCase().replaceAll(RegExp(r'[-_]'), '');
+    if (normalized == 'fluidglow' || normalized == 'fluid' || normalized == 'glow') {
+      return ProgressBarType.fluidGlow;
+    }
+    if (normalized == 'adaptivewaveform' ||
+        normalized == 'waveform' ||
+        normalized == 'jelly') {
+      return ProgressBarType.adaptiveWaveform;
+    }
+    if (normalized == 'duallayerrhythm' ||
+        normalized == 'rhythm' ||
+        normalized == 'ambientrhythm') {
+      return ProgressBarType.dualLayerRhythm;
+    }
+    for (final item in values) {
+      if (item.name.toLowerCase() == normalized) return item;
+    }
+    return null;
+  }
+
+  String get label {
+    switch (this) {
+      case ProgressBarType.fluidGlow:
+        return '流体微光';
+      case ProgressBarType.adaptiveWaveform:
+        return '动态声波';
+      case ProgressBarType.dualLayerRhythm:
+        return '灵动呼吸';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case ProgressBarType.fluidGlow:
+        return '全宽弹性撑满，三态微交互（悬停展开高亮滑块与时间气泡），支持滚轮微调。';
+      case ProgressBarType.adaptiveWaveform:
+        return '全宽动态排布声波柱，两端无缝贴合，具备果冻弹簧回弹、引力吸附与曲目特征波形。';
+      case ProgressBarType.dualLayerRhythm:
+        return '顶层高精度时间轴拖拽寻道，底层音频频谱流动律动光雾呼吸动效。';
+    }
+  }
+}
+
 /// 鎶婃棫 app data 鐩綍锛堝鏋滃瓨鍦級绉诲埌鏂扮殑鐩綍銆?
 /// 只在 app data 鐩綍娌℃湁鏁版嵁鏃惰繘琛屻€?
 /// 什C:\\Users\\$username\\AppData\\Roaming\\com.example\\coriander_player 移到 C:\\Users\\$username\\Documents\\coriander_player
@@ -157,7 +212,10 @@ class AppSettings {
   Timer? _saveDebounce;
 
   /// 主题模式：亮 / 暗 / 跟随系统
-  ThemeMode themeMode = getWindowsThemeMode();
+  ThemeMode themeMode = ThemeMode.system;
+
+  /// 手动选择的自定义主题色（独立保存，与系统主题色互不覆盖）
+  int customTheme = const Color(0xFF4F8DFF).toARGB32();
 
   /// 启动时或封面主题色不适合当主题时的主色
   int defaultTheme = getWindowsTheme();
@@ -180,6 +238,15 @@ class AppSettings {
 
   /// 歌词来源：true，本地优先；false，在线优先
   bool localLyricFirst = true;
+
+  /// 歌词保存选项偏好：写入音频内嵌标签（ID3v2/FLAC/MP4等）
+  bool lyricSaveWriteTag = true;
+
+  /// 歌词保存选项偏好：保存同级 .lrc 文件
+  bool lyricSaveExportLrc = true;
+
+  /// 歌词保存选项偏好：应用到播放器
+  bool lyricSaveApplyPlayer = true;
   Size windowSize = defaultWindowSize;
   bool isWindowMaximized = false;
 
@@ -189,7 +256,20 @@ class AppSettings {
   double backgroundImageOpacity = 0.8;
   WindowBackdropMode windowBackdropMode = WindowBackdropMode.defaultGradient;
   UiEffectsLevel uiEffectsLevel = UiEffectsLevel.visual;
-  bool lyricDepthBlur = false;
+  final ValueNotifier<bool> lyricDepthBlurNotifier = ValueNotifier(false);
+  bool get lyricDepthBlur => lyricDepthBlurNotifier.value;
+  set lyricDepthBlur(bool value) {
+    if (lyricDepthBlurNotifier.value == value) return;
+    lyricDepthBlurNotifier.value = value;
+  }
+  final ValueNotifier<ProgressBarType> progressBarTypeNotifier =
+      ValueNotifier(ProgressBarType.fluidGlow);
+  ProgressBarType get progressBarType => progressBarTypeNotifier.value;
+  set progressBarType(ProgressBarType value) {
+    if (progressBarTypeNotifier.value == value) return;
+    progressBarTypeNotifier.value = value;
+    scheduleSaveSettings();
+  }
   UiVisualStyleMode uiVisualStyleMode = UiVisualStyleMode.borderless;
 
   /// 播放页沉浸模块化设置
@@ -224,18 +304,31 @@ class AppSettings {
           (8 * 128));
       return isDarkMode ? ThemeMode.dark : ThemeMode.light;
     } catch (_) {
-      return ThemeMode.dark;
+      try {
+        final brightness =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        return brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
+      } catch (_) {
+        return ThemeMode.dark;
+      }
     }
   }
 
   static int getWindowsTheme() {
     try {
       final systemTheme = SystemTheme.getSystemTheme();
+      final a = systemTheme.accent.$1;
+      final r = systemTheme.accent.$2;
+      final g = systemTheme.accent.$3;
+      final b = systemTheme.accent.$4;
+      if (a == 0 && r == 0 && g == 0 && b == 0) {
+        return const Color(0xFF4F8DFF).toARGB32();
+      }
       return Color.fromARGB(
-        systemTheme.accent.$1,
-        systemTheme.accent.$2,
-        systemTheme.accent.$3,
-        systemTheme.accent.$4,
+        a == 0 ? 255 : a,
+        r,
+        g,
+        b,
       ).toARGB32();
     } catch (_) {
       return const Color(0xFF4F8DFF).toARGB32();
@@ -293,12 +386,23 @@ class AppSettings {
       _instance.useSystemThemeMode = ustm == 1 ? true : false;
     }
 
+    final ct = settingsMap["CustomTheme"];
+    if (ct != null) {
+      _instance.customTheme = ct;
+    } else if (settingsMap["DefaultTheme"] != null && !_instance.useSystemTheme) {
+      _instance.customTheme = settingsMap["DefaultTheme"];
+    }
+
     if (!_instance.useSystemTheme) {
-      _instance.defaultTheme = settingsMap["DefaultTheme"];
+      _instance.defaultTheme = _instance.customTheme;
+    } else {
+      _instance.defaultTheme = getWindowsTheme();
     }
     if (!_instance.useSystemThemeMode) {
       _instance.themeMode =
           settingsMap["ThemeMode"] == 0 ? ThemeMode.light : ThemeMode.dark;
+    } else {
+      _instance.themeMode = ThemeMode.system;
     }
 
     _instance.dynamicTheme = settingsMap["DynamicTheme"] == 1 ? true : false;
@@ -326,9 +430,17 @@ class AppSettings {
       final settingsStr = File(settingsPath).readAsStringSync();
       if (settingsStr.trim().isEmpty) return;
       Map settingsMap = json.decode(settingsStr);
+      await parseSettingsMap(settingsMap);
+    } catch (err, trace) {
+      LOGGER.e(err, stackTrace: trace);
+    }
+  }
 
+  static Future<void> parseSettingsMap(Map settingsMap) async {
+    try {
       if (settingsMap["Version"] == null) {
-        return _readFromJson_old(settingsMap);
+        await _readFromJson_old(settingsMap);
+        return;
       }
 
       final ust = settingsMap["UseSystemTheme"];
@@ -341,13 +453,24 @@ class AppSettings {
         _instance.useSystemThemeMode = ustm;
       }
 
+      final ct = settingsMap["CustomTheme"];
+      if (ct != null) {
+        _instance.customTheme = ct;
+      } else if (settingsMap["DefaultTheme"] != null && !_instance.useSystemTheme) {
+        _instance.customTheme = settingsMap["DefaultTheme"];
+      }
+
       if (!_instance.useSystemTheme) {
-        _instance.defaultTheme = settingsMap["DefaultTheme"];
+        _instance.defaultTheme = _instance.customTheme;
+      } else {
+        _instance.defaultTheme = getWindowsTheme();
       }
       if (!_instance.useSystemThemeMode) {
         _instance.themeMode = (settingsMap["ThemeMode"] ?? false)
             ? ThemeMode.dark
             : ThemeMode.light;
+      } else {
+        _instance.themeMode = ThemeMode.system;
       }
 
       final dt = settingsMap["DynamicTheme"];
@@ -371,6 +494,19 @@ class AppSettings {
         _instance.localLyricFirst = llf;
       }
 
+      final lswt = settingsMap["LyricSaveWriteTag"];
+      if (lswt != null) {
+        _instance.lyricSaveWriteTag = lswt;
+      }
+      final lsel = settingsMap["LyricSaveExportLrc"];
+      if (lsel != null) {
+        _instance.lyricSaveExportLrc = lsel;
+      }
+      final lsap = settingsMap["LyricSaveApplyPlayer"];
+      if (lsap != null) {
+        _instance.lyricSaveApplyPlayer = lsap;
+      }
+
       _instance.windowSize = parseWindowSize(settingsMap["WindowSize"]);
 
       final isMaximized = settingsMap["IsWindowMaximized"];
@@ -380,10 +516,8 @@ class AppSettings {
 
       final ff = settingsMap["FontFamily"];
       final fp = settingsMap["FontPath"];
-      if (ff != null) {
-        _instance.fontFamily = ff;
-        _instance.fontPath = fp;
-      }
+      _instance.fontFamily = ff;
+      _instance.fontPath = fp;
 
       final bgImage = settingsMap["BackgroundImagePath"];
       if (bgImage is String && bgImage.isNotEmpty) {
@@ -399,15 +533,34 @@ class AppSettings {
             WindowBackdropMode.fromName(windowBackdropMode) ??
                 WindowBackdropMode.defaultGradient;
       }
+      if (_instance.windowBackdropMode == WindowBackdropMode.meshFlow) {
+        _instance.dynamicTheme = true;
+      } else if (_instance.windowBackdropMode == WindowBackdropMode.prismaticGlass &&
+          _instance.useSystemTheme) {
+        _instance.dynamicTheme = false;
+      }
       _instance.uiEffectsLevel = UiEffectsLevel.visual;
       _instance.lyricDepthBlur = settingsMap["LyricDepthBlur"] == true;
-      _instance.uiVisualStyleMode = UiVisualStyleMode.borderless;
+      final uiVisualStyleModeName = settingsMap["UiVisualStyleMode"];
+      if (uiVisualStyleModeName is String) {
+        _instance.uiVisualStyleMode =
+            UiVisualStyleMode.fromName(uiVisualStyleModeName) ??
+                UiVisualStyleMode.borderless;
+      } else {
+        _instance.uiVisualStyleMode = UiVisualStyleMode.borderless;
+      }
       _instance.showSpectrumVisualizer =
           settingsMap["ShowSpectrumVisualizer"] ?? true;
       _instance.showKaraokeAnimation =
           settingsMap["ShowKaraokeAnimation"] ?? true;
       _instance.coverBreathEffect = settingsMap["CoverBreathEffect"] ?? true;
       _instance.autoHideControls = settingsMap["AutoHideControls"] ?? false;
+      final progressBarTypeName = settingsMap["ProgressBarType"];
+      if (progressBarTypeName is String) {
+        _instance.progressBarTypeNotifier.value =
+            ProgressBarType.fromName(progressBarTypeName) ??
+                ProgressBarType.fluidGlow;
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -416,9 +569,22 @@ class AppSettings {
   Future<void> saveSettings() async {
     _saveDebounce?.cancel();
     _saveDebounce = null;
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
     try {
-      final isMaximized = await windowManager.isMaximized();
-      final isFullScreen = await windowManager.isFullScreen();
+      bool isMaximized = false;
+      bool isFullScreen = false;
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          isMaximized = await windowManager
+              .isMaximized()
+              .timeout(const Duration(milliseconds: 300), onTimeout: () => false);
+          isFullScreen = await windowManager
+              .isFullScreen()
+              .timeout(const Duration(milliseconds: 300), onTimeout: () => false);
+        } catch (_) {}
+      }
       final settingsMap = {
         "Version": version,
         "ThemeMode": themeMode == ThemeMode.dark,
@@ -427,8 +593,12 @@ class AppSettings {
         "UseSystemTheme": useSystemTheme,
         "UseSystemThemeMode": useSystemThemeMode,
         "DefaultTheme": defaultTheme,
+        "CustomTheme": customTheme,
         "ArtistSeparator": artistSeparator,
         "LocalLyricFirst": localLyricFirst,
+        "LyricSaveWriteTag": lyricSaveWriteTag,
+        "LyricSaveExportLrc": lyricSaveExportLrc,
+        "LyricSaveApplyPlayer": lyricSaveApplyPlayer,
         "IsWindowMaximized": isMaximized,
         "FontFamily": fontFamily,
         "FontPath": fontPath,
@@ -442,14 +612,19 @@ class AppSettings {
         "ShowKaraokeAnimation": showKaraokeAnimation,
         "CoverBreathEffect": coverBreathEffect,
         "AutoHideControls": autoHideControls,
+        "ProgressBarType": progressBarType.name,
       };
 
-      // 鍙湁鍦ㄧ獥鍙ｄ笉鏄渶澶у寲涓斾笉鏄叏灞忔椂鎵嶄繚瀛樼獥鍙ｅ昂瀵搞€?
-      // 杩欐牱 windowSize 濮嬬粓淇濆瓨鐨勬槸绐楀彛鍖栨椂鐨勫昂瀵搞€?
+      // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸。
+      // 这样 windowSize 始终保存的是窗口化时的尺寸。
       Size sizeToSave = windowSize;
-      if (!isMaximized && !isFullScreen) {
-        sizeToSave = await windowManager.getSize();
-        windowSize = sizeToSave;
+      if (!isMaximized && !isFullScreen && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          sizeToSave = await windowManager
+              .getSize()
+              .timeout(const Duration(milliseconds: 300), onTimeout: () => sizeToSave);
+          windowSize = sizeToSave;
+        } catch (_) {}
       }
       settingsMap["WindowSize"] =
           "${sizeToSave.width.toStringAsFixed(1)},${sizeToSave.height.toStringAsFixed(1)}";

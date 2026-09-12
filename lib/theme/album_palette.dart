@@ -111,7 +111,7 @@ class AlbumPalette {
 
     final lum = pureHueLuminance(hsl.hue);
     final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-    final baseSat = hsl.saturation.clamp(0.35, (0.85 - excess * 0.15).clamp(0.40, 0.85));
+    final baseSat = hsl.saturation.clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
     final secondaryMaxL = 0.72 - excess * 0.18;
     final accentMaxL = 0.76 - excess * 0.20;
     final highlightMaxL = 0.88 - excess * 0.24;
@@ -292,9 +292,9 @@ Color _clampForDarkMode(
 
   final clampedL = hsl.lightness.clamp(effectiveMinL, effectiveMaxL);
 
-  // 饱和度自适应：冷暗色（蓝/紫）适度提纯保证鲜明，高感知色（黄/橙/青/绿）限制饱和度过冲防止刺眼荧光感
-  final satFactor = 1.02 - excess * 0.22;
-  final maxSat = (0.84 - excess * 0.18).clamp(0.58, 0.84);
+  // 饱和度自适应：冷暗色（蓝/紫）保持饱满鲜明，高感知色（黄/橙/青/绿）限制饱和度过冲防止刺眼荧光感
+  final satFactor = 1.0 - excess * 0.04;
+  final maxSat = (0.95 - math.pow(excess, 1.6) * 0.14).clamp(0.85, 0.95);
   final minSat = isMuted ? 0.0 : 0.20;
   final clampedS = (hsl.saturation * satFactor).clamp(minSat, maxSat);
   return hsl.withLightness(clampedL).withSaturation(clampedS).toColor();
@@ -487,7 +487,7 @@ Color _deriveHarmoniousColor(
   final lum = AlbumPalette.pureHueLuminance(hsl.hue);
   final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
   final maxL = 0.82 - excess * 0.18;
-  final baseSat = hsl.saturation.clamp(0.35, (0.88 - excess * 0.15).clamp(0.40, 0.88));
+  final baseSat = hsl.saturation.clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
   return hsl
       .withHue((hsl.hue + hueOffset + 360.0) % 360.0)
       .withSaturation(baseSat)

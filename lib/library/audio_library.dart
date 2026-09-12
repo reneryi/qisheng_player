@@ -28,6 +28,69 @@ class _AudioCoverProviders {
   final ImageProvider? large;
 }
 
+class _AudioCoverCache {
+  static const int maxProvidersEntries = 300;
+  static const int maxBytesEntries = 20;
+
+  static final Map<String, Future<_AudioCoverProviders>> _providersCache = {};
+  static final Map<String, Future<Uint8List?>> _bytesCache = {};
+
+  static Future<_AudioCoverProviders> getProviders(
+    String key,
+    Future<_AudioCoverProviders> Function() loader,
+  ) {
+    final existing = _providersCache.remove(key);
+    if (existing != null) {
+      _providersCache[key] = existing;
+      return existing;
+    }
+    if (_providersCache.length >= maxProvidersEntries) {
+      final oldestKey = _providersCache.keys.first;
+      _providersCache.remove(oldestKey);
+    }
+    final future = loader();
+    _providersCache[key] = future;
+    future.catchError((_) {
+      _providersCache.remove(key);
+      return const _AudioCoverProviders(null, null, null);
+    });
+    return future;
+  }
+
+  static Future<Uint8List?> getBytes(
+    String key,
+    Future<Uint8List?> Function() loader,
+  ) {
+    final existing = _bytesCache.remove(key);
+    if (existing != null) {
+      _bytesCache[key] = existing;
+      return existing;
+    }
+    if (_bytesCache.length >= maxBytesEntries) {
+      final oldestKey = _bytesCache.keys.first;
+      _bytesCache.remove(oldestKey);
+    }
+    final future = loader();
+    _bytesCache[key] = future;
+    future.catchError((_) {
+      _bytesCache.remove(key);
+      return null;
+    });
+    return future;
+  }
+
+  static void invalidate(String key) {
+    _providersCache.remove(key);
+    _bytesCache.remove(key);
+  }
+
+  @visibleForTesting
+  static void clearAll() {
+    _providersCache.clear();
+    _bytesCache.clear();
+  }
+}
+
 /// from index.json
 class AudioLibrary {
   List<AudioFolder> folders;
@@ -284,8 +347,6 @@ class Audio {
   /// 标签来源（Lofty、Windows、null）
   String? by;
 
-  Future<_AudioCoverProviders>? _coverProvidersFuture;
-  Future<Uint8List?>? _coverBytesFuture;
   final CoverSizesLoader _coverSizesLoader;
 
   /// 以“、”和“/”分割艺术家，会把名称中带有这些符号的艺术家分割。
@@ -450,7 +511,7 @@ class Audio {
   }
 
   Future<_AudioCoverProviders> get _coverProviders {
-    return _coverProvidersFuture ??= _loadCoverProviders();
+    return _AudioCoverCache.getProviders(mediaPath, _loadCoverProviders);
   }
 
   /// 缓存ImageProvider而不是Uint8List（bytes）
@@ -463,20 +524,21 @@ class Audio {
 
   /// 读取音乐文件中的原始封面字节，供调色板提取使用。
   Future<Uint8List?> get coverBytes {
-    final existingFuture = _coverBytesFuture;
-    if (existingFuture != null) return existingFuture;
-
-    final future = getOriginalPictureFromPath(path: mediaPath).then((pic) {
-      if (pic == null || pic.isEmpty) return null;
-      return pic;
+    return _AudioCoverCache.getBytes(mediaPath, () {
+      return getOriginalPictureFromPath(path: mediaPath).then((pic) {
+        if (pic == null || pic.isEmpty) return null;
+        return pic;
+      });
     });
-    _coverBytesFuture = future;
-    return future;
   }
 
   void clearCoverCache() {
-    _coverProvidersFuture = null;
-    _coverBytesFuture = null;
+    _AudioCoverCache.invalidate(mediaPath);
+  }
+
+  @visibleForTesting
+  static void clearCoverCacheForTesting() {
+    _AudioCoverCache.clearAll();
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片

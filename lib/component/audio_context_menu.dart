@@ -1,13 +1,58 @@
-import 'package:qisheng_player/app_paths.dart' as app_paths;
-import 'package:qisheng_player/component/animated_menu_content.dart';
-import 'package:qisheng_player/library/audio_library.dart';
-import 'package:qisheng_player/library/playlist.dart';
-import 'package:qisheng_player/play_service/play_service.dart';
-import 'package:qisheng_player/src/rust/api/utils.dart' as rust_utils;
-import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/component/animated_menu_content.dart';
+import 'package:qisheng_player/component/audio_edit_dialog.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
+import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/page/playlists_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/src/rust/api/utils.dart' as rust_utils;
+import 'package:qisheng_player/utils.dart';
+
+/// 全局单曲上下文菜单状态管理器。
+///
+/// 确保应用内任何时刻只保留最新一次操作触发的菜单（例如右键点击或点击“更多”按钮），
+/// 新菜单弹出时自动关闭前一状态的菜单，避免重叠或同时出现多个菜单。
+class AudioContextMenuManager {
+  static MenuController? _activeController;
+
+  /// 当前展开的菜单控制器
+  static MenuController? get activeController => _activeController;
+
+  /// 当前是否有菜单处于展开状态
+  static bool get hasActive =>
+      _activeController != null && _activeController!.isOpen;
+
+  /// 注册新打开的菜单控制器。若先前已有其他菜单展开，立即将其关闭
+  static void registerOpened(MenuController controller) {
+    if (_activeController != null && _activeController != controller) {
+      if (_activeController!.isOpen) {
+        _activeController!.close();
+      }
+    }
+    _activeController = controller;
+  }
+
+  /// 主动关闭当前处于展开状态的菜单
+  static void closeActive({MenuController? except}) {
+    if (_activeController != null && _activeController != except) {
+      if (_activeController!.isOpen) {
+        _activeController!.close();
+      }
+      _activeController = null;
+    }
+  }
+
+  /// 注销已关闭的菜单控制器
+  static void clear(MenuController controller) {
+    if (_activeController == controller) {
+      _activeController = null;
+    }
+  }
+}
 
 /// 单曲右键上下文菜单（1.4 统一组件）。
 ///
@@ -18,11 +63,12 @@ import 'package:material_symbols_icons/symbols.dart';
 /// - 定位到本地文件（Explorer 选中）
 /// - 匹配歌词 / 音乐编辑（在线匹配）
 /// - 详细信息
-class AudioContextMenu extends StatelessWidget {
+class AudioContextMenu extends StatefulWidget {
   const AudioContextMenu({
     super.key,
     required this.audio,
     required this.builder,
+    this.controller,
     this.playlist,
     this.audioIndex,
     this.onEdit,
@@ -33,26 +79,52 @@ class AudioContextMenu extends StatelessWidget {
   /// 触发区域构建器（与 [MenuAnchor.builder] 同构，可通过 controller 主动打开菜单）。
   final MenuAnchorChildBuilder builder;
 
+  /// 可选的外部 MenuController，为空时内部自动维护。
+  final MenuController? controller;
+
   /// 播放上下文：提供后可「按列表索引播放」；为空时播放单曲。
   final List<Audio>? playlist;
   final int? audioIndex;
   final VoidCallback? onEdit;
 
   @override
+  State<AudioContextMenu> createState() => _AudioContextMenuState();
+}
+
+class _AudioContextMenuState extends State<AudioContextMenu> {
+  late final MenuController _internalController = MenuController();
+
+  MenuController get _effectiveController =>
+      widget.controller ?? _internalController;
+
+  @override
+  void dispose() {
+    AudioContextMenuManager.clear(_effectiveController);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MenuAnchor(
+      controller: _effectiveController,
       consumeOutsideTap: true,
+      onOpen: () {
+        AudioContextMenuManager.registerOpened(_effectiveController);
+      },
+      onClose: () {
+        AudioContextMenuManager.clear(_effectiveController);
+      },
       menuChildren: animatedMenuChildren(
         context,
         buildAudioContextMenuChildren(
           context,
-          audio: audio,
-          playlist: playlist,
-          audioIndex: audioIndex,
-          onEdit: onEdit,
+          audio: widget.audio,
+          playlist: widget.playlist,
+          audioIndex: widget.audioIndex,
+          onEdit: widget.onEdit,
         ),
       ),
-      builder: builder,
+      builder: widget.builder,
     );
   }
 }
@@ -103,35 +175,11 @@ List<Widget> buildAudioContextMenuChildren(
         [
           MenuItemButton(
             onPressed: () async {
-              final controller = TextEditingController();
-              final name = await showDialog<String>(
+              final existingNames = PLAYLISTS.map((e) => e.name).toList();
+              final name = await showModernDialog<String>(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("新建歌单"),
-                  content: TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: "歌单名称",
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (value) {
-                      Navigator.pop(context, value);
-                    },
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("取消"),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.pop(context, controller.text);
-                      },
-                      child: const Text("创建"),
-                    ),
-                  ],
-                ),
+                builder: (context) =>
+                    NewPlaylistDialog(existingNames: existingNames),
               );
 
               final trimmed = name?.trim();
@@ -221,7 +269,11 @@ List<Widget> buildAudioContextMenuChildren(
       child: const Text("定位到本地文件"),
     ),
     MenuItemButton(
-      onPressed: onEdit,
+      onPressed: onEdit ??
+          () => showModernDialog(
+                context: context,
+                builder: (context) => AudioEditDialog(audio: audio),
+              ),
       leadingIcon: const Icon(Symbols.lyrics),
       child: const Text("匹配歌词 / 音乐编辑"),
     ),

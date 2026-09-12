@@ -369,7 +369,13 @@ class BassPlayer {
   /// leave the device's output freq as it is
   BassPlayer() {
     final exeDir = path.dirname(Platform.resolvedExecutable);
-    final bassDir = path.join(exeDir, "BASS");
+    var bassDir = path.join(exeDir, "BASS");
+    if (!File(path.join(bassDir, "bass.dll")).existsSync()) {
+      final cwdBassDir = path.join(Directory.current.path, "BASS");
+      if (File(path.join(cwdBassDir, "bass.dll")).existsSync()) {
+        bassDir = cwdBassDir;
+      }
+    }
 
     final bassLibPath = path.join(bassDir, "bass.dll");
     if (!File(bassLibPath).existsSync()) {
@@ -378,6 +384,7 @@ class BassPlayer {
         "Please put required BASS dlls in: $bassDir",
       );
     }
+
 
     try {
       _bassLib = ffi.DynamicLibrary.open(bassLibPath);
@@ -433,12 +440,17 @@ class BassPlayer {
       if (prevState) {
         _bassWasapi.BASS_WASAPI_Free();
         _bassInit();
+      } else {
+        _bassWasapi.BASS_WASAPI_Free();
       }
       wasapiExclusive = exclusive;
       if (_fstream != null && _fPath != null) {
         setSource(_fPath!);
         setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
         seek(lastPos);
+        if (exclusive) {
+          _bassWasapiInit();
+        }
         if (prevPlayerState == PlayerState.playing) {
           start();
         }
@@ -457,12 +469,12 @@ class BassPlayer {
         setSource(currentPath);
         setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
         seek(lastPos);
+        if (prevState) {
+          _bassWasapiInit();
+        }
         if (prevPlayerState == PlayerState.playing ||
             prevPlayerState == PlayerState.pausedDevice) {
           start();
-        } else if (prevPlayerState == PlayerState.paused) {
-          start();
-          pause();
         }
       } catch (rollbackErr, rollbackTrace) {
         LOGGER.e(
@@ -473,6 +485,7 @@ class BassPlayer {
     }
     return false;
   }
+
 
   /// if setSource has been called once,
   /// it will pause current channel and free current stream.
@@ -561,22 +574,34 @@ class BassPlayer {
           -1,
           0,
           0,
-          BASS.BASS_WASAPI_EXCLUSIVE | BASS.BASS_WASAPI_EVENT,
+          BASS.BASS_WASAPI_EXCLUSIVE |
+              BASS.BASS_WASAPI_EVENT |
+              BASS.BASS_WASAPI_AUTOFORMAT,
           0.05,
           0,
           ffi.Pointer<BASS.WASAPIPROC>.fromAddress(-1),
           ffi.Pointer<ffi.Void>.fromAddress(_fstream!),
         ) ==
         BASS.FALSE) {
-      switch (_bass.BASS_ErrorGetCode()) {
+      final errCode = _bass.BASS_ErrorGetCode();
+      switch (errCode) {
+
+
         case BASS.BASS_ERROR_WASAPI:
           throw const FormatException("WASAPI is not available.");
         case BASS.BASS_ERROR_DEVICE:
           throw const FormatException("device is invalid.");
         case BASS.BASS_ERROR_ALREADY:
-          _ensureInitializationRetryAvailable('BASS_WASAPI_Init', retries);
-          _bassWasapi.BASS_WASAPI_Free();
-          return _bassWasapiInit(retries: retries + 1);
+          // 设备已被当前流成功初始化，无需重复销毁重试（如暂停后恢复播放场景）。
+          return;
+        case BASS.BASS_ERROR_BUSY:
+          if (retries < 2) {
+            _bassWasapi.BASS_WASAPI_Free();
+            return _bassWasapiInit(retries: retries + 1);
+          }
+          throw const FormatException(
+              "音频输出设备已被其他程序独占或正忙 (BASS_ERROR_BUSY)");
+
         case BASS.BASS_ERROR_NOTAVAIL:
           throw const FormatException(
               "Exclusive mode and/or event-driven buffering is unavailable on the device, or WASAPIPROC_PUSH is unavailable on input devices and when using event-driven buffering.");
@@ -588,9 +613,6 @@ class BassPlayer {
         case BASS.BASS_ERROR_FORMAT:
           throw const FormatException(
               "The specified format (or that of the BASS channel) is not supported by the device. If the BASS_WASAPI_AUTOFORMAT flag was specified, no other format could be found either.");
-        case BASS.BASS_ERROR_BUSY:
-          throw const FormatException(
-              "The device is already in use, eg. another process may have initialized it in exclusive mode.");
         case BASS.BASS_ERROR_INIT:
           _ensureInitializationRetryAvailable('BASS_WASAPI_Init', retries);
           _bassInit();
@@ -606,7 +628,10 @@ class BassPlayer {
               "Access to the device is denied. This could be due to privacy settings.");
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException("Some other mystery problem!");
+        default:
+          throw FormatException("Failed to initialize WASAPI (error $errCode)");
       }
+
     }
   }
 
@@ -615,13 +640,21 @@ class BassPlayer {
     _bassWasapiInit();
 
     if (_bassWasapi.BASS_WASAPI_Start() == BASS.FALSE) {
-      switch (_bass.BASS_ErrorGetCode()) {
+      final err = _bass.BASS_ErrorGetCode();
+      switch (err) {
+        case BASS.BASS_ERROR_ALREADY:
+          // Already started is acceptable
+          break;
         case BASS.BASS_ERROR_INIT:
           _ensureInitializationRetryAvailable('BASS_WASAPI_Start', retries);
           _bassWasapiInit();
           return _start_wasapiExclusive(retries: retries + 1);
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException("Some other mystery problem!");
+        default:
+          throw FormatException(
+            "Failed to start WASAPI exclusive mode (error $err)",
+          );
       }
     }
     _completionEmitted = false;
@@ -732,6 +765,10 @@ class BassPlayer {
   /// do nothing if [setSource] hasn't been called
   void freeFStream() {
     if (_fstream == null) return;
+
+    if (wasapiExclusive) {
+      _bassWasapi.BASS_WASAPI_Free();
+    }
 
     if (_bass.BASS_StreamFree(_fstream!) == 0) {
       switch (_bass.BASS_ErrorGetCode()) {

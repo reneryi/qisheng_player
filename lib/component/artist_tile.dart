@@ -45,10 +45,27 @@ class _ArtistTileState extends State<ArtistTile> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final placeholder = Icon(
-      Symbols.broken_image,
-      color: scheme.onSurface,
-      size: 48,
+    final placeholder = Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.primaryContainer.withValues(alpha: 0.65),
+            scheme.surfaceContainerHighest,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Symbols.person_rounded,
+          color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+          size: 26,
+        ),
+      ),
     );
     return Tooltip(
       message: widget.artist.name,
@@ -62,7 +79,9 @@ class _ArtistTileState extends State<ArtistTile> {
         child: Row(
           children: [
             FutureBuilder(
-              future: widget.artist.works.first.cover,
+              future: widget.artist.works.isEmpty
+                  ? Future<ImageProvider?>.value(null)
+                  : widget.artist.works.first.cover,
               builder: (context, snapshot) {
                 if (snapshot.data == null) {
                   return RepaintBoundary(

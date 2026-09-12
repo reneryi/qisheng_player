@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
@@ -261,8 +261,8 @@ class _AudioDetailHero extends StatelessWidget {
                 style: TextStyle(
                   color: scheme.onSurface,
                   fontSize: compact ? 28 : 34,
-                  fontWeight: FontWeight.w800,
-                  height: 1.05,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
                 ),
               ),
               const SizedBox(height: 10),
@@ -379,7 +379,7 @@ class _DetailSection extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: 10),

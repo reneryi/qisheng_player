@@ -1,3 +1,4 @@
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
@@ -74,53 +75,77 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
               builder: (context, _) {
                 final queue = playbackService.playlist.value;
                 final canReorder = widget.enableReorder;
+                final listWidget = canReorder
+                    ? ReorderableListView.builder(
+                        scrollController: scrollController,
+                        buildDefaultDragHandles: false,
+                        padding: const EdgeInsets.fromLTRB(4, 0, 16, 16),
+                        itemCount: queue.length,
+                        itemExtent: _itemExtent,
+                        proxyDecorator: (child, index, animation) {
+                          return Material(
+                            color: Colors.transparent,
+                            child: child,
+                          );
+                        },
+                        onReorder: (oldIndex, newIndex) {
+                          if (newIndex > oldIndex) {
+                            newIndex -= 1;
+                          }
+                          playbackService.reorderPlaylist(oldIndex, newIndex);
+                        },
+                        itemBuilder: (context, index) {
+                          final item = queue[index];
+                          return _PlaylistViewItem(
+                            key: ValueKey(item.path),
+                            index: index,
+                            dense: widget.dense,
+                            isCurrent: index == playbackService.playlistIndex,
+                            enableReorder: true,
+                          );
+                        },
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(4, 0, 16, 16),
+                        itemCount: queue.length,
+                        itemExtent: _itemExtent,
+                        itemBuilder: (context, index) {
+                          final item = queue[index];
+                          return _PlaylistViewItem(
+                            key: ValueKey(item.path),
+                            index: index,
+                            dense: widget.dense,
+                            isCurrent: index == playbackService.playlistIndex,
+                            enableReorder: false,
+                          );
+                        },
+                      );
+
+                final effectiveList = AppSettings.instance.uiEffectsLevel ==
+                        UiEffectsLevel.performance
+                    ? listWidget
+                    : ShaderMask(
+                        shaderCallback: (Rect rect) {
+                          return const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black,
+                              Colors.black,
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.04, 0.96, 1.0],
+                          ).createShader(rect);
+                        },
+                        blendMode: BlendMode.dstIn,
+                        child: listWidget,
+                      );
+
                 return Scrollbar(
                   controller: scrollController,
-                  thumbVisibility: true,
-                  child: canReorder
-                      ? ReorderableListView.builder(
-                          scrollController: scrollController,
-                          buildDefaultDragHandles: false,
-                          itemCount: queue.length,
-                          itemExtent: _itemExtent,
-                          proxyDecorator: (child, index, animation) {
-                            return Material(
-                              color: Colors.transparent,
-                              child: child,
-                            );
-                          },
-                          onReorder: (oldIndex, newIndex) {
-                            if (newIndex > oldIndex) {
-                              newIndex -= 1;
-                            }
-                            playbackService.reorderPlaylist(oldIndex, newIndex);
-                          },
-                          itemBuilder: (context, index) {
-                            final item = queue[index];
-                            return _PlaylistViewItem(
-                              key: ValueKey(item.path),
-                              index: index,
-                              dense: widget.dense,
-                              isCurrent: index == playbackService.playlistIndex,
-                              enableReorder: true,
-                            );
-                          },
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: queue.length,
-                          itemExtent: _itemExtent,
-                          itemBuilder: (context, index) {
-                            final item = queue[index];
-                            return _PlaylistViewItem(
-                              key: ValueKey(item.path),
-                              index: index,
-                              dense: widget.dense,
-                              isCurrent: index == playbackService.playlistIndex,
-                              enableReorder: false,
-                            );
-                          },
-                        ),
+                  child: effectiveList,
                 );
               },
             ),

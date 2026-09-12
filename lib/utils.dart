@@ -325,7 +325,11 @@ final GlobalKey<NavigatorState> ROUTER_KEY = GlobalKey();
 
 final SCAFFOLD_MESSAGER = GlobalKey<ScaffoldMessengerState>();
 void showTextOnSnackBar(String text) {
-  SCAFFOLD_MESSAGER.currentState?.showSnackBar(SnackBar(content: Text(text)));
+  final state = SCAFFOLD_MESSAGER.currentState;
+  if (state != null) {
+    state.hideCurrentSnackBar();
+    state.showSnackBar(SnackBar(content: Text(text)));
+  }
 }
 
 String formatMusicCount(int count) => '$count 首音乐';

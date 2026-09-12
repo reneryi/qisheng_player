@@ -6,7 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_installed_fonts`, `_read_fonts_in_folder`, `inspect_font_path`
+// These functions are ignored because they are not marked as `pub`: `_get_installed_fonts`, `_read_fonts_in_folder`, `extract_face_details`, `inspect_font_path_faces`, `inspect_font_path`, `pick_preferred_name`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `FaceDetails`
 
 Future<List<InstalledFont>?> getInstalledFonts() =>
     RustLib.instance.api.crateApiInstalledFontGetInstalledFonts();
@@ -17,14 +18,28 @@ Future<InstalledFont?> inspectFontFile({required String path}) =>
 class InstalledFont {
   final String path;
   final String fullName;
+  final String? familyName;
+  final String? styleName;
+  final int? weight;
+  final bool? isItalic;
 
   const InstalledFont({
     required this.path,
     required this.fullName,
+    this.familyName,
+    this.styleName,
+    this.weight,
+    this.isItalic,
   });
 
   @override
-  int get hashCode => path.hashCode ^ fullName.hashCode;
+  int get hashCode =>
+      path.hashCode ^
+      fullName.hashCode ^
+      familyName.hashCode ^
+      styleName.hashCode ^
+      weight.hashCode ^
+      isItalic.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -32,5 +47,9 @@ class InstalledFont {
       other is InstalledFont &&
           runtimeType == other.runtimeType &&
           path == other.path &&
-          fullName == other.fullName;
+          fullName == other.fullName &&
+          familyName == other.familyName &&
+          styleName == other.styleName &&
+          weight == other.weight &&
+          isItalic == other.isItalic;
 }

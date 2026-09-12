@@ -5,6 +5,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/lyric_line_motion.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
@@ -13,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
-class LyricViewTile extends StatelessWidget {
+class LyricViewTile extends StatefulWidget {
   const LyricViewTile({
     super.key,
     required this.line,
@@ -32,17 +33,20 @@ class LyricViewTile extends StatelessWidget {
   final void Function()? onTap;
 
   @override
+  State<LyricViewTile> createState() => _LyricViewTileState();
+}
+
+class _LyricViewTileState extends State<LyricViewTile> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final lyricViewController = context.watch<LyricViewController>();
     final motion = context.motion;
-    final isMainLine = isCurrentLine || opacity == 1.0;
+    final isMainLine = widget.isCurrentLine || widget.opacity == 1.0;
+    final isInteractiveHover = _isHovered && !widget.isCurrentLine;
 
     final settings = AppSettings.instance;
-    final depthBlurSigma = resolveLyricDepthBlurSigma(
-      distanceFromCurrent: distanceFromCurrent,
-      enabled: settings.lyricDepthBlur,
-      effectsLevel: settings.uiEffectsLevel,
-    );
 
     return Align(
       alignment: switch (lyricViewController.lyricTextAlign) {
@@ -53,10 +57,10 @@ class LyricViewTile extends StatelessWidget {
       child: AnimatedOpacity(
         duration: motion.controlTransitionDuration,
         curve: motion.fast,
-        opacity: opacity,
+        opacity: isInteractiveHover ? 0.95 : widget.opacity,
         child: LyricLineMotion(
-          isCurrent: isCurrentLine,
-          distanceFromCurrent: distanceFromCurrent,
+          isCurrent: widget.isCurrentLine,
+          distanceFromCurrent: widget.distanceFromCurrent,
           alignment: switch (lyricViewController.lyricTextAlign) {
             LyricTextAlign.left => Alignment.centerLeft,
             LyricTextAlign.center => Alignment.center,
@@ -68,24 +72,43 @@ class LyricViewTile extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: isMainLine ? 4 : 0),
             child: InkWell(
               enableFeedback: false,
-              onTap: onTap,
+              onTap: widget.onTap,
+              onHover: (hovered) {
+                if (_isHovered != hovered) {
+                  setState(() {
+                    _isHovered = hovered;
+                  });
+                }
+              },
               borderRadius: BorderRadius.circular(14.0),
-              child: Builder(
-                builder: (context) {
-                  final content = line is SyncLyricLine
+              child: ValueListenableBuilder<bool>(
+                valueListenable: settings.lyricDepthBlurNotifier,
+                builder: (context, depthBlurEnabled, _) {
+                  final depthBlurSigma = resolveLyricDepthBlurSigma(
+                    distanceFromCurrent: widget.distanceFromCurrent,
+                    enabled: depthBlurEnabled,
+                    effectsLevel: settings.uiEffectsLevel,
+                    blurAdjacent: true,
+                    isPastLine: widget.isPastLine,
+                    isHovered: isInteractiveHover,
+                  );
+
+                  final content = widget.line is SyncLyricLine
                       ? _SyncLineContent(
-                          syncLine: line as SyncLyricLine,
+                          syncLine: widget.line as SyncLyricLine,
                           isMainLine: isMainLine,
-                          isPastLine: isPastLine,
+                          isPastLine: widget.isPastLine,
                         )
                       : _LrcLineContent(
-                          lrcLine: line as LrcLine,
+                          lrcLine: widget.line as LrcLine,
                           isMainLine: isMainLine,
-                          isPastLine: isPastLine,
+                          isPastLine: widget.isPastLine,
                         );
-                  if (depthBlurSigma <= 0) return content;
-                  return ImageFiltered(
-                    imageFilter: createLyricDepthBlurFilter(depthBlurSigma),
+
+                  return AnimatedLyricDepthBlur(
+                    sigma: depthBlurSigma,
+                    duration: motion.controlTransitionDuration,
+                    curve: motion.normal,
                     child: content,
                   );
                 },
@@ -275,7 +298,8 @@ class _SyncLineContent extends StatelessWidget {
           alpha: isPastLine ? 0.88 : 0.72,
         ),
         fontSize: fontSize,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
+        height: 1.3,
       ),
     );
   }
@@ -314,19 +338,24 @@ class _SyncLineContent extends StatelessWidget {
           alpha: isPastLine ? 0.88 : 0.72,
         ),
         fontSize: fontSize,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
+        height: 1.3,
       );
     }
 
     return TextStyle(
       color: scheme.onSecondaryContainer,
       fontSize: fontSize + 4,
-      fontWeight: FontWeight.w800,
-      height: 1.16,
+      fontWeight: FontWeight.w700,
+      height: 1.28,
       shadows: [
         Shadow(
-          color: scheme.primary.withValues(alpha: 0.34),
-          blurRadius: 16,
+          color: scheme.primary.withValues(alpha: 0.38),
+          blurRadius: 8,
+        ),
+        Shadow(
+          color: scheme.primary.withValues(alpha: 0.16),
+          blurRadius: 18,
         ),
       ],
     );
@@ -362,19 +391,31 @@ class _LrcLineContent extends StatelessWidget {
     final alignment = lyricViewController.lyricTextAlign;
     final showTranslation = lyricViewController.showTranslation;
 
-    final splited = lrcLine.content.split("─");
-    final List<Text> contents = [
-      buildPrimaryText(splited.first, scheme, alignment, lyricFontSize),
+    final parsed = LyricLineParser.parse(lrcLine.content);
+    final isCredit = parsed.isCredit;
+
+    final effectiveLyricFontSize = lyricFontSize;
+
+    final List<Widget> contents = [
+      buildPrimaryText(
+        parsed.primary,
+        scheme,
+        alignment,
+        effectiveLyricFontSize,
+        isCredit: isCredit,
+      ),
     ];
-    if (showTranslation) {
-      for (var i = 1; i < splited.length; i++) {
-        contents.add(buildSecondaryText(
-          splited[i],
-          scheme,
-          alignment,
-          translationFontSize,
-        ));
-      }
+    if (showTranslation &&
+        !isCredit &&
+        parsed.translation != null &&
+        parsed.translation!.trim().isNotEmpty) {
+      contents.add(const SizedBox(height: 6));
+      contents.add(buildSecondaryText(
+        parsed.translation!,
+        scheme,
+        alignment,
+        translationFontSize,
+      ));
     }
 
     return Padding(
@@ -390,12 +431,13 @@ class _LrcLineContent extends StatelessWidget {
     );
   }
 
-  Text buildPrimaryText(
+  Widget buildPrimaryText(
     String text,
     ColorScheme scheme,
     LyricTextAlign align,
-    double fontSize,
-  ) {
+    double fontSize, {
+    bool isCredit = false,
+  }) {
     return Text(
       text,
       textAlign: switch (align) {
@@ -404,19 +446,25 @@ class _LrcLineContent extends StatelessWidget {
         LyricTextAlign.right => TextAlign.right,
       },
       style: TextStyle(
-        color: isMainLine
-            ? scheme.onSecondaryContainer
-            : scheme.onSecondaryContainer.withValues(
-                alpha: isPastLine ? 0.88 : 0.72,
-              ),
-        fontSize: isMainLine ? fontSize + 4 : fontSize,
-        fontWeight: isMainLine ? FontWeight.w800 : FontWeight.w500,
-        height: isMainLine ? 1.16 : 1.22,
-        shadows: isMainLine
+        color: isCredit
+            ? scheme.onSecondaryContainer.withValues(alpha: 0.54)
+            : (isMainLine
+                ? scheme.onSecondaryContainer
+                : scheme.onSecondaryContainer.withValues(
+                    alpha: isPastLine ? 0.88 : 0.72,
+                  )),
+        fontSize: (!isCredit && isMainLine) ? fontSize + 4 : fontSize,
+        fontWeight: (!isCredit && isMainLine) ? FontWeight.w700 : FontWeight.w400,
+        height: isMainLine ? 1.28 : 1.3,
+        shadows: (!isCredit && isMainLine)
             ? [
                 Shadow(
-                  color: scheme.primary.withValues(alpha: 0.34),
-                  blurRadius: 16,
+                  color: scheme.primary.withValues(alpha: 0.38),
+                  blurRadius: 8,
+                ),
+                Shadow(
+                  color: scheme.primary.withValues(alpha: 0.16),
+                  blurRadius: 18,
                 ),
               ]
             : null,

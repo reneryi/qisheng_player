@@ -1158,6 +1158,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_SYSCHAR:
       return 0;
+    case WM_QUERYENDSESSION:
+      allow_close_ = true;
+      if (media_control_channel_) {
+        media_control_channel_->InvokeMethod("exit_app", nullptr);
+      }
+      return TRUE;
+    case WM_ENDSESSION:
+      if (wparam == TRUE) {
+        allow_close_ = true;
+        TerminateDesktopLyricProcesses();
+        RemoveTrayIcon();
+        if (media_control_channel_) {
+          media_control_channel_->InvokeMethod("exit_app", nullptr);
+        }
+      }
+      return 0;
     case WM_CLOSE:
       if (!allow_close_) {
         MinimizeToTray();
@@ -1276,6 +1292,9 @@ void FlutterWindow::RestoreFromTray() {
 void FlutterWindow::ExitApplication() {
   TerminateDesktopLyricProcesses();
   allow_close_ = true;
+  if (media_control_channel_) {
+    media_control_channel_->InvokeMethod("exit_app", nullptr);
+  }
   PostMessage(GetHandle(), WM_CLOSE, 0, 0);
 }
 

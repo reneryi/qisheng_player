@@ -279,7 +279,7 @@ class _NowPlayingTrackIdentity extends StatelessWidget {
                     fontSize:
                         compact ? 22 : 30, // 非 compact 模式下歌曲标题字号调大至 30 像素，更显大气
                     fontWeight: FontWeight.w800,
-                    height: 1.2,
+                    height: 1.22,
                     decoration: TextDecoration.none,
                     decorationColor: Colors.transparent,
                     decorationThickness: 0,
@@ -740,11 +740,11 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   }
 
   double get _primaryFontSize =>
-      (widget.compact ? 28 : 36) * _fontScale; // 杂志级排版：主歌词字号随缩放系数动态调整
+      (widget.compact ? 24 : 30) * _fontScale; // 杂志级排版：主歌词字号随缩放系数动态调整
   double get _secondaryFontSize =>
-      (widget.compact ? 18 : 22) * _fontScale; // 杂志级排版：副歌词字号随缩放系数动态调整
+      (widget.compact ? 16 : 20) * _fontScale; // 杂志级排版：副歌词字号随缩放系数动态调整
   double get _translationFontSize =>
-      (widget.compact ? 14 : 16) * _fontScale; // 翻译行字号随缩放系数动态调整
+      (widget.compact ? 13 : 15) * _fontScale; // 翻译行字号随缩放系数动态调整
   double get _baseVerticalPadding => widget.compact ? 140 : 200;
   double _verticalPaddingFor(LyricLine line) {
     if (_viewportHeight <= 0) return _baseVerticalPadding;
@@ -772,6 +772,13 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     });
   }
 
+  int? _hoveredIndex;
+
+  void _onDepthBlurSettingChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -781,6 +788,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     _currentLineIndex = lyricService.currentLyricLineIndex;
     lyricLineStreamSubscription =
         lyricService.lyricLineStream.listen(_handleLyricLineChange);
+    AppSettings.instance.lyricDepthBlurNotifier
+        .addListener(_onDepthBlurSettingChanged);
     _requestScrollToLine(_currentLineIndex, animated: false);
   }
 
@@ -810,32 +819,35 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     _requestScrollToLine(_currentLineIndex, animated: false);
   }
 
-  String _primaryText(LyricLine line) {
+  ParsedLyricLine _parsedLine(LyricLine line) {
     if (line is SyncLyricLine) {
-      return line.content;
+      return ParsedLyricLine(
+        primary: line.content,
+        translation: line.translation,
+        isCredit: false,
+      );
     }
     if (line is LrcLine) {
-      return line.content.split('┃').first;
+      return LyricLineParser.parse(line.content);
     }
-    return '';
+    return const ParsedLyricLine(primary: '');
+  }
+
+  String _primaryText(LyricLine line) {
+    return _parsedLine(line).primary;
   }
 
   bool _showTranslation(LyricLine line) {
     if (!AppPreference.instance.nowPlayingPagePref.showTranslation) {
       return false;
     }
-    return _translationText(line).trim().isNotEmpty;
+    final parsed = _parsedLine(line);
+    if (parsed.isCredit) return false;
+    return (parsed.translation ?? '').trim().isNotEmpty;
   }
 
   String _translationText(LyricLine line) {
-    if (line is SyncLyricLine) {
-      return line.translation ?? '';
-    }
-    if (line is LrcLine) {
-      final parts = line.content.split('┃');
-      return parts.length > 1 ? parts.skip(1).join(' ') : '';
-    }
-    return '';
+    return _parsedLine(line).translation ?? '';
   }
 
   double _estimatedLineHeight(LyricLine line, {required bool isCurrent}) {
@@ -910,10 +922,15 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     });
   }
 
-  double _lineOpacity({required int index, required bool isCurrent}) {
+  double _lineOpacity({
+    required int index,
+    required bool isCurrent,
+    bool depthBlurEnabled = false,
+  }) {
     return resolveLyricLineOpacity(
       distanceFromCurrent: (index - _currentLineIndex).abs(),
       isPastLine: index < _currentLineIndex,
+      depthBlurEnabled: depthBlurEnabled,
     );
   }
 
@@ -935,22 +952,35 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     required ColorScheme scheme,
   }) {
     final motion = context.motion;
-    final style = TextStyle(
-      color: lineColor,
-      fontSize: isCurrent ? _primaryFontSize : _secondaryFontSize,
-      fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w600, // 高对比字重
-      height: 1.15,
-      shadows: isCurrent
-          ? [
-              Shadow(
-                color: scheme.primary.withValues(alpha: 0.18), // 减淡阴影光晕
-                blurRadius: 12,
-              ),
-            ]
-          : null,
-    );
+    final parsed = _parsedLine(line);
+    final isCredit = parsed.isCredit;
+    final style = isCredit
+        ? TextStyle(
+            color: lineColor.withValues(alpha: 0.56),
+            fontSize: _secondaryFontSize,
+            fontWeight: FontWeight.w400,
+            height: 1.35,
+          )
+        : TextStyle(
+            color: lineColor,
+            fontSize: isCurrent ? _primaryFontSize : _secondaryFontSize,
+            fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w400,
+            height: 1.35,
+            shadows: isCurrent
+                ? [
+                    Shadow(
+                      color: scheme.primary.withValues(alpha: 0.38),
+                      blurRadius: 8,
+                    ),
+                    Shadow(
+                      color: scheme.primary.withValues(alpha: 0.16),
+                      blurRadius: 18,
+                    ),
+                  ]
+                : null,
+          );
 
-    if (isCurrent && line is SyncLyricLine && line.words.isNotEmpty) {
+    if (isCurrent && !isCredit && line is SyncLyricLine && line.words.isNotEmpty) {
       return StreamBuilder<double>(
         stream: playbackService.positionStream,
         initialData: playbackService.position,
@@ -1005,7 +1035,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
       style: style,
       textAlign: TextAlign.left, // 杂志排版：居左对齐
       child: Text(
-        _primaryText(line),
+        parsed.primary,
         textAlign: TextAlign.left,
       ),
     );
@@ -1058,10 +1088,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                     final currentLine = widget.lyric.lines[_currentLineIndex
                         .clamp(0, widget.lyric.lines.length - 1)];
                     final verticalPadding = _verticalPaddingFor(currentLine);
-                    return Scrollbar(
-                      controller: scrollController,
-                      thumbVisibility: true,
-                      child: ListView.builder(
+                    final lyricListView = ListView.builder(
                         controller: scrollController,
                         padding: EdgeInsets.symmetric(
                           vertical: verticalPadding,
@@ -1080,19 +1107,22 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
 
                           final distanceFromCurrent =
                               (index - _currentLineIndex).abs();
-                          final depthBlurSigma = resolveLyricDepthBlurSigma(
-                            distanceFromCurrent: distanceFromCurrent,
-                            enabled: AppSettings.instance.lyricDepthBlur,
-                            effectsLevel: AppSettings.instance.uiEffectsLevel,
-                          );
+                          final isPast = index < _currentLineIndex;
 
+                          final isHovered = _hoveredIndex == index && !isCurrent;
                           return KeyedSubtree(
                             key: _lineKeys[index],
                             child: AnimatedOpacity(
                               duration: motion.controlTransitionDuration,
                               curve: motion.fast,
-                              opacity: _lineOpacity(
-                                  index: index, isCurrent: isCurrent),
+                              opacity: isHovered
+                                  ? 0.95
+                                  : _lineOpacity(
+                                      index: index,
+                                      isCurrent: isCurrent,
+                                      depthBlurEnabled: AppSettings
+                                          .instance.lyricDepthBlur,
+                                    ),
                               child: LyricLineMotion(
                                 isCurrent: isCurrent,
                                 distanceFromCurrent: distanceFromCurrent,
@@ -1104,8 +1134,29 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                                     playbackService.seek(
                                         line.start.inMilliseconds / 1000.0);
                                   },
-                                  child: Builder(
-                                    builder: (context) {
+                                  onHover: (hovered) {
+                                    if (hovered && _hoveredIndex != index) {
+                                      setState(() => _hoveredIndex = index);
+                                    } else if (!hovered && _hoveredIndex == index) {
+                                      setState(() => _hoveredIndex = null);
+                                    }
+                                  },
+                                  child: ValueListenableBuilder<bool>(
+                                    valueListenable: AppSettings
+                                        .instance.lyricDepthBlurNotifier,
+                                    builder: (context, depthBlurEnabled, _) {
+                                      final depthBlurSigma =
+                                          resolveLyricDepthBlurSigma(
+                                        distanceFromCurrent:
+                                            distanceFromCurrent,
+                                        enabled: depthBlurEnabled,
+                                        effectsLevel: AppSettings
+                                            .instance.uiEffectsLevel,
+                                        blurAdjacent: true,
+                                        isPastLine: isPast,
+                                        isHovered: isHovered,
+                                      );
+
                                       final content = AnimatedPadding(
                                         duration:
                                             motion.controlTransitionDuration,
@@ -1153,11 +1204,12 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                                           ],
                                         ),
                                       );
-                                      if (depthBlurSigma <= 0) return content;
-                                      return ImageFiltered(
-                                        imageFilter: createLyricDepthBlurFilter(
-                                          depthBlurSigma,
-                                        ),
+
+                                      return AnimatedLyricDepthBlur(
+                                        sigma: depthBlurSigma,
+                                        duration:
+                                            motion.controlTransitionDuration,
+                                        curve: motion.normal,
                                         child: content,
                                       );
                                     },
@@ -1167,7 +1219,33 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                             ),
                           );
                         },
-                      ),
+                      );
+
+                    final effectiveList = AppSettings.instance.uiEffectsLevel ==
+                            UiEffectsLevel.performance
+                        ? lyricListView
+                        : ShaderMask(
+                            shaderCallback: (Rect rect) {
+                              return const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black,
+                                  Colors.black,
+                                  Colors.transparent,
+                                ],
+                                stops: [0.0, 0.08, 0.92, 1.0],
+                              ).createShader(rect);
+                            },
+                            blendMode: BlendMode.dstIn,
+                            child: lyricListView,
+                          );
+
+                    return Scrollbar(
+                      controller: scrollController,
+                      thumbVisibility: true,
+                      child: effectiveList,
                     );
                   },
                 ),
@@ -1240,6 +1318,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   @override
   void dispose() {
     _scaleIndicatorTimer?.cancel(); // 清理缩放指示指示器可能残存的定时器
+    AppSettings.instance.lyricDepthBlurNotifier
+        .removeListener(_onDepthBlurSettingChanged);
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();
     super.dispose();

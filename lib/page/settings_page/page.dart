@@ -105,6 +105,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             fontSize: 14,
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
+                            letterSpacing: 0.22,
+                            height: 1.30,
+                            leadingDistribution: TextLeadingDistribution.even,
                             color: selected
                                 ? scheme.primary
                                 : scheme.onSurface.withValues(alpha: 0.85),
@@ -124,6 +127,15 @@ class _SettingsPageState extends State<SettingsPage> {
               duration: const Duration(milliseconds: 200),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (currentChild, previousChildren) {
+                return Stack(
+                  alignment: Alignment.topLeft,
+                  children: <Widget>[
+                    ...previousChildren.map((w) => IgnorePointer(child: w)),
+                    if (currentChild != null) currentChild,
+                  ],
+                );
+              },
               child: KeyedSubtree(
                 key: ValueKey(_selectedCategory),
                 child: ListView(
@@ -207,6 +219,13 @@ class _SettingsPageState extends State<SettingsPage> {
               LyricDepthBlurSwitch(),
             ],
           ),
+          AppSection(
+            title: '底栏播控与进度条',
+            description: '控制底栏音频进度条的视觉呈现形态、微交互与动态光效。',
+            children: [
+              ProgressBarTypeControl(),
+            ],
+          ),
         ];
       case _SettingsCategory.playback:
         return const [
@@ -215,6 +234,7 @@ class _SettingsPageState extends State<SettingsPage> {
             description: '播放行为、歌词来源和音量均衡等日常设置。',
             children: [
               DefaultLyricSourceControl(),
+              LyricSaveOptionsControl(),
               VolumeLevelingSwitch(),
               VolumeLevelingPreampControl(),
               ArtistSeparatorEditor(),

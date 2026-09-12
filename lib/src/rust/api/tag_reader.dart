@@ -66,6 +66,14 @@ Future<bool> writeCoverToFile(
         .crateApiTagReaderWriteCoverToFile(path: path, coverData: coverData);
 
 /// for Flutter
+/// 将歌词文本写入音乐文件的元数据标签
+/// 支持 ID3v2 (MP3 USLT), VorbisComments (FLAC/OGG LYRICS), MP4Ilst (M4A) 等格式
+Future<bool> writeLyricToFile(
+        {required String path, required String lyricText}) =>
+    RustLib.instance.api
+        .crateApiTagReaderWriteLyricToFile(path: path, lyricText: lyricText);
+
+/// for Flutter
 /// 扫描给定路径下所有子文件夹（包括自己）的音乐文件并把索引保存在 index_path/index.json。
 Stream<IndexActionState> buildIndexFromFoldersRecursively(
         {required List<String> folders, required String indexPath}) =>

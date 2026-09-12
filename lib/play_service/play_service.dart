@@ -29,6 +29,14 @@ class PlayService {
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
+    // 退出前优先快照当前播放状态并落盘，防止后续硬件或子进程释放耗时导致最新状态丢失
+    try {
+      _playbackService?.rememberPlaybackSession();
+      await AppPreference.instance.save();
+    } catch (err, trace) {
+      LOGGER.e('[shutdown] 播放状态预存失败: $err', stackTrace: trace);
+    }
+
     await _closeSafely('歌词服务', () async => _lyricService?.close());
     await _closeSafely(
       '桌面歌词',
@@ -45,7 +53,10 @@ class PlayService {
     Future<void>? Function() operation,
   ) async {
     try {
-      await operation();
+      final fut = operation();
+      if (fut != null) {
+        await fut.timeout(const Duration(milliseconds: 1500));
+      }
     } catch (err, trace) {
       LOGGER.e('[shutdown] $label 释放失败: $err', stackTrace: trace);
     }
