@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qisheng_player/component/fluid_gradient_background.dart';
@@ -652,6 +654,176 @@ void main() {
     provider.windowBackdropMode = WindowBackdropMode.defaultGradient;
     final gradients = provider.backgroundGradient;
     expect(gradients.length, equals(3));
+  });
+
+  testWidgets('FluidGradientBackground ticker stops on static background image', (
+    tester,
+  ) async {
+    final provider = ThemeProvider.instance;
+    final previousBackdrop = provider.windowBackdropMode;
+    final previousPath = AppSettings.instance.backgroundImagePath;
+    final tempDir = Directory.systemTemp.createTempSync('bg_test');
+    final tempFile = File('${tempDir.path}/test_bg.jpg')
+      ..writeAsBytesSync([1, 2, 3]);
+
+    addTearDown(() {
+      provider.windowBackdropMode = previousBackdrop;
+      AppSettings.instance.backgroundImagePath = previousPath;
+      AppSettings.instance.notifyBackgroundChanged();
+      WindowControls.isWindowVisible.value = true;
+      try {
+        tempDir.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    provider.windowBackdropMode = WindowBackdropMode.meshFlow;
+    AppSettings.instance.backgroundImagePath = null;
+    WindowControls.isWindowVisible.value = true;
+
+    Widget app() {
+      return ChangeNotifierProvider<ThemeProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          theme: AppTheme.build(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+            effectsLevel: UiEffectsLevel.balanced,
+            windowBackdropMode: WindowBackdropMode.meshFlow,
+          ),
+          home: const FluidGradientBackground(
+            child: SizedBox(key: ValueKey('test_child')),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(app());
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final state = tester.state<FluidGradientBackgroundState>(
+      find.byType(FluidGradientBackground),
+    );
+    expect(state.isTickerActive, isTrue);
+
+    // 设置静态背景图片
+    AppSettings.instance.backgroundImagePath = tempFile.path;
+    AppSettings.instance.notifyBackgroundChanged();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(state.isTickerActive, isFalse);
+
+    // 移除静态背景图片，恢复动效
+    AppSettings.instance.backgroundImagePath = null;
+    AppSettings.instance.notifyBackgroundChanged();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(state.isTickerActive, isTrue);
+  });
+
+  testWidgets('FluidGradientBackground stops ticker on hidden lifecycle and resumes on resumed', (
+    tester,
+  ) async {
+    final provider = ThemeProvider.instance;
+    final previousBackdrop = provider.windowBackdropMode;
+    final previousPath = AppSettings.instance.backgroundImagePath;
+
+    addTearDown(() {
+      provider.windowBackdropMode = previousBackdrop;
+      AppSettings.instance.backgroundImagePath = previousPath;
+      WindowControls.isWindowVisible.value = true;
+    });
+
+    provider.windowBackdropMode = WindowBackdropMode.meshFlow;
+    AppSettings.instance.backgroundImagePath = null;
+    WindowControls.isWindowVisible.value = true;
+
+    Widget app() {
+      return ChangeNotifierProvider<ThemeProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          theme: AppTheme.build(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+            effectsLevel: UiEffectsLevel.balanced,
+            windowBackdropMode: WindowBackdropMode.meshFlow,
+          ),
+          home: const FluidGradientBackground(
+            child: SizedBox(key: ValueKey('test_child')),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(app());
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final state = tester.state<FluidGradientBackgroundState>(
+      find.byType(FluidGradientBackground),
+    );
+    expect(state.isTickerActive, isTrue);
+
+    // 模拟应用进入 hidden/paused 状态
+    state.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(state.isTickerActive, isFalse);
+
+    // 模拟应用恢复 resumed 状态
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(state.isTickerActive, isTrue);
+  });
+
+  testWidgets('FluidGradientBackground stops ticker when window is minimized and resumes on restored', (
+    tester,
+  ) async {
+    final provider = ThemeProvider.instance;
+    final previousBackdrop = provider.windowBackdropMode;
+    final previousPath = AppSettings.instance.backgroundImagePath;
+
+    addTearDown(() {
+      provider.windowBackdropMode = previousBackdrop;
+      AppSettings.instance.backgroundImagePath = previousPath;
+      WindowControls.isWindowVisible.value = true;
+    });
+
+    provider.windowBackdropMode = WindowBackdropMode.meshFlow;
+    AppSettings.instance.backgroundImagePath = null;
+    WindowControls.isWindowVisible.value = true;
+
+    Widget app() {
+      return ChangeNotifierProvider<ThemeProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          theme: AppTheme.build(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+            effectsLevel: UiEffectsLevel.balanced,
+            windowBackdropMode: WindowBackdropMode.meshFlow,
+          ),
+          home: const FluidGradientBackground(
+            child: SizedBox(key: ValueKey('test_child')),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(app());
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final state = tester.state<FluidGradientBackgroundState>(
+      find.byType(FluidGradientBackground),
+    );
+    expect(state.isTickerActive, isTrue);
+
+    // 模拟窗口最小化
+    WindowControls.isWindowVisible.value = false;
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(state.isTickerActive, isFalse);
+
+    // 模拟窗口恢复
+    WindowControls.isWindowVisible.value = true;
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(state.isTickerActive, isTrue);
   });
 }
 

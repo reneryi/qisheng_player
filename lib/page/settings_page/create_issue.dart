@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/component/settings_tile.dart';
+import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/page/settings_page/cpfeedback_key.dart';
@@ -160,5 +160,14 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    titleEditingController.dispose();
+    descEditingController.dispose();
+    logEditingController.dispose();
+    submitBtnController.dispose();
+    super.dispose();
   }
 }

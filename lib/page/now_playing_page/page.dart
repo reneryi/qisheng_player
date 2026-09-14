@@ -30,6 +30,7 @@ import 'package:qisheng_player/page/now_playing_page/component/vertical_lyric_vi
 import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:qisheng_player/src/bass/bass_player.dart' show PlayerState;
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';

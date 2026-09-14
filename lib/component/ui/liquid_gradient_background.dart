@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
 
 @immutable
@@ -92,6 +93,7 @@ class _LiquidGradientBackgroundState extends State<LiquidGradientBackground>
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this);
+    WindowControls.isWindowVisible.addListener(_syncController);
     _syncController();
   }
 
@@ -103,7 +105,7 @@ class _LiquidGradientBackgroundState extends State<LiquidGradientBackground>
 
   void _syncController() {
     final profile = _profile;
-    if (!profile.animated) {
+    if (!profile.animated || !WindowControls.isWindowVisible.value) {
       _controller.stop();
       _controller.value = 0;
       return;
@@ -118,6 +120,7 @@ class _LiquidGradientBackgroundState extends State<LiquidGradientBackground>
 
   @override
   void dispose() {
+    WindowControls.isWindowVisible.removeListener(_syncController);
     _controller.dispose();
     super.dispose();
   }

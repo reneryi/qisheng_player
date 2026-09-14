@@ -56,6 +56,11 @@ class InitArgsMessage {
   /// theme
   final int onSurface;
 
+  final String? lyricFontFamily;
+  final bool followPlayerFont;
+  final bool hasSpecifiedColor;
+  final String? playerFontFamily;
+
   const InitArgsMessage(
     this.isPlaying,
     this.title,
@@ -64,8 +69,12 @@ class InitArgsMessage {
     this.darkMode,
     this.primary,
     this.surfaceContainer,
-    this.onSurface,
-  );
+    this.onSurface, {
+    this.lyricFontFamily,
+    this.followPlayerFont = true,
+    this.hasSpecifiedColor = false,
+    this.playerFontFamily,
+  });
 
   factory InitArgsMessage.fromJson(Map<String, dynamic> json) =>
       _$InitArgsMessageFromJson(json);
@@ -90,15 +99,21 @@ class ControlEventMessage extends Message {
 /// desktop lyric -> player
 @JsonSerializable()
 class PreferenceChangedMessage extends Message {
-  final int primary;
+  final int? primary;
   final int surfaceContainer;
   final int onSurface;
+  final bool? hasSpecifiedColor;
+  final String? lyricFontFamily;
+  final bool? followPlayerFont;
 
   const PreferenceChangedMessage(
     this.primary,
     this.surfaceContainer,
-    this.onSurface,
-  );
+    this.onSurface, {
+    this.hasSpecifiedColor,
+    this.lyricFontFamily,
+    this.followPlayerFont,
+  });
 
   factory PreferenceChangedMessage.fromJson(Map<String, dynamic> json) =>
       _$PreferenceChangedMessageFromJson(json);
@@ -201,6 +216,20 @@ class UnlockMessage extends Message {
 
   @override
   Map<String, dynamic> _toJson() => _$UnlockMessageToJson(this);
+}
+
+/// player -> desktop lyric
+@JsonSerializable()
+class PlayerFontChangedMessage extends Message {
+  final String? fontFamily;
+
+  const PlayerFontChangedMessage(this.fontFamily);
+
+  factory PlayerFontChangedMessage.fromJson(Map<String, dynamic> json) =>
+      _$PlayerFontChangedMessageFromJson(json);
+
+  @override
+  Map<String, dynamic> _toJson() => _$PlayerFontChangedMessageToJson(this);
 }
 
 // abstract class DesktopLyricMessage {

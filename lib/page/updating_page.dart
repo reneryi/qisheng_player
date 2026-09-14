@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:qisheng_player/app_settings.dart';
@@ -59,9 +59,14 @@ class UpdatingPage extends StatelessWidget {
 }
 
 class UpdatingStateView extends StatefulWidget {
-  const UpdatingStateView({super.key, required this.indexPath});
+  const UpdatingStateView({
+    super.key,
+    required this.indexPath,
+    @visibleForTesting this.streamOverride,
+  });
 
   final Directory indexPath;
+  final Stream<IndexActionState>? streamOverride;
 
   @override
   State<UpdatingStateView> createState() => _UpdatingStateViewState();
@@ -72,10 +77,12 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
   StreamSubscription? _subscription;
 
   void whenIndexUpdated() async {
+    if (!mounted) return;
     final playback = PlayService.instance.playbackService;
     final status = await libraryReloadCoordinator.reload(
       afterReload: playback.reconcileLibraryReferences,
     );
+    if (!mounted) return;
     if (status != AudioLibraryLoadStatus.loaded) {
       showTextOnSnackBar("曲库索引加载失败，请重新扫描音乐文件夹");
       return;
@@ -83,7 +90,9 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
     if (playback.nowPlaying == null) {
       await playback.restoreLastSession();
     }
+    if (!mounted) return;
     _subscription?.cancel();
+    _subscription = null;
     final ctx = context;
     if (ctx.mounted) {
       ctx.go(app_paths.AUDIOS_PAGE);
@@ -93,16 +102,29 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
   @override
   void initState() {
     super.initState();
-    updateIndexStream = updateIndex(
-      indexPath: widget.indexPath.path,
-    ).asBroadcastStream();
+    updateIndexStream = widget.streamOverride ??
+        updateIndex(
+          indexPath: widget.indexPath.path,
+        ).asBroadcastStream();
 
     _subscription = updateIndexStream.listen(
       (action) {
         LOGGER.i("[update index] ${action.progress}: ${action.message}");
       },
+      onError: (err, stack) {
+        LOGGER.e("[update index] error: $err", stackTrace: stack);
+        if (!mounted) return;
+        showTextOnSnackBar("更新曲库索引时发生错误: $err");
+      },
       onDone: whenIndexUpdated,
     );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _subscription = null;
+    super.dispose();
   }
 
   @override

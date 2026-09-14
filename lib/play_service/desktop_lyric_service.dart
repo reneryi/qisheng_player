@@ -41,6 +41,7 @@ abstract class DesktopLyricController extends ChangeNotifier {
   void sendPlayerStateMessage(bool isPlaying);
   void sendNowPlayingMessage(Audio nowPlaying);
   void sendLyricLineMessage(LyricLine line);
+  void sendPlayerFontChangedMessage(String? fontFamily) {}
 }
 
 class DesktopLyricService extends DesktopLyricController {
@@ -98,11 +99,15 @@ class DesktopLyricService extends DesktopLyricController {
   void _saveDesktopLyricPreference({
     bool? enabled,
     bool? locked,
+    bool clearPrimary = false,
     int? primary,
     int? surfaceContainer,
     int? onSurface,
     double? windowLeft,
     double? windowTop,
+    String? lyricFontFamily,
+    bool? followPlayerFont,
+    bool updateLyricFontFamily = false,
     bool persist = true,
   }) {
     final pref = AppPreference.instance.desktopLyricPref;
@@ -116,7 +121,12 @@ class DesktopLyricService extends DesktopLyricController {
       pref.locked = locked;
       changed = true;
     }
-    if (primary != null && pref.primary != primary) {
+    if (clearPrimary) {
+      if (pref.primary != null) {
+        pref.primary = null;
+        changed = true;
+      }
+    } else if (primary != null && pref.primary != primary) {
       pref.primary = primary;
       changed = true;
     }
@@ -134,6 +144,16 @@ class DesktopLyricService extends DesktopLyricController {
     }
     if (windowTop != null && pref.windowTop != windowTop) {
       pref.windowTop = windowTop;
+      changed = true;
+    }
+    if (updateLyricFontFamily || lyricFontFamily != null) {
+      if (pref.lyricFontFamily != lyricFontFamily) {
+        pref.lyricFontFamily = lyricFontFamily;
+        changed = true;
+      }
+    }
+    if (followPlayerFont != null && pref.followPlayerFont != followPlayerFont) {
+      pref.followPlayerFont = followPlayerFont;
       changed = true;
     }
 
@@ -478,11 +498,23 @@ class DesktopLyricService extends DesktopLyricController {
     } else if (messageType ==
         msg.getMessageTypeName<msg.PreferenceChangedMessage>()) {
       final pref = msg.PreferenceChangedMessage.fromJson(messageContent);
-      _saveDesktopLyricPreference(
-        primary: pref.primary,
-        surfaceContainer: pref.surfaceContainer,
-        onSurface: pref.onSurface,
-      );
+      final desktopLyricPref = AppPreference.instance.desktopLyricPref;
+
+      if (pref.hasSpecifiedColor == false || pref.primary == null) {
+        desktopLyricPref.primary = null;
+      } else if (pref.hasSpecifiedColor == true && pref.primary != null) {
+        desktopLyricPref.primary = pref.primary;
+      }
+
+      desktopLyricPref.surfaceContainer = pref.surfaceContainer;
+      desktopLyricPref.onSurface = pref.onSurface;
+
+      if (pref.lyricFontFamily != null || pref.followPlayerFont != null) {
+        desktopLyricPref.lyricFontFamily = pref.lyricFontFamily;
+        desktopLyricPref.followPlayerFont = pref.followPlayerFont ?? false;
+      }
+
+      AppPreference.instance.save();
     }
   }
 
@@ -538,14 +570,18 @@ class DesktopLyricService extends DesktopLyricController {
 
       final nowPlaying = _playbackService.nowPlaying;
       final currScheme = ThemeProvider.instance.currScheme;
-      final isDarkMode = ThemeProvider.instance.themeMode == ThemeMode.dark;
+      final isDarkMode =
+          ThemeProvider.instance.effectiveBrightness == Brightness.dark;
       final desktopLyricPref = AppPreference.instance.desktopLyricPref;
       final initialPrimary =
           desktopLyricPref.primary ?? currScheme.primary.toARGB32();
-      final initialSurfaceContainer = desktopLyricPref.surfaceContainer ??
-          currScheme.surfaceContainer.toARGB32();
-      final initialOnSurface =
-          desktopLyricPref.onSurface ?? currScheme.onSurface.toARGB32();
+      final initialSurfaceContainer = currScheme.surfaceContainer.toARGB32();
+      final initialOnSurface = currScheme.onSurface.toARGB32();
+      _saveDesktopLyricPreference(
+        surfaceContainer: initialSurfaceContainer,
+        onSurface: initialOnSurface,
+        persist: false,
+      );
       Object? lastErr;
       StackTrace? lastTrace;
       for (final desktopLyricPath in candidates) {
@@ -556,13 +592,17 @@ class DesktopLyricService extends DesktopLyricController {
               [
                 json.encode(msg.InitArgsMessage(
                   _playbackService.playerState == PlayerState.playing,
-                  nowPlaying?.title ?? "旀",
-                  nowPlaying?.artist ?? "旀",
-                  nowPlaying?.album ?? "旀",
+                  nowPlaying?.title ?? "无",
+                  nowPlaying?.artist ?? "无",
+                  nowPlaying?.album ?? "无",
                   isDarkMode,
                   initialPrimary,
                   initialSurfaceContainer,
                   initialOnSurface,
+                  lyricFontFamily: desktopLyricPref.lyricFontFamily,
+                  followPlayerFont: desktopLyricPref.followPlayerFont,
+                  hasSpecifiedColor: desktopLyricPref.primary != null,
+                  playerFontFamily: AppSettings.instance.fontFamily,
                 ).toJson())
               ],
               workingDirectory: path.dirname(desktopLyricPath));
@@ -570,7 +610,7 @@ class DesktopLyricService extends DesktopLyricController {
           final process = await desktopLyric;
           if (!_isStarting) {
             try {
-              process?.kill(ProcessSignal.sigkill);
+              process?.kill();
             } catch (_) {}
             await _cleanupDesktopLyricProcess();
             return;
@@ -611,7 +651,9 @@ class DesktopLyricService extends DesktopLyricController {
               process.stdout.transform(utf8.decoder).listen(
                     _parseDesktopLyricStdout,
                   );
-          await _sendInstalledFontsToDesktopLyric();
+          sendThemeMessage(currScheme);
+          sendThemeModeMessage(isDarkMode);
+          unawaited(_sendInstalledFontsToDesktopLyric());
 
           await _restoreDesktopLyricWindowPosition(targetPid: process.pid);
 
@@ -643,7 +685,7 @@ class DesktopLyricService extends DesktopLyricController {
           _saveDesktopLyricPreference(
             enabled: true,
             locked: isLocked,
-            primary: initialPrimary,
+            primary: desktopLyricPref.primary,
             surfaceContainer: initialSurfaceContainer,
             onSurface: initialOnSurface,
           );
@@ -658,7 +700,7 @@ class DesktopLyricService extends DesktopLyricController {
           );
           try {
             final proc = await desktopLyric;
-            proc?.kill(ProcessSignal.sigkill);
+            proc?.kill();
           } catch (_) {}
           await _cleanupDesktopLyricProcess();
         }
@@ -731,7 +773,9 @@ class DesktopLyricService extends DesktopLyricController {
     try {
       final value = await desktopLyric;
       await _syncDesktopLyricWindowPosition(forceSave: true);
-      value?.kill(ProcessSignal.sigterm);
+      try {
+        value?.kill();
+      } catch (_) {}
       if (disablePreference) {
         _saveDesktopLyricPreference(
           enabled: false,
@@ -761,13 +805,16 @@ class DesktopLyricService extends DesktopLyricController {
   }
 
   void sendThemeMessage(ColorScheme scheme) {
+    final desktopLyricPref = AppPreference.instance.desktopLyricPref;
+    final int effectivePrimary =
+        desktopLyricPref.primary ?? scheme.primary.toARGB32();
+
     _saveDesktopLyricPreference(
-      primary: scheme.primary.toARGB32(),
       surfaceContainer: scheme.surfaceContainer.toARGB32(),
       onSurface: scheme.onSurface.toARGB32(),
     );
     sendMessage(msg.ThemeChangedMessage(
-      scheme.primary.toARGB32(),
+      effectivePrimary,
       scheme.surfaceContainer.toARGB32(),
       scheme.onSurface.toARGB32(),
     ));
@@ -804,5 +851,10 @@ class DesktopLyricService extends DesktopLyricController {
         translation,
       ));
     }
+  }
+
+  @override
+  void sendPlayerFontChangedMessage(String? fontFamily) {
+    sendMessage(msg.PlayerFontChangedMessage(fontFamily));
   }
 }

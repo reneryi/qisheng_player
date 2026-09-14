@@ -57,3 +57,9 @@ dist/windows/*
 qisheng_player/
 .agents/*/
 
+# Temporary testing & diagnostic artifacts
+*.wav
+task_frames/
+video_frames/
+run_gen.py
+

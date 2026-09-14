@@ -32,6 +32,7 @@ void main() {
       ),
       0,
     );
+    // 远景行 (distanceFromCurrent >= 4) 默认保持最大散景 lyricDepthMaxBlurSigma
     expect(
       resolveLyricDepthBlurSigma(
         distanceFromCurrent: 8,

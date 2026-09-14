@@ -27,48 +27,40 @@ class LrcLine extends UnsyncLyricLine {
   }
 
   /// line: [mm:ss.msmsms]content
-  static LrcLine? fromLine(String line, [int? offset]) {
-    if (line.trim().isEmpty) {
-      return null;
+  static final _timeTagRegex = RegExp(r'\[(\d{1,2}):(\d{2}(?:\.\d+)?)\]');
+
+  /// 解析包含单个或多个时间戳的行，展开为独立的 [LrcLine] 列表
+  static List<LrcLine> parseLines(String line, [int? offset]) {
+    if (line.trim().isEmpty) return const [];
+    final matches = _timeTagRegex.allMatches(line).toList();
+    if (matches.isEmpty) return const [];
+
+    final content = line.replaceAll(_timeTagRegex, '').trim();
+    final result = <LrcLine>[];
+
+    for (final match in matches) {
+      final minuteStr = match.group(1);
+      final secondStr = match.group(2);
+      if (minuteStr == null || secondStr == null) continue;
+      final minute = int.tryParse(minuteStr);
+      final second = double.tryParse(secondStr);
+      if (minute == null || second == null) continue;
+
+      final inMilliseconds = ((minute * 60 + second) * 1000).toInt();
+      result.add(LrcLine(
+        Duration(
+          milliseconds: max(inMilliseconds - (offset ?? 0), 0),
+        ),
+        content,
+        isBlank: content.isEmpty,
+      ));
     }
 
-    final left = line.indexOf("[");
-    final right = line.indexOf("]");
-
-    if (left == -1 || right == -1) {
-      return null;
-    }
-
-    var lrcTimeString = line.substring(left + 1, right);
-
-    // replace [mm:ss.msms...] with ""
-    var content = line
-        .substring(right + 1)
-        .trim()
-        .replaceAll(RegExp(r"\[\d{2}:\d{2}\.\d{2,}\]"), "");
-
-    var timeList = lrcTimeString.split(":");
-    int? minute;
-    double? second;
-    if (timeList.length >= 2) {
-      minute = int.tryParse(timeList[0]);
-      second = double.tryParse(timeList[1]);
-    }
-
-    if (minute == null || second == null) {
-      return null;
-    }
-
-    var inMilliseconds = ((minute * 60 + second) * 1000).toInt();
-
-    return LrcLine(
-      Duration(
-        milliseconds: max(inMilliseconds - (offset ?? 0), 0),
-      ),
-      content,
-      isBlank: content.isEmpty,
-    );
+    return result;
   }
+
+  static LrcLine? fromLine(String line, [int? offset]) =>
+      parseLines(line, offset).firstOrNull;
 }
 
 enum LrcSource {
@@ -153,26 +145,25 @@ class Lrc extends Lyric {
 
     var lines = <LrcLine>[];
     for (int i = 0; i < lrcLines.length; i++) {
-      var lyricLine = LrcLine.fromLine(lrcLines[i], offsetInMilliseconds);
-      if (lyricLine == null) {
-        continue;
-      }
-      lines.add(lyricLine);
+      lines.addAll(LrcLine.parseLines(lrcLines[i], offsetInMilliseconds));
     }
 
     if (lines.isEmpty) {
       return null;
     }
 
-    for (var i = 0; i < lines.length - 1; i++) {
-      lines[i].length = lines[i + 1].start - lines[i].start;
-    }
-    if (lines.isNotEmpty) {
-      lines.last.length = Duration.zero;
-    }
-
     final result = Lrc(lines, source);
     result._sort();
+
+    for (var i = 0; i < result.lines.length - 1; i++) {
+      final current = result.lines[i] as LrcLine;
+      final next = result.lines[i + 1] as LrcLine;
+      final diff = next.start - current.start;
+      current.length = diff.isNegative ? Duration.zero : diff;
+    }
+    if (result.lines.isNotEmpty) {
+      (result.lines.last as LrcLine).length = Duration.zero;
+    }
 
     if (separator == null) {
       return result;
@@ -217,7 +208,7 @@ class Lrc extends Lyric {
     return Lrc(clippedLines, lyric.source);
   }
 
-  /// 安全读取本地歌词文件，支持 UTF-8 及 UTF-16 (LE / BE) 编码格式
+  /// 安全读取本地歌词文件，支持 UTF-8 及 UTF-16 (LE / BE) 编码格式，并支持 GBK/GB2312 编码回退
   static Future<String?> _readLrcFileSafely(File file) async {
     try {
       final bytes = await file.readAsBytes();
@@ -236,7 +227,17 @@ class Lrc extends Lyric {
         }
         return String.fromCharCodes(units);
       }
-      return utf8.decode(bytes, allowMalformed: true);
+      try {
+        return utf8.decode(bytes);
+      } catch (_) {
+        try {
+          final rustLrc = await getLyricFromPath(path: file.path);
+          if (rustLrc != null && rustLrc.isNotEmpty) {
+            return rustLrc;
+          }
+        } catch (_) {}
+        return utf8.decode(bytes, allowMalformed: true);
+      }
     } catch (_) {
       return null;
     }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -232,46 +231,40 @@ class _FluidGlowProgressSliderState extends State<FluidGlowProgressSlider>
                     left: bubbleLeft,
                     bottom: widget.height + 8.0,
                     child: IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            width: bubbleWidth,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainer
-                                  .withValues(alpha: 0.78),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                width: 1.0,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.22),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                      child: Container(
+                        width: bubbleWidth,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainer
+                              .withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Text(
-                              Duration(
-                                milliseconds: tooltipSeconds.isFinite
-                                    ? (tooltipSeconds * 1000).round()
-                                    : 0,
-                              ).toStringHMMSS(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurface,
-                                letterSpacing: 0,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
+                          ],
+                        ),
+                        child: Text(
+                          Duration(
+                            milliseconds: tooltipSeconds.isFinite
+                                ? (tooltipSeconds * 1000).round()
+                                : 0,
+                          ).toStringHMMSS(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurface,
+                            letterSpacing: 0,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ),
@@ -299,6 +292,18 @@ class _FluidGlowSliderPainter extends CustomPainter {
   final bool isDragging;
   final ColorScheme colorScheme;
 
+  static final Paint _bgPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _baseActivePaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _bloomPaint = Paint();
+  static final Paint _beamPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _normalCorePaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _outerGlowPaint = Paint();
+  static final Paint _innerGlowPaint = Paint();
+  static final Paint _thumbCorePaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _thumbRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+
   @override
   void paint(Canvas canvas, Size size) {
     final width = size.width;
@@ -320,15 +325,13 @@ class _FluidGlowSliderPainter extends CustomPainter {
     final trackTop = centerY - currentTrackHeight / 2.0;
 
     // 2. 绘制背景凹槽底轨 (Dark Translucent Trench)
-    final bgPaint = Paint()
-      ..color = colorScheme.onSurface.withValues(alpha: 0.14)
-      ..style = PaintingStyle.fill;
+    _bgPaint.color = colorScheme.onSurface.withValues(alpha: 0.14);
 
     final bgRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, trackTop, width, currentTrackHeight),
       trackRadius,
     );
-    canvas.drawRRect(bgRect, bgPaint);
+    canvas.drawRRect(bgRect, _bgPaint);
 
     final progressX = (percent * width).clamp(0.0, width);
     if (progressX <= 0.001) return;
@@ -339,15 +342,13 @@ class _FluidGlowSliderPainter extends CustomPainter {
       trackRadius,
     );
 
-    final baseActivePaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          colorScheme.primary.withValues(alpha: 0.28),
-          colorScheme.primary.withValues(alpha: 0.42),
-        ],
-      ).createShader(Rect.fromLTWH(0, trackTop, progressX, currentTrackHeight))
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(activeRect, baseActivePaint);
+    _baseActivePaint.shader = LinearGradient(
+      colors: [
+        colorScheme.primary.withValues(alpha: 0.28),
+        colorScheme.primary.withValues(alpha: 0.42),
+      ],
+    ).createShader(Rect.fromLTWH(0, trackTop, progressX, currentTrackHeight));
+    canvas.drawRRect(activeRect, _baseActivePaint);
 
     // 4. 绘制流体激光束向左衰减拖尾 (Beam / Comet Trail Effect)
     // 扩展光束有效照射长度至 130px，呈现显著的向左强光照照射效果
@@ -368,7 +369,7 @@ class _FluidGlowSliderPainter extends CustomPainter {
           beamLength + 2.0,
           bloomHeight,
         );
-        final bloomPaint = Paint()
+        _bloomPaint
           ..shader = LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
@@ -391,7 +392,7 @@ class _FluidGlowSliderPainter extends CustomPainter {
                 const Radius.circular(bloomHeight / 2.0),
               ),
             ),
-          bloomPaint,
+          _bloomPaint,
         );
       }
 
@@ -410,14 +411,12 @@ class _FluidGlowSliderPainter extends CustomPainter {
         ],
       ).createShader(beamRect);
 
-      final beamPaint = Paint()
-        ..shader = beamShader
-        ..style = PaintingStyle.fill;
+      _beamPaint.shader = beamShader;
 
       // 裁剪在已播轨道圆角内，确保平齐闭合
       canvas.save();
       canvas.clipRRect(activeRect);
-      canvas.drawRect(beamRect, beamPaint);
+      canvas.drawRect(beamRect, _beamPaint);
       canvas.restore();
     }
 
@@ -432,10 +431,8 @@ class _FluidGlowSliderPainter extends CustomPainter {
         Radius.circular(currentTrackHeight / 2.0),
       );
 
-      final corePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.98 * normalCoreAlpha)
-        ..style = PaintingStyle.fill;
-      canvas.drawRRect(coreRect, corePaint);
+      _normalCorePaint.color = Colors.white.withValues(alpha: 0.98 * normalCoreAlpha);
+      canvas.drawRRect(coreRect, _normalCorePaint);
     }
 
     // 6. 悬停与拖拽态发光圆圈 Thumb 滑块
@@ -448,30 +445,25 @@ class _FluidGlowSliderPainter extends CustomPainter {
 
       // 6.1 外层高斯漫射光晕
       final outerAlpha = isDragging ? 0.50 : (0.35 * hoverProgress);
-      final outerGlowPaint = Paint()
+      _outerGlowPaint
         ..color = colorScheme.primary.withValues(alpha: outerAlpha)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, isDragging ? 16.0 : 12.0);
-      canvas.drawCircle(thumbCenter, thumbRadius + (isDragging ? 3.5 : 2.0), outerGlowPaint);
+      canvas.drawCircle(thumbCenter, thumbRadius + (isDragging ? 3.5 : 2.0), _outerGlowPaint);
 
       // 6.2 内层致密凝聚光晕
       final innerAlpha = isDragging ? 0.85 : (0.70 * hoverProgress);
-      final innerGlowPaint = Paint()
+      _innerGlowPaint
         ..color = colorScheme.primary.withValues(alpha: innerAlpha)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-      canvas.drawCircle(thumbCenter, thumbRadius, innerGlowPaint);
+      canvas.drawCircle(thumbCenter, thumbRadius, _innerGlowPaint);
 
       // 6.3 核心高对比纯白晶体
-      final corePaint = Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(thumbCenter, thumbRadius * 0.70, corePaint);
+      _thumbCorePaint.color = Colors.white;
+      canvas.drawCircle(thumbCenter, thumbRadius * 0.70, _thumbCorePaint);
 
       // 6.4 高清外轮廓描边
-      final ringPaint = Paint()
-        ..color = colorScheme.primary
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2;
-      canvas.drawCircle(thumbCenter, thumbRadius * 0.70, ringPaint);
+      _thumbRingPaint.color = colorScheme.primary;
+      canvas.drawCircle(thumbCenter, thumbRadius * 0.70, _thumbRingPaint);
     }
   }
 

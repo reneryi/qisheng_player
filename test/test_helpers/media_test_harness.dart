@@ -143,14 +143,17 @@ class FakePlaybackController extends PlaybackController {
     required Audio audio,
     required List<Audio> queue,
     PlayerState initialState = PlayerState.paused,
+    bool initialShuffle = false,
   })  : _nowPlaying = audio,
         _playlist = ValueNotifier<List<Audio>>(queue),
         _playMode = ValueNotifier<PlayMode>(PlayMode.loop),
+        _shuffle = ValueNotifier<bool>(initialShuffle),
         _volume = ValueNotifier<double>(0.5),
         _playerState = initialState;
 
   final ValueNotifier<List<Audio>> _playlist;
   final ValueNotifier<PlayMode> _playMode;
+  final ValueNotifier<bool> _shuffle;
   final ValueNotifier<double> _volume;
   final StreamController<double> _positionController =
       StreamController<double>.broadcast();
@@ -195,6 +198,15 @@ class FakePlaybackController extends PlaybackController {
 
   @override
   ValueNotifier<PlayMode> get playMode => _playMode;
+
+  @override
+  ValueNotifier<bool> get shuffle => _shuffle;
+
+  @override
+  void useShuffle(bool flag) {
+    _shuffle.value = flag;
+    notifyListeners();
+  }
 
   @override
   void lastAudio() {}

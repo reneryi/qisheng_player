@@ -97,6 +97,7 @@ class WindowControls {
   static final _windowListener = _PlaybackWindowListener();
   static Timer? _resumeSyncTimer;
   static int _resumeSyncGeneration = 0;
+  static final ValueNotifier<bool> isWindowVisible = ValueNotifier<bool>(true);
   static final ValueNotifier<WindowLayoutMode> layoutMode =
       ValueNotifier(WindowLayoutMode.normal);
 
@@ -496,7 +497,11 @@ class WindowControls {
           }
           return;
         case "window_restored_from_tray":
+          isWindowVisible.value = true;
           resyncPlaybackAfterWindowActivated(reason: 'tray restore');
+          return;
+        case "window_minimized_to_tray":
+          isWindowVisible.value = false;
           return;
         case "on_window_layout_changed":
           if (call.arguments is Map) {
@@ -539,7 +544,13 @@ class _PlaybackWindowListener with WindowListener {
   }
 
   @override
+  void onWindowMinimize() {
+    WindowControls.isWindowVisible.value = false;
+  }
+
+  @override
   void onWindowRestore() {
+    WindowControls.isWindowVisible.value = true;
     unawaited(WindowControls.syncWindowLayoutMode());
     WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window restore');
   }

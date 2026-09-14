@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:qisheng_player/src/rust/api/tag_reader.dart';
@@ -6,15 +6,18 @@ import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 
 class BuildIndexStateView extends StatefulWidget {
-  const BuildIndexStateView(
-      {super.key,
-      required this.indexPath,
-      required this.folders,
-      required this.whenIndexBuilt});
+  const BuildIndexStateView({
+    super.key,
+    required this.indexPath,
+    required this.folders,
+    required this.whenIndexBuilt,
+    @visibleForTesting this.streamOverride,
+  });
 
   final Directory indexPath;
   final List<String> folders;
   final void Function() whenIndexBuilt;
+  final Stream<IndexActionState>? streamOverride;
 
   @override
   State<BuildIndexStateView> createState() => _BuildIndexStateViewState();
@@ -27,20 +30,35 @@ class _BuildIndexStateViewState extends State<BuildIndexStateView> {
   @override
   void initState() {
     super.initState();
-    buildIndexStream = buildIndexFromFoldersRecursively(
-      folders: widget.folders,
-      indexPath: widget.indexPath.path,
-    ).asBroadcastStream();
+    buildIndexStream = widget.streamOverride ??
+        buildIndexFromFoldersRecursively(
+          folders: widget.folders,
+          indexPath: widget.indexPath.path,
+        ).asBroadcastStream();
 
     _subscription = buildIndexStream.listen(
       (action) {
         LOGGER.i("[build index] ${action.progress}: ${action.message}");
       },
+      onError: (err, stack) {
+        LOGGER.e("[build index] error: $err", stackTrace: stack);
+        if (!mounted) return;
+        showTextOnSnackBar("扫描曲库时发生错误: $err");
+      },
       onDone: () {
-        widget.whenIndexBuilt();
         _subscription?.cancel();
+        _subscription = null;
+        if (!mounted) return;
+        widget.whenIndexBuilt();
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _subscription = null;
+    super.dispose();
   }
 
   @override

@@ -100,6 +100,7 @@ class NowPlayingPagePreference {
 
 class PlaybackPreference {
   PlayMode playMode;
+  bool shuffle;
   double volumeDsp;
   bool enableVolumeLeveling;
   double volumeLevelingPreampDb;
@@ -116,11 +117,13 @@ class PlaybackPreference {
     this.lastAudioPath,
     this.lastPlaylistPaths,
     this.lastPlaylistIndex,
-    this.lastPosition,
-  );
+    this.lastPosition, [
+    this.shuffle = false,
+  ]);
 
   Map toMap() => {
         "playMode": playMode.name,
+        "shuffle": shuffle,
         "volumeDsp": volumeDsp,
         "enableVolumeLeveling": enableVolumeLeveling,
         "volumeLevelingPreampDb": volumeLevelingPreampDb,
@@ -142,22 +145,25 @@ class PlaybackPreference {
             const [],
         (map["lastPlaylistIndex"] as num?)?.toInt() ?? 0,
         (map["lastPosition"] as num?)?.toDouble() ?? 0.0,
+        map["shuffle"] ?? false,
       );
 }
 
 class DesktopLyricPreference {
-  /// 閫€鍑哄墠妗岄潰姝岃瘝鏄惁澶勪簬寮€鍚姸鎬?
+  /// 退出前桌面歌词是否处于开启状态
   bool enabled;
 
-  /// 閫€鍑哄墠妗岄潰姝岃瘝鏄惁閿佸畾
+  /// 退出前桌面歌词是否锁定
   bool locked;
 
-  /// 妗岄潰姝岃瘝鍋忓ソ涓婚鑹?
+  /// 桌面歌词偏好主题色
   int? primary;
   int? surfaceContainer;
   int? onSurface;
   double? windowLeft;
   double? windowTop;
+  String? lyricFontFamily;
+  bool followPlayerFont;
 
   DesktopLyricPreference(
     this.enabled,
@@ -166,8 +172,10 @@ class DesktopLyricPreference {
     this.surfaceContainer,
     this.onSurface,
     this.windowLeft,
-    this.windowTop,
-  );
+    this.windowTop, {
+    this.lyricFontFamily,
+    this.followPlayerFont = true,
+  });
 
   Map toMap() => {
         "enabled": enabled,
@@ -177,16 +185,22 @@ class DesktopLyricPreference {
         "onSurface": onSurface,
         "windowLeft": windowLeft,
         "windowTop": windowTop,
+        "lyricFontFamily": lyricFontFamily,
+        "followPlayerFont": followPlayerFont,
       };
 
   factory DesktopLyricPreference.fromMap(Map map) => DesktopLyricPreference(
         map["enabled"] ?? false,
         map["locked"] ?? false,
-        map["primary"],
-        map["surfaceContainer"],
-        map["onSurface"],
+        map["primary"] != null ? (map["primary"] as num).toInt() : null,
+        map["surfaceContainer"] != null
+            ? (map["surfaceContainer"] as num).toInt()
+            : null,
+        map["onSurface"] != null ? (map["onSurface"] as num).toInt() : null,
         (map["windowLeft"] as num?)?.toDouble(),
         (map["windowTop"] as num?)?.toDouble(),
+        lyricFontFamily: map["lyricFontFamily"] as String?,
+        followPlayerFont: map["followPlayerFont"] as bool? ?? true,
       );
 }
 
@@ -321,8 +335,17 @@ class AppPreference {
     0.0,
   );
 
-  var desktopLyricPref =
-      DesktopLyricPreference(false, false, null, null, null, null, null);
+  var desktopLyricPref = DesktopLyricPreference(
+    false,
+    false,
+    null,
+    null,
+    null,
+    null,
+    null,
+    lyricFontFamily: null,
+    followPlayerFont: true,
+  );
 
   var nowPlayingPagePref = NowPlayingPagePreference(
     NowPlayingViewMode.withLyric,
@@ -436,7 +459,9 @@ class AppPreference {
         ..surfaceContainer = loadedDesktopLyricPref.surfaceContainer
         ..onSurface = loadedDesktopLyricPref.onSurface
         ..windowLeft = loadedDesktopLyricPref.windowLeft
-        ..windowTop = loadedDesktopLyricPref.windowTop;
+        ..windowTop = loadedDesktopLyricPref.windowTop
+        ..lyricFontFamily = loadedDesktopLyricPref.lyricFontFamily
+        ..followPlayerFont = loadedDesktopLyricPref.followPlayerFont;
 
       final loadedNowPlayingPref =
           NowPlayingPagePreference.fromMap(prefMap["nowPlayingPagePref"]);

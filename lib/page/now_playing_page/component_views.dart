@@ -377,7 +377,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
-    )..repeat(reverse: true); // 双向无限循环，实现平滑吸纳膨胀的呼吸感
+    );
   }
 
   @override
@@ -394,9 +394,7 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
         context.surfaces.effectsLevel == UiEffectsLevel.visual &&
             !MediaQuery.disableAnimationsOf(context) &&
             TickerMode.valuesOf(context).enabled;
-    if (glowEnabled && !_glowController.isAnimating) {
-      _glowController.repeat(reverse: true);
-    } else if (!glowEnabled && _glowController.isAnimating) {
+    if (!glowEnabled && _glowController.isAnimating) {
       _glowController.stop();
       _glowController.value = 0;
     }
@@ -475,6 +473,19 @@ class _NowPlayingArtworkState extends State<_NowPlayingArtwork>
   Widget build(BuildContext context) {
     final accents = context.accents;
     final effectsLevel = context.surfaces.effectsLevel;
+
+    final isPlaying = context.select<PlaybackController, bool>(
+      (p) => p.playerState == PlayerState.playing,
+    );
+    final glowEnabled = effectsLevel == UiEffectsLevel.visual &&
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled;
+    if ((!isPlaying || !glowEnabled) && _glowController.isAnimating) {
+      _glowController.stop();
+      _glowController.value = 0;
+    } else if (isPlaying && glowEnabled && !_glowController.isAnimating) {
+      _glowController.repeat(reverse: true);
+    }
 
     return Selector<PlaybackController, Audio?>(
       selector: (_, playback) => playback.nowPlaying,

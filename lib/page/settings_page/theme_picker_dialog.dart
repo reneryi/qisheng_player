@@ -113,4 +113,10 @@ class _ThemePickerDialogState extends State<ThemePickerDialog> {
     ),
   );
 }
+
+  @override
+  void dispose() {
+    rgbHexTextEditingController.dispose();
+    super.dispose();
+  }
 }

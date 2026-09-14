@@ -127,6 +127,7 @@ class _LyricHorizontalScrollAreaState
 
     lyricLineStreamSubscription = widget.lyricController.lyricLineStream.listen(
       (line) {
+        if (!mounted) return;
         if (widget.lyric.lines.isEmpty) return;
         final safeIndex = line.clamp(0, widget.lyric.lines.length - 1).toInt();
         final currLine = widget.lyric.lines[safeIndex];
@@ -267,8 +268,8 @@ class _LyricHorizontalScrollAreaState
   void dispose() {
     _scrollGeneration++;
     _pendingScrollTimer?.cancel();
-    super.dispose();
     lyricLineStreamSubscription.cancel();
     scrollController.dispose();
+    super.dispose();
   }
 }

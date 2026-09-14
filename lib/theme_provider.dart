@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/rust/api/album_palette.dart' as rust_palette;
 import 'package:qisheng_player/theme/album_palette.dart';
@@ -523,6 +525,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (this.fontFamily == fontFamily) return;
     this.fontFamily = fontFamily;
     notifyListeners();
+    unawaited(_syncDesktopLyricFont(fontFamily));
   }
 
   void applyUiEffectsLevel(UiEffectsLevel level) {
@@ -722,18 +725,40 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(_syncDesktopLyricTheme());
   }
 
-  Future<void> _syncDesktopLyricTheme({bool sendThemeMode = false}) async {
+  @visibleForTesting
+  DesktopLyricController? desktopLyricServiceOverride;
+
+  DesktopLyricController get _desktopLyricService =>
+      desktopLyricServiceOverride ?? PlayService.instance.desktopLyricService;
+
+  Future<void> _syncDesktopLyricTheme({bool sendThemeMode = true}) async {
     try {
-      final canSend =
-          await PlayService.instance.desktopLyricService.canSendMessage;
+      final pref = AppPreference.instance.desktopLyricPref;
+      pref.surfaceContainer = currScheme.surfaceContainer.toARGB32();
+      pref.onSurface = currScheme.onSurface.toARGB32();
+      AppPreference.instance.save();
+
+      final service = _desktopLyricService;
+      final canSend = await service.canSendMessage;
       if (!canSend) return;
 
-      PlayService.instance.desktopLyricService.sendThemeMessage(currScheme);
+      service.sendThemeMessage(currScheme);
       if (sendThemeMode) {
-        PlayService.instance.desktopLyricService.sendThemeModeMessage(
+        service.sendThemeModeMessage(
           effectiveBrightness == Brightness.dark,
         );
       }
+    } catch (_) {}
+  }
+
+  Future<void> _syncDesktopLyricFont(String? fontFamily) async {
+    try {
+      if (!AppPreference.instance.desktopLyricPref.followPlayerFont) return;
+      final service = _desktopLyricService;
+      final canSend = await service.canSendMessage;
+      if (!canSend) return;
+
+      service.sendPlayerFontChangedMessage(fontFamily);
     } catch (_) {}
   }
 }

@@ -16,6 +16,10 @@ InitArgsMessage _$InitArgsMessageFromJson(Map<String, dynamic> json) =>
       (json['primary'] as num).toInt(),
       (json['surfaceContainer'] as num).toInt(),
       (json['onSurface'] as num).toInt(),
+      lyricFontFamily: json['lyricFontFamily'] as String?,
+      followPlayerFont: json['followPlayerFont'] as bool? ?? true,
+      hasSpecifiedColor: json['hasSpecifiedColor'] as bool? ?? false,
+      playerFontFamily: json['playerFontFamily'] as String?,
     );
 
 Map<String, dynamic> _$InitArgsMessageToJson(InitArgsMessage instance) =>
@@ -28,6 +32,10 @@ Map<String, dynamic> _$InitArgsMessageToJson(InitArgsMessage instance) =>
       'primary': instance.primary,
       'surfaceContainer': instance.surfaceContainer,
       'onSurface': instance.onSurface,
+      'lyricFontFamily': instance.lyricFontFamily,
+      'followPlayerFont': instance.followPlayerFont,
+      'hasSpecifiedColor': instance.hasSpecifiedColor,
+      'playerFontFamily': instance.playerFontFamily,
     };
 
 ControlEventMessage _$ControlEventMessageFromJson(Map<String, dynamic> json) =>
@@ -53,9 +61,12 @@ const _$ControlEventEnumMap = {
 PreferenceChangedMessage _$PreferenceChangedMessageFromJson(
         Map<String, dynamic> json) =>
     PreferenceChangedMessage(
-      (json['primary'] as num).toInt(),
+      (json['primary'] as num?)?.toInt(),
       (json['surfaceContainer'] as num).toInt(),
       (json['onSurface'] as num).toInt(),
+      hasSpecifiedColor: json['hasSpecifiedColor'] as bool?,
+      lyricFontFamily: json['lyricFontFamily'] as String?,
+      followPlayerFont: json['followPlayerFont'] as bool?,
     );
 
 Map<String, dynamic> _$PreferenceChangedMessageToJson(
@@ -64,6 +75,9 @@ Map<String, dynamic> _$PreferenceChangedMessageToJson(
       'primary': instance.primary,
       'surfaceContainer': instance.surfaceContainer,
       'onSurface': instance.onSurface,
+      'hasSpecifiedColor': instance.hasSpecifiedColor,
+      'lyricFontFamily': instance.lyricFontFamily,
+      'followPlayerFont': instance.followPlayerFont,
     };
 
 PlayerStateChangedMessage _$PlayerStateChangedMessageFromJson(
@@ -142,3 +156,15 @@ UnlockMessage _$UnlockMessageFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$UnlockMessageToJson(UnlockMessage instance) =>
     <String, dynamic>{};
+
+PlayerFontChangedMessage _$PlayerFontChangedMessageFromJson(
+        Map<String, dynamic> json) =>
+    PlayerFontChangedMessage(
+      json['fontFamily'] as String?,
+    );
+
+Map<String, dynamic> _$PlayerFontChangedMessageToJson(
+        PlayerFontChangedMessage instance) =>
+    <String, dynamic>{
+      'fontFamily': instance.fontFamily,
+    };

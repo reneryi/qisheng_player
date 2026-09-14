@@ -53,6 +53,8 @@ class BassPlayer {
   static const int _maxInitializationRetries = 2;
   static const int _fftValueCount = 1024;
   static const int _channelGetDataError = 0xFFFFFFFF;
+  final List<int> _loadedPlugins = [];
+  bool _isFreed = false;
 
   void _ensureInitializationRetryAvailable(String operation, int retries) {
     if (retries >= _maxInitializationRetries) {
@@ -88,6 +90,9 @@ class BassPlayer {
     _lastEmittedPlayerState = state;
     _playerStateStreamController.add(state);
   }
+
+  /// Whether an active stream source has been loaded.
+  bool get hasSource => !_isFreed && _fstream != null;
 
   /// audio's length in seconds
   double get length => _fstream == null
@@ -261,11 +266,25 @@ class BassPlayer {
     }
   }
 
-  void _bassInit() {
+  void _bassInit({int device = 1}) {
+    final flags = device == -1 ? 0 : BASS.BASS_DEVICE_REINIT;
     if (_bass.BASS_Init(
-            1, 48000, BASS.BASS_DEVICE_REINIT, ffi.nullptr, ffi.nullptr) ==
+            device, 48000, flags, ffi.nullptr, ffi.nullptr) ==
         0) {
-      switch (_bass.BASS_ErrorGetCode()) {
+      final err = _bass.BASS_ErrorGetCode();
+      if (err == BASS.BASS_ERROR_ALREADY) {
+        return;
+      }
+      if (device != -1 &&
+          (err == BASS.BASS_ERROR_DEVICE ||
+              err == BASS.BASS_ERROR_DRIVER ||
+              err == BASS.BASS_ERROR_NOTAVAIL)) {
+        LOGGER.w(
+            "BASS_Init device $device failed ($err), fallback to default device -1");
+        _bassInit(device: -1);
+        return;
+      }
+      switch (err) {
         case BASS.BASS_ERROR_DEVICE:
           throw const FormatException("device is invalid.");
         case BASS.BASS_ERROR_NOTAVAIL:
@@ -289,6 +308,8 @@ class BassPlayer {
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException(
               "Some other mystery problem! Maybe Something else has exclusive use of the device.");
+        default:
+          throw FormatException("BASS_Init failed with unhandled error code: $err");
       }
     }
   }
@@ -309,6 +330,8 @@ class BassPlayer {
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException(
               "Some other mystery problem! Maybe Something else has exclusive use of the device.");
+        default:
+          throw FormatException("BASS_Start failed with unhandled error code: ${_bass.BASS_ErrorGetCode()}");
       }
     }
   }
@@ -331,7 +354,10 @@ class BassPlayer {
     final hplugin = _bass.BASS_PluginLoad(pluginPathP, BASS.BASS_UNICODE);
     ffi.malloc.free(pluginPathP);
 
-    if (hplugin != 0) return;
+    if (hplugin != 0) {
+      _loadedPlugins.add(hplugin);
+      return;
+    }
 
     final errCode = _bass.BASS_ErrorGetCode();
     // Flutter hot restart recreates Dart objects without unloading the native
@@ -544,6 +570,8 @@ class BassPlayer {
           throw const FormatException("Could not initialize 3D support.");
         case BASS.BASS_ERROR_UNKNOWN:
           throw const FormatException("Some other mystery problem!");
+        default:
+          throw FormatException("BASS_StreamCreateFile failed with unhandled error code: ${_bass.BASS_ErrorGetCode()}");
       }
     }
   }
@@ -565,6 +593,8 @@ class BassPlayer {
           throw const FormatException("attrib is not valid.");
         case BASS.BASS_ERROR_ILLPARAM:
           throw const FormatException("value is not valid.");
+        default:
+          throw FormatException("BASS_ChannelSetAttribute failed with unhandled error code: ${_bass.BASS_ErrorGetCode()}");
       }
     }
   }
@@ -764,13 +794,18 @@ class BassPlayer {
   ///
   /// do nothing if [setSource] hasn't been called
   void freeFStream() {
-    if (_fstream == null) return;
+    if (_isFreed) return;
+    final stream = _fstream;
+    if (stream == null) return;
+    _positionUpdater?.cancel();
+    _fstream = null;
+    _fPath = null;
 
     if (wasapiExclusive) {
       _bassWasapi.BASS_WASAPI_Free();
     }
 
-    if (_bass.BASS_StreamFree(_fstream!) == 0) {
+    if (_bass.BASS_StreamFree(stream) == 0) {
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_HANDLE:
           LOGGER.w("StreamFree is called on a invalid handle.");
@@ -787,6 +822,27 @@ class BassPlayer {
   ///
   /// Also free the bass.dll.
   void free() {
+    if (_isFreed) {
+      throw StateError("BassPlayer has already been freed.");
+    }
+    _isFreed = true;
+    _positionUpdater?.cancel();
+    _playerStateStreamController.close();
+    _positionStreamController.close();
+
+    final stream = _fstream;
+    if (stream != null) {
+      _fstream = null;
+      _fPath = null;
+      _bass.BASS_StreamFree(stream);
+    }
+
+    // 释放所有已加载的解码插件动态库句柄 (BASS-03)
+    for (final plugin in _loadedPlugins) {
+      _bass.BASS_PluginFree(plugin);
+    }
+    _loadedPlugins.clear();
+
     if (wasapiExclusive) {
       _bassWasapi.BASS_WASAPI_Free();
     }
@@ -810,9 +866,5 @@ class BassPlayer {
 
     _bassWasapiLib.close();
     _bassLib.close();
-
-    _positionUpdater?.cancel();
-    _playerStateStreamController.close();
-    _positionStreamController.close();
   }
 }

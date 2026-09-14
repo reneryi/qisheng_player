@@ -1,9 +1,11 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use flutter_rust_bridge::frb;
 use windows::{
     core::HSTRING,
-    Foundation::{TimeSpan, TypedEventHandler},
+    Foundation::{EventRegistrationToken, TimeSpan, TypedEventHandler},
     Media::{
         MediaPlaybackStatus, MediaPlaybackType, Playback::MediaPlayer,
         SystemMediaTransportControls, SystemMediaTransportControlsButton,
@@ -25,6 +27,8 @@ use super::{logger::log_to_dart, tag_reader};
 pub struct SMTCFlutter {
     _smtc: Option<SystemMediaTransportControls>,
     _player: Option<MediaPlayer>,
+    _button_token: Mutex<Option<EventRegistrationToken>>,
+    _generation: AtomicU64,
 }
 
 pub enum SMTCControlEvent {
@@ -51,6 +55,8 @@ impl SMTCFlutter {
                 Self {
                     _smtc: None,
                     _player: None,
+                    _button_token: Mutex::new(None),
+                    _generation: AtomicU64::new(0),
                 }
             }
         }
@@ -87,8 +93,17 @@ impl SMTCFlutter {
 
             Ok(())
         }));
-        if let Err(err) = res {
-            log_to_dart(format!("Failed to register SMTC button listener: {}", err));
+        match res {
+            Ok(token) => {
+                if let Ok(mut guard) = self._button_token.lock() {
+                    if let Some(old_token) = guard.replace(token) {
+                        let _ = smtc.RemoveButtonPressed(old_token);
+                    }
+                }
+            }
+            Err(err) => {
+                log_to_dart(format!("Failed to register SMTC button listener: {}", err));
+            }
         }
     }
 
@@ -122,7 +137,9 @@ impl SMTCFlutter {
         if self._smtc.is_none() {
             return;
         }
+        let gen = self._generation.fetch_add(1, Ordering::SeqCst) + 1;
         if let Err(err) = self._update_display(
+            gen,
             HSTRING::from(title),
             HSTRING::from(artist),
             HSTRING::from(album),
@@ -134,6 +151,13 @@ impl SMTCFlutter {
     }
 
     pub fn close(self) {
+        if let Some(smtc) = &self._smtc {
+            if let Ok(mut guard) = self._button_token.lock() {
+                if let Some(token) = guard.take() {
+                    let _ = smtc.RemoveButtonPressed(token);
+                }
+            }
+        }
         if let Some(player) = self._player {
             let _ = player.Close();
         }
@@ -164,6 +188,8 @@ impl SMTCFlutter {
         Ok(Self {
             _smtc: Some(smtc),
             _player: Some(player),
+            _button_token: Mutex::new(None),
+            _generation: AtomicU64::new(0),
         })
     }
 
@@ -241,6 +267,7 @@ impl SMTCFlutter {
 
     fn _update_display(
         &self,
+        gen: u64,
         title: HSTRING,
         artist: HSTRING,
         album: HSTRING,
@@ -250,6 +277,10 @@ impl SMTCFlutter {
         let Some(smtc) = &self._smtc else {
             return Ok(());
         };
+        if self._generation.load(Ordering::SeqCst) != gen {
+            return Ok(());
+        }
+
         let updater = smtc.DisplayUpdater()?;
         updater.SetType(MediaPlaybackType::Music)?;
 
@@ -265,10 +296,21 @@ impl SMTCFlutter {
         music_properties.SetArtist(&artist)?;
         music_properties.SetAlbumTitle(&album)?;
 
+        if self._generation.load(Ordering::SeqCst) != gen {
+            return Ok(());
+        }
+
         if let Some(pic_stream_ref) = Self::_load_thumbnail(&path) {
+            if self._generation.load(Ordering::SeqCst) != gen {
+                return Ok(());
+            }
             if let Err(err) = updater.SetThumbnail(&pic_stream_ref) {
                 log_to_dart(format!("Failed to set SMTC thumbnail: {}", err));
             }
+        }
+
+        if self._generation.load(Ordering::SeqCst) != gen {
+            return Ok(());
         }
 
         updater.Update()?;

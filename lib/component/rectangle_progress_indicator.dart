@@ -55,8 +55,9 @@ class _RectangleProgressIndicatorState
 
   @override
   void dispose() {
-    super.dispose();
     subscription.cancel();
+    progress.dispose();
+    super.dispose();
   }
 }
 

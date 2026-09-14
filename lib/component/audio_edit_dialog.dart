@@ -310,17 +310,24 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
     widget.audio.clearCoverCache();
 
     // 将封面写入音乐文件的元数据标签（非 CUE 轨道）。
+    bool tagWriteSucceeded = true;
     if (!widget.audio.isCueTrack && cover is FileImage) {
       try {
         if (cover.file.existsSync()) {
           final coverBytes = await cover.file.readAsBytes();
-          await tag_writer.writeCoverToFile(
+          final writeOk = await tag_writer.writeCoverToFile(
             path: widget.audio.path,
             coverData: coverBytes,
           );
+          if (!writeOk) {
+            tagWriteSucceeded = false;
+          }
+        } else {
+          tagWriteSucceeded = false;
         }
       } catch (err, trace) {
         LOGGER.e("封面写入文件失败", error: err, stackTrace: trace);
+        tagWriteSucceeded = false;
       }
     }
 
@@ -328,7 +335,11 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
     if (playbackService.nowPlaying?.path == widget.audio.path) {
       playbackService.refreshNowPlaying();
     }
-    showTextOnSnackBar("已应用在线封面");
+    if (!tagWriteSucceeded) {
+      showTextOnSnackBar("在线封面已应用到播放器，但写入音频文件标签失败（可能文件只读或格式不支持）");
+    } else {
+      showTextOnSnackBar("已应用在线封面");
+    }
   }
 
   Widget _buildModernField({

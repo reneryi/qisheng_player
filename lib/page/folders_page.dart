@@ -48,8 +48,9 @@ class _FoldersPageState extends State<FoldersPage> {
       barrierDismissible: false,
       builder: (context) => _FolderLibraryManagerDialog(
         allowFolderEdit: allowFolderEdit,
-        initialFolders:
-            AudioLibrary.instance.folders.map((e) => e.path).toList(),
+        initialFolders: AudioLibrary.instance.roots.isNotEmpty
+            ? List<String>.from(AudioLibrary.instance.roots)
+            : AudioLibrary.instance.folders.map((e) => e.path).toList(),
         onIndexBuilt: () async {
           final status = await libraryReloadCoordinator.reload(
             afterReload:
@@ -220,7 +221,9 @@ class _FolderLibraryManagerDialogState
                       const SizedBox(height: 3),
                       Text(
                         widget.allowFolderEdit
-                            ? "选择并维护本地音乐文件夹，自动构建歌曲索引"
+                            ? (AudioLibrary.instance.roots.isNotEmpty
+                                ? "管理已配置的扫描根目录，自动递归收录子文件夹及歌曲"
+                                : "选择并维护本地音乐文件夹，自动构建歌曲索引")
                             : "重新扫描并更新选定文件夹中的音频元数据",
                         style: TextStyle(
                           color: scheme.onSurfaceVariant.withValues(
@@ -329,6 +332,27 @@ class _FolderLibraryManagerDialogState
                                       ),
                                     ),
                                   ),
+                                  if (AudioLibrary.instance.roots.contains(folders[i]))
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: scheme.primary
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        "根目录",
+                                        style: TextStyle(
+                                          color: scheme.primary,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
                                   if (widget.allowFolderEdit)
                                     IconButton(
                                       tooltip: "移除此文件夹",
@@ -565,7 +589,7 @@ class _AudioFolderTileState extends State<AudioFolderTile> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '更新于 ${modified.toLocal()} · ${formatSongCount(widget.audioFolder.audios.length)}',
+                            '${widget.audioFolder.pendingRetry ? "[待重试] " : ""}更新于 ${modified.toLocal()} · ${formatSongCount(widget.audioFolder.audios.length)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

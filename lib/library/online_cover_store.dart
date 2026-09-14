@@ -22,8 +22,33 @@ String onlineCoverCacheKey(String path) {
 }
 
 @visibleForTesting
-bool isSupportedOnlineCoverContentType(ContentType? contentType) =>
-    contentType?.primaryType.toLowerCase() == 'image';
+bool isSupportedOnlineCoverContentType(ContentType? contentType) {
+  if (contentType == null) return false;
+  final mime = contentType.mimeType.toLowerCase();
+  return mime == 'image/jpeg' || mime == 'image/jpg' || mime == 'image/png';
+}
+
+@visibleForTesting
+bool isJpegBytes(Uint8List bytes) =>
+    bytes.length >= 3 &&
+    bytes[0] == 0xFF &&
+    bytes[1] == 0xD8 &&
+    bytes[2] == 0xFF;
+
+@visibleForTesting
+bool isPngBytes(Uint8List bytes) =>
+    bytes.length >= 4 &&
+    bytes[0] == 0x89 &&
+    bytes[1] == 0x50 &&
+    bytes[2] == 0x4E &&
+    bytes[3] == 0x47;
+
+@visibleForTesting
+String? detectCoverExtension(Uint8List bytes) {
+  if (isJpegBytes(bytes)) return '.jpg';
+  if (isPngBytes(bytes)) return '.png';
+  return null;
+}
 
 @visibleForTesting
 Future<Uint8List> readBoundedCoverBytes(
@@ -92,10 +117,15 @@ class OnlineCoverStore {
   final int Function() _nowMilliseconds;
   final Future<void> Function(Map<String, int>)? _persistFailuresForTesting;
   bool _loaded = false;
+  bool get isLoaded => _loaded;
+
+  @visibleForTesting
+  void resetLoadedForTesting({bool loaded = false}) {
+    _loaded = loaded;
+  }
 
   Future<void> read() async {
     if (_loaded) return;
-    _loaded = true;
 
     final supportPath = (await getAppDataDir()).path;
     try {
@@ -113,31 +143,35 @@ class OnlineCoverStore {
           }
         }
       }
-    } catch (err, trace) {
-      LOGGER.e(err, stackTrace: trace);
-    }
 
-    try {
       final failedFile = File("$supportPath\\cover_cache_failed.json");
-      if (!failedFile.existsSync()) return;
-      final raw = await failedFile.readAsString();
-      if (raw.trim().isEmpty) return;
-      final map = json.decode(raw) as Map<String, dynamic>;
-      final loaded = <String, int>{
-        for (final entry in map.entries)
-          if (entry.value is num) entry.key: (entry.value as num).toInt(),
-      };
-      final recent = retainRecentCoverFailures(loaded, _nowMilliseconds());
-      _failedAudioPaths
-        ..clear()
-        ..addAll(recent);
-      if (recent.length != loaded.length) await _saveFailures();
+      if (failedFile.existsSync()) {
+        final raw = await failedFile.readAsString();
+        if (raw.trim().isNotEmpty) {
+          final map = json.decode(raw) as Map<String, dynamic>;
+          final loaded = <String, int>{
+            for (final entry in map.entries)
+              if (entry.value is num) entry.key: (entry.value as num).toInt(),
+          };
+          final recent = retainRecentCoverFailures(loaded, _nowMilliseconds());
+          _failedAudioPaths
+            ..clear()
+            ..addAll(recent);
+          if (recent.length != loaded.length) await _saveFailures();
+        }
+      }
+      _loaded = true;
     } catch (err, trace) {
+      _loaded = false;
       LOGGER.e(err, stackTrace: trace);
     }
   }
 
   Future<void> save() async {
+    if (!_loaded) {
+      LOGGER.w("OnlineCoverStore.save: blocked save because store is not loaded yet");
+      return;
+    }
     try {
       final supportPath = (await getAppDataDir()).path;
       final cachePath = "$supportPath\\cover_cache.json";
@@ -274,8 +308,14 @@ class OnlineCoverStore {
       final bytes = await readBoundedCoverBytes(resp);
       if (bytes.isEmpty) return null;
 
+      final extension = detectCoverExtension(bytes);
+      if (extension == null) {
+        LOGGER.w("OnlineCoverStore: downloaded image is neither JPEG nor PNG magic bytes, rejected");
+        return null;
+      }
+
       final dir = await _coverCacheDir();
-      final cachePath = "${dir.path}\\${_cacheNameForPath(lookupPath)}.jpg";
+      final cachePath = "${dir.path}\\${_cacheNameForPath(lookupPath)}$extension";
       await File(cachePath).writeAsBytes(bytes, flush: true);
       _cachedPathMap[lookupPath] = cachePath;
       final removedLookup = _failedAudioPaths.remove(lookupPath) != null;

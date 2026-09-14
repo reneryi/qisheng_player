@@ -1,53 +1,194 @@
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:desktop_lyric/component/action_row.dart';
 import 'package:desktop_lyric/component/lyric_line_view.dart';
+import 'package:desktop_lyric/component/modern_lyric_dialog_frame.dart';
 import 'package:desktop_lyric/component/now_playing_info.dart';
 import 'package:desktop_lyric/desktop_lyric_controller.dart';
+import 'package:desktop_lyric/message.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+// ignore: non_constant_identifier_names
 final LYRIC_TEXT_KEY = GlobalKey();
+// ignore: non_constant_identifier_names
 final TRANSLATION_TEXT_KEY = GlobalKey();
 
+// ignore: non_constant_identifier_names
 final TEXT_DISPLAY_CONTROLLER = TextDisplayController();
 
+// ignore: non_constant_identifier_names
 bool ALWAYS_SHOW_ACTION_ROW = false;
 
-/// 在保证正确布局的前提下缩小窗口大小。
+final ValueNotifier<bool> isDialogOpen = ValueNotifier(false);
+
+/// 物理不可压缩的垂直固定非歌词开销常量（86.0px）：
+/// - 外边距 vertical margin: 12.0px (上下各 6.0px)
+/// - 容器外边框 border: 2.0px (上下各 1.0px)
+/// - 前景内边距 foreground padding: 16.0px (上下各 8.0px)
+/// - 顶部操作栏 ActionRow: 48.0px (M3 规范标准交互最小高度)
+/// - 间距 SizedBox: 8.0px
+const double kFixedLayoutOverhead = 86.0;
+
+/// 阴影与字符降笔区 (descenders & text shadows) 渲染余量（8.0px）
+const double kLyricShadowAndBleedBuffer = 8.0;
+
+/// 桌面歌词绝对安全高度基线下限（142.0px）
+const double kMinSafetyLyricWindowHeight = 142.0;
+
+/// 精确核算桌面歌词完全展示两行歌词（主歌词+翻译/副歌词）所需的窗口物理高度
+///
+/// 具备离屏 TextPainter 预估能力：当歌词行尚未完成首帧渲染或当前行暂无翻译时，
+/// 绝不将副歌词高度归零，始终为副歌词预留充足空间，并提供 142.0px 绝对安全基线。
+double calculateRequiredLyricWindowHeight({
+  double? lyricFontSize,
+  double? translationFontSize,
+  String? fontFamily,
+  double? measuredLyricHeight,
+  double? measuredTranslationHeight,
+}) {
+  final effectiveLyricFontSize =
+      lyricFontSize ?? TEXT_DISPLAY_CONTROLLER.lyricFontSize;
+  final effectiveTranslationFontSize =
+      translationFontSize ?? TEXT_DISPLAY_CONTROLLER.translationFontSize;
+  final effectiveFontFamily =
+      fontFamily ?? TEXT_DISPLAY_CONTROLLER.lyricFontFamily;
+
+  // 1. 固定非歌词垂直物理开销 (86.0px)
+  // vertical margin 12px + border 2px + foreground padding 16px + ActionRow 48px + gap 8px = 86.0px
+  const double fixedOverhead = kFixedLayoutOverhead;
+
+  // 2. 主歌词高度测算（优先使用实际测量值，兜底使用离屏 TextPainter）
+  final lyricPainter = TextPainter(
+    text: TextSpan(
+      text: '测试歌词 Sample Lyric',
+      style: TextStyle(
+        fontSize: effectiveLyricFontSize,
+        fontFamily: effectiveFontFamily,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  final estimatedLyricHeight = lyricPainter.height;
+  final lyricHeight = (measuredLyricHeight != null && measuredLyricHeight > 0)
+      ? math.max(measuredLyricHeight, estimatedLyricHeight)
+      : estimatedLyricHeight;
+
+  // 3. 翻译/副歌词高度测算（绝不可归零，始终为副歌词预留空间）
+  final translationPainter = TextPainter(
+    text: TextSpan(
+      text: '测试翻译 Sample Translation',
+      style: TextStyle(
+        fontSize: effectiveTranslationFontSize,
+        fontFamily: effectiveFontFamily,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  final estimatedTranslationHeight = translationPainter.height;
+  final translationHeight =
+      (measuredTranslationHeight != null && measuredTranslationHeight > 0)
+          ? math.max(measuredTranslationHeight, estimatedTranslationHeight)
+          : estimatedTranslationHeight;
+
+  final totalComputed = fixedOverhead +
+      kLyricShadowAndBleedBuffer +
+      lyricHeight +
+      translationHeight;
+
+  // 4. 绝对安全基线限制：默认字号下绝不低于 142.0px，当字号增大时自适应向上拓展
+  return math.max(kMinSafetyLyricWindowHeight, totalComputed.ceilToDouble());
+}
+
+/// 恢复桌面歌词窗口安全尺寸与坐标（支持双重钳制：142px 尺寸安全底线 + 屏幕工作区坐标安全钳制）
+Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
+  final targetHeight = calculateRequiredLyricWindowHeight(
+    lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
+    translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
+    fontFamily: TEXT_DISPLAY_CONTROLLER.lyricFontFamily,
+  );
+
+  try {
+    if (preferredPos != null) {
+      final safePos = await calculateSafeWindowPosition(
+        originPos: preferredPos,
+        originSize: const Size(800.0, 134.0),
+        targetWidth: 800.0,
+        targetHeight: targetHeight,
+      );
+      await windowManager.setPosition(safePos);
+    }
+    await windowManager.setSize(Size(800.0, targetHeight));
+  } catch (_) {
+    try {
+      await windowManager.setSize(Size(800.0, targetHeight));
+    } catch (_) {}
+  }
+}
+
+/// 在保证正确布局的前提下按当前歌词与字号调整窗口大小，彻底消除 10px 亏空与副歌词截断
 void resizeWithForegroundSize() {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    double? lyricTextHeight;
-    double? translationTextHeight;
+  try {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        double? lyricTextHeight;
+        double? translationTextHeight;
 
-    final lyricTextRenderObject =
-        LYRIC_TEXT_KEY.currentContext?.findRenderObject();
-    if (lyricTextRenderObject != null) {
-      final renderBox = lyricTextRenderObject as RenderBox;
-      lyricTextHeight = renderBox.size.height;
-    }
+        final lyricContext = LYRIC_TEXT_KEY.currentContext;
+        if (lyricContext != null && lyricContext.mounted) {
+          final lyricTextRenderObject = lyricContext.findRenderObject();
+          if (lyricTextRenderObject is RenderBox &&
+              lyricTextRenderObject.hasSize) {
+            lyricTextHeight = lyricTextRenderObject.size.height;
+          }
+        }
 
-    final translationTextRenderObject =
-        TRANSLATION_TEXT_KEY.currentContext?.findRenderObject();
-    if (translationTextRenderObject != null) {
-      final renderBox = translationTextRenderObject as RenderBox;
-      translationTextHeight = renderBox.size.height;
-    }
+        final translationContext = TRANSLATION_TEXT_KEY.currentContext;
+        if (translationContext != null && translationContext.mounted) {
+          final translationTextRenderObject =
+              translationContext.findRenderObject();
+          if (translationTextRenderObject is RenderBox &&
+              translationTextRenderObject.hasSize) {
+            translationTextHeight = translationTextRenderObject.size.height;
+          }
+        }
 
-    if (lyricTextHeight != null) {
-      final windowHeight =
-          8 + 40 + 8 + lyricTextHeight + (translationTextHeight ?? 0) + 8;
-      // 1px 余量，避免边界截断
-      windowManager.setSize(Size(800, windowHeight + 1));
-    }
-  });
+        final targetHeight = calculateRequiredLyricWindowHeight(
+          lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
+          translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
+          fontFamily: TEXT_DISPLAY_CONTROLLER.lyricFontFamily,
+          measuredLyricHeight: lyricTextHeight,
+          measuredTranslationHeight: translationTextHeight,
+        );
+
+        windowManager.setSize(Size(800.0, targetHeight));
+      } catch (_) {
+        // Safe guard against deallocated widget tree during tests
+      }
+    });
+  } catch (_) {
+    // WidgetsBinding not initialized in some pure unit tests.
+  }
 }
 
 class TextDisplayController extends ChangeNotifier {
   double lyricFontSize = 22.0;
   double translationFontSize = 18.0;
-  String? lyricFontFamily;
+
   bool _fontFamilyInitialized = false;
-  bool _userSpecifiedFont = false;
+
+  /// 三态机状态模型：
+  /// 态 1：followPlayerFont: true, lyricFontFamily: null（跟随主播放器）
+  /// 态 2：followPlayerFont: false, lyricFontFamily: null（系统默认）
+  /// 态 3：followPlayerFont: false, lyricFontFamily: "选定字体名称"（指定专属字体）
+  bool followPlayerFont = true;
+  String? _customLyricFontFamily;
 
   /// true: 使用指定颜色
   /// false: 跟随播放器主题（默认）
@@ -56,16 +197,80 @@ class TextDisplayController extends ChangeNotifier {
     DesktopLyricController.instance.theme.value.primary,
   );
 
-  void initializeFontFamilyFromPlayer(String? family) {
-    if (_userSpecifiedFont) return;
-    final normalized = family?.trim();
-    final next = (normalized == null || normalized.isEmpty) ? null : normalized;
+  /// 供歌词渲染（LyricLineDisplayArea）读取的实际字形：
+  /// - 若处于跟随态，直接解析为主播放器当前生效字体；
+  /// - 若非跟随态，返回选定的专属字体（null 即为系统默认字体）。
+  String? get lyricFontFamily {
+    if (followPlayerFont) {
+      return DesktopLyricController.instance.currentFontFamily.value;
+    }
+    return _customLyricFontFamily;
+  }
 
-    if (_fontFamilyInitialized && lyricFontFamily == next) return;
+  set lyricFontFamily(String? family) {
+    final normalized = family?.trim();
+    _customLyricFontFamily =
+        (normalized == null || normalized.isEmpty) ? null : normalized;
+  }
+
+  /// 偏好持久化或三态机判定所用的字体字段（跟随态下严格为 null）
+  String? get preferenceLyricFontFamily =>
+      followPlayerFont ? null : _customLyricFontFamily;
+
+  /// 从主程序注入的启动参数初始化
+  void initializeFromInitArgs({
+    String? playerFont,
+    String? savedFont,
+    bool followPlayer = true,
+    bool hasSpecifiedColor = false,
+    Color? specifiedColor,
+  }) {
+    followPlayerFont = followPlayer;
+    final normalizedSaved = savedFont?.trim();
+    _customLyricFontFamily =
+        (normalizedSaved == null || normalizedSaved.isEmpty) ? null : normalizedSaved;
+    this.hasSpecifiedColor = hasSpecifiedColor;
+    if (specifiedColor != null) {
+      this.specifiedColor = specifiedColor;
+    }
     _fontFamilyInitialized = true;
-    lyricFontFamily = next;
     notifyListeners();
     resizeWithForegroundSize();
+  }
+
+  /// 初始化或更新字体偏好（支持 IPC 异步到达）
+  void initializeFontPreferences({
+    required String? playerFont,
+    required String? savedFont,
+    required bool followPlayer,
+  }) {
+    followPlayerFont = followPlayer;
+    final normalizedSaved = savedFont?.trim();
+    _customLyricFontFamily =
+        (normalizedSaved == null || normalizedSaved.isEmpty) ? null : normalizedSaved;
+    _fontFamilyInitialized = true;
+    notifyListeners();
+    resizeWithForegroundSize();
+  }
+
+  /// 响应主播放器下发的字体变更通知（PlayerFontChangedMessage）
+  void onPlayerFontChanged(String? newPlayerFont) {
+    if (followPlayerFont) {
+      notifyListeners();
+      resizeWithForegroundSize();
+    }
+  }
+
+  void initializeFontFamilyFromPlayer(String? family) {
+    if (!_fontFamilyInitialized) {
+      _fontFamilyInitialized = true;
+      if (followPlayerFont) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          notifyListeners();
+          resizeWithForegroundSize();
+        });
+      }
+    }
   }
 
   /// 每次增加 1
@@ -86,12 +291,27 @@ class TextDisplayController extends ChangeNotifier {
     resizeWithForegroundSize();
   }
 
-  void setLyricFontFamily(String? family) {
-    _userSpecifiedFont = true;
-    lyricFontFamily = family?.trim().isEmpty ?? true ? null : family?.trim();
+  /// 用户在字体选择面板中选定/切换字体（三态机流转入口）：
+  /// - 态 1：applyFont(family: null, followPlayer: true)
+  /// - 态 2：applyFont(family: null, followPlayer: false)
+  /// - 态 3：applyFont(family: "指定字体名", followPlayer: false)
+  void applyFont({
+    required String? family,
+    required bool followPlayer,
+  }) {
+    followPlayerFont = followPlayer;
+    final normalized = family?.trim();
+    _customLyricFontFamily =
+        (normalized == null || normalized.isEmpty) ? null : normalized;
     _fontFamilyInitialized = true;
     notifyListeners();
     resizeWithForegroundSize();
+    syncPreferenceToPlayer();
+  }
+
+  /// 兼容旧 setLyricFontFamily 接口
+  void setLyricFontFamily(String? family) {
+    applyFont(family: family, followPlayer: false);
   }
 
   /// 指定歌词颜色
@@ -99,12 +319,34 @@ class TextDisplayController extends ChangeNotifier {
     specifiedColor = color;
     hasSpecifiedColor = true;
     notifyListeners();
+    syncPreferenceToPlayer();
   }
 
   /// 让歌词颜色跟随播放器主题
   void usePlayerTheme() {
     hasSpecifiedColor = false;
     notifyListeners();
+    syncPreferenceToPlayer();
+  }
+
+  /// 构建 PreferenceChangedMessage
+  PreferenceChangedMessage buildPreferenceMessage() {
+    final primary = hasSpecifiedColor ? specifiedColor.toARGB32() : null;
+    final theme = DesktopLyricController.instance.theme.value;
+    final prefFont = followPlayerFont ? null : _customLyricFontFamily;
+    return PreferenceChangedMessage(
+      primary,
+      theme.surfaceContainer,
+      theme.onSurface,
+      hasSpecifiedColor: hasSpecifiedColor,
+      lyricFontFamily: prefFont,
+      followPlayerFont: followPlayerFont,
+    );
+  }
+
+  /// 向主播放器 stdout 发送 PreferenceChangedMessage
+  void syncPreferenceToPlayer() {
+    stdout.write("${buildPreferenceMessage().buildMessageJson()}\n");
   }
 }
 
@@ -123,6 +365,8 @@ class DesktopLyricForeground extends StatelessWidget {
           children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
               child: isHovering || ALWAYS_SHOW_ACTION_ROW
                   ? const RepaintBoundary(child: ActionRow())
                   : const RepaintBoundary(child: NowPlayingInfo()),

@@ -89,11 +89,13 @@ class E2EPlaybackController extends PlaybackController {
     PlayerState initialState = PlayerState.paused,
     double initialDuration = 240.0,
     double initialVolume = 0.8,
+    bool initialShuffle = false,
   })  : _nowPlaying = initialAudio,
         _playlist = ValueNotifier<List<Audio>>(
           initialQueue ?? (initialAudio != null ? [initialAudio] : []),
         ),
         _playMode = ValueNotifier<PlayMode>(PlayMode.loop),
+        _shuffle = ValueNotifier<bool>(initialShuffle),
         _volume = ValueNotifier<double>(initialVolume),
         _spectrum = ValueNotifier<List<double>>(<double>[]),
         _playerState = initialState,
@@ -101,6 +103,7 @@ class E2EPlaybackController extends PlaybackController {
 
   final ValueNotifier<List<Audio>> _playlist;
   final ValueNotifier<PlayMode> _playMode;
+  final ValueNotifier<bool> _shuffle;
   final ValueNotifier<double> _volume;
   final ValueNotifier<List<double>> _spectrum;
   final StreamController<double> _positionController =
@@ -146,6 +149,15 @@ class E2EPlaybackController extends PlaybackController {
 
   @override
   ValueNotifier<PlayMode> get playMode => _playMode;
+
+  @override
+  ValueNotifier<bool> get shuffle => _shuffle;
+
+  @override
+  void useShuffle(bool flag) {
+    _shuffle.value = flag;
+    notifyListeners();
+  }
 
   @override
   ValueNotifier<List<double>> get audioSpectrum => _spectrum;

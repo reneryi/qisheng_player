@@ -16,35 +16,43 @@ class _LyricLineViewState extends State<LyricLineView> {
   final waitFor = const Duration(milliseconds: 300);
   final scrollController = ScrollController();
 
+  void _onLyricLineChanged() {
+    final line = DesktopLyricController.instance.lyricLine.value;
+
+    /// 减去启动延时和滚动结束停留时间
+    final Duration lastTime = line.length - waitFor - waitFor;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) return;
+
+      scrollController.jumpTo(0);
+      if (scrollController.position.maxScrollExtent > 0) {
+        if (lastTime.isNegative) return;
+
+        Future.delayed(waitFor, () {
+          if (!mounted || !scrollController.hasClients) return;
+
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent,
+            duration: lastTime,
+            curve: Curves.linear,
+          );
+        });
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    DesktopLyricController.instance.lyricLine.addListener(_onLyricLineChanged);
+  }
 
-    DesktopLyricController.instance.lyricLine.addListener(() {
-      final line = DesktopLyricController.instance.lyricLine.value;
-
-      /// 减去启动延时和滚动结束停留时间
-      final Duration lastTime = line.length - waitFor - waitFor;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!scrollController.hasClients) return;
-
-        scrollController.jumpTo(0);
-        if (scrollController.position.maxScrollExtent > 0) {
-          if (lastTime.isNegative) return;
-
-          Future.delayed(waitFor, () {
-            if (!scrollController.hasClients) return;
-
-            scrollController.animateTo(
-              scrollController.position.maxScrollExtent,
-              duration: lastTime,
-              curve: Curves.linear,
-            );
-          });
-        }
-      });
-    });
+  @override
+  void dispose() {
+    DesktopLyricController.instance.lyricLine.removeListener(_onLyricLineChanged);
+    scrollController.dispose();
+    super.dispose();
   }
 
   @override

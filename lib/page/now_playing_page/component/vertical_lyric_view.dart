@@ -8,6 +8,7 @@ import 'package:qisheng_player/page/now_playing_page/component/lyric_controls_vi
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_tile.dart';
+import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/gestures.dart'; // 引入 gestures 包用于拦截鼠标滚轮信号
@@ -310,8 +311,6 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
   }
 }
 
-final LYRIC_VIEW_KEY = GlobalKey();
-
 class _VerticalLyricScrollView extends StatefulWidget {
   const _VerticalLyricScrollView({
     required this.lyric,
@@ -331,6 +330,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   final lyricService = PlayService.instance.lyricService;
   late StreamSubscription lyricLineStreamSubscription;
   final scrollController = ScrollController();
+  Animation<double>? _routeAnimation;
 
   late List<GlobalKey> _lineKeys;
   List<Widget> lyricTiles = const [];
@@ -350,6 +350,26 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         .addListener(_onDepthBlurSettingChanged);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final routeAnim = NowPlayingRouteTransitionScope.maybeOf(context);
+    if (_routeAnimation != routeAnim) {
+      _routeAnimation?.removeStatusListener(_onRouteAnimationStatusChanged);
+      _routeAnimation = routeAnim;
+      _routeAnimation?.addStatusListener(_onRouteAnimationStatusChanged);
+      if (_routeAnimation == null || _routeAnimation!.isCompleted) {
+        _calibrateCurrentLyricLineAfterTransition();
+      }
+    }
+  }
+
+  void _onRouteAnimationStatusChanged(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _calibrateCurrentLyricLineAfterTransition();
+    }
+  }
+
   void _onDepthBlurSettingChanged() {
     if (!mounted) return;
     if (_lastSafeIndex != null) {
@@ -359,13 +379,33 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     }
   }
 
-  void _initLyricView() {
+  int _resolveCurrentLineIndex() {
+    if (widget.lyric.lines.isEmpty) return 0;
+    // 优先读取 LyricService 权威当前行
+    final serviceIndex = lyricService.currentLyricLineIndex;
+    if (serviceIndex >= 0 && serviceIndex < widget.lyric.lines.length) {
+      return serviceIndex;
+    }
+    // 兜底：根据播放进度重新查询
+    final pos = playbackService.position;
     final next = widget.lyric.lines.indexWhere(
-      (element) =>
-          element.start.inMilliseconds / 1000 > playbackService.position,
+      (element) => element.start.inMilliseconds / 1000 > pos,
     );
     final nextLyricLine = next == -1 ? widget.lyric.lines.length : next;
-    final initialIndex = max(nextLyricLine - 1, 0);
+    return max(nextLyricLine - 1, 0).clamp(0, widget.lyric.lines.length - 1);
+  }
+
+  void _calibrateCurrentLyricLineAfterTransition() {
+    if (!mounted || widget.lyric.lines.isEmpty) return;
+    final authoritativeIndex = _resolveCurrentLineIndex();
+    _lastSafeIndex = authoritativeIndex;
+    lyricTiles = _generateLyricTiles(authoritativeIndex);
+    setState(() {});
+    _scrollCurrentLyricIntoView(animated: false, jumpFast: true);
+  }
+
+  void _initLyricView() {
+    final initialIndex = _resolveCurrentLineIndex();
     _lastSafeIndex = initialIndex;
     lyricTiles = _generateLyricTiles(initialIndex);
 
@@ -411,6 +451,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         return KeyedSubtree(
           key: _lineKeys[i],
           child: LyricViewTile(
+            key: ValueKey('lyric_tile_${i}_$isCurrent'),
             line: widget.lyric.lines[i],
             opacity: opacity,
             isCurrentLine: isCurrent,
@@ -495,8 +536,8 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     bool jumpFast = false,
     required int attempt,
   }) {
-    if (attempt >= 3) return;
-    Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
+    if (attempt >= 5) return;
+    Future<void>.delayed(Duration(milliseconds: 100 * (attempt + 1)), () {
       if (!mounted) return;
       _scrollCurrentLyricIntoView(
         animated: animated,
@@ -509,7 +550,6 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   @override
   Widget build(BuildContext context) {
     final scrollWidget = CustomScrollView(
-      key: LYRIC_VIEW_KEY,
       controller: scrollController,
       slivers: [
         const SliverFillRemaining(),
@@ -553,6 +593,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
 
   @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_onRouteAnimationStatusChanged);
     AppSettings.instance.lyricDepthBlurNotifier
         .removeListener(_onDepthBlurSettingChanged);
     lyricLineStreamSubscription.cancel();

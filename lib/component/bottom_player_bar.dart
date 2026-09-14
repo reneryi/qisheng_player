@@ -75,24 +75,30 @@ class BottomPlayerBar extends StatelessWidget {
         return Row(
           children: [
             Expanded(
-              child: _BottomBarTrackSection(
-                dense: layout.dense,
-                disableHero: disableHero,
+              child: RepaintBoundary(
+                child: _BottomBarTrackSection(
+                  dense: layout.dense,
+                  disableHero: disableHero,
+                ),
               ),
             ),
             SizedBox(width: gap),
             Expanded(
               flex: 2,
-              child: _BottomBarCenterSection(
-                compact: layout.compact,
-                dense: layout.dense,
+              child: RepaintBoundary(
+                child: _BottomBarCenterSection(
+                  compact: layout.compact,
+                  dense: layout.dense,
+                ),
               ),
             ),
             SizedBox(width: gap),
             Expanded(
-              child: _BottomBarActionsSection(
-                compact: layout.compact,
-                dense: layout.dense,
+              child: RepaintBoundary(
+                child: _BottomBarActionsSection(
+                  compact: layout.compact,
+                  dense: layout.dense,
+                ),
               ),
             ),
           ],
@@ -378,7 +384,9 @@ class _BottomBarCenterSection extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ProgressStrip(compact: compact, dense: dense),
+            RepaintBoundary(
+              child: _ProgressStrip(compact: compact, dense: dense),
+            ),
             SizedBox(height: gap),
             _PlaybackControls(dense: dense),
           ],
@@ -700,18 +708,15 @@ class _ShuffleModeControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = context.read<PlaybackController>();
-    return ValueListenableBuilder<PlayMode>(
-      valueListenable: playback.playMode,
-      builder: (context, playMode, _) {
-        final selected = playMode == PlayMode.loop;
+    return ValueListenableBuilder<bool>(
+      valueListenable: playback.shuffle,
+      builder: (context, shuffle, _) {
         return _TransportIconButton(
-          tooltip: selected ? '关闭随机播放' : '随机播放',
-          onPressed: () => playback.setPlayMode(
-            selected ? PlayMode.forward : PlayMode.loop,
-          ),
+          tooltip: shuffle ? '关闭随机播放' : '随机播放',
+          onPressed: () => playback.useShuffle(!shuffle),
           icon: Symbols.shuffle,
           dense: dense,
-          selected: selected,
+          selected: shuffle,
         );
       },
     );
@@ -729,18 +734,22 @@ class _SequenceModeControl extends StatelessWidget {
     return ValueListenableBuilder<PlayMode>(
       valueListenable: playback.playMode,
       builder: (context, playMode, _) {
-        final single = playMode == PlayMode.singleLoop;
         final next = switch (playMode) {
-          PlayMode.loop => PlayMode.forward,
-          PlayMode.forward => PlayMode.singleLoop,
+          PlayMode.forward => PlayMode.loop,
+          PlayMode.loop => PlayMode.singleLoop,
           PlayMode.singleLoop => PlayMode.forward,
         };
+        final (tooltip, icon, selected) = switch (playMode) {
+          PlayMode.forward => ('顺序播放', Symbols.repeat, false),
+          PlayMode.loop => ('列表循环', Symbols.repeat, true),
+          PlayMode.singleLoop => ('单曲循环', Symbols.repeat_one_on, true),
+        };
         return _TransportIconButton(
-          tooltip: single ? '单曲循环' : '顺序播放',
+          tooltip: tooltip,
           onPressed: () => playback.setPlayMode(next),
-          icon: single ? Symbols.repeat_one_on : Symbols.repeat,
+          icon: icon,
           dense: dense,
-          selected: single || playMode == PlayMode.forward,
+          selected: selected,
         );
       },
     );

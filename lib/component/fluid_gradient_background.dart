@@ -9,6 +9,7 @@ import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/theme_provider.dart';
+import 'package:qisheng_player/window_controls.dart';
 
 /// 栖声播放器多材质窗口背景容器 (Multi-Material Window Backdrop Pipeline)
 class FluidGradientBackground extends StatefulWidget {
@@ -18,11 +19,11 @@ class FluidGradientBackground extends StatefulWidget {
 
   @override
   State<FluidGradientBackground> createState() =>
-      _FluidGradientBackgroundState();
+      FluidGradientBackgroundState();
 }
 
-class _FluidGradientBackgroundState extends State<FluidGradientBackground>
-    with TickerProviderStateMixin {
+class FluidGradientBackgroundState extends State<FluidGradientBackground>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // 着色器程序实例缓存
   static ui.FragmentProgram? _meshFlowProgram;
   static ui.FragmentProgram? _waterRippleProgram;
@@ -30,6 +31,11 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
   late final AnimationController _animController;
   AnimationController? _paletteTransitionController;
   AnimationController? _brightnessTransitionController;
+
+  bool _isAppLifecycleVisible = true;
+
+  @visibleForTesting
+  bool get isTickerActive => _animController.isAnimating;
 
   // 懒加载安全获取色彩过渡控制器（1200ms 感知平滑渐变融化，专注切歌色彩平滑过渡）
   AnimationController get _paletteController {
@@ -53,15 +59,27 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
   AlbumPalette? _fromPalette;
   AlbumPalette? _targetPalette;
 
+  // 弥散流彩帧间静态色彩快速缓存（避免每帧 60/120fps 重复执行 150+ 次 Oklab pow/HSL 运算与 GC 尖刺）
+  AlbumPalette? _lastMeshActivePalette;
+  double? _lastMeshDarkness;
+  AlbumPalette? _cachedMeshModePalette;
+  List<Color>? _cachedMeshBaseGradient;
+
   // 独立多波源水波纹物理管理器 (0 setState，纯 GPU 驱动)
   final WaterRippleManager _rippleManager = WaterRippleManager();
 
-  // 系统级高精度单调计时器，用于着色器时间源
+  // 系统级高精度单调计时器与平滑虚拟时钟（钳位单帧时间步长，避免 IDE 调试/GC 停顿引发着色器位移跳变）
   final Stopwatch _stopwatch = Stopwatch()..start();
+  double _smoothTime = 0.0;
+  int _lastMicroseconds = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppSettings.instance.backgroundVersion.addListener(_syncTickerState);
+    WindowControls.isWindowVisible.addListener(_syncTickerState);
+
     // 60/120fps VSync 动画时钟，直接驱动 CustomPainter，绝不在每帧触发全局 setState
     _animController = AnimationController(
       vsync: this,
@@ -71,9 +89,30 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
     _loadShaders();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final isVisible = state != AppLifecycleState.hidden &&
+        state != AppLifecycleState.paused;
+    if (_isAppLifecycleVisible != isVisible) {
+      _isAppLifecycleVisible = isVisible;
+      _syncTickerState();
+    }
+  }
+
   void _syncTickerState([WindowBackdropMode? explicitMode]) {
     if (!mounted) return;
     try {
+      final hasStaticBackground = _resolveBackgroundFile() != null;
+      final isWindowVisible =
+          _isAppLifecycleVisible && WindowControls.isWindowVisible.value;
+
+      if (hasStaticBackground || !isWindowVisible) {
+        if (_animController.isAnimating) {
+          _animController.stop();
+        }
+        return;
+      }
+
       final mode = explicitMode ??
           Provider.of<ThemeProvider>(context, listen: false)
               .effectiveWindowBackdropMode;
@@ -155,6 +194,9 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    AppSettings.instance.backgroundVersion.removeListener(_syncTickerState);
+    WindowControls.isWindowVisible.removeListener(_syncTickerState);
     _animController.dispose();
     _paletteTransitionController?.dispose();
     _brightnessTransitionController?.dispose();
@@ -284,32 +326,52 @@ class _FluidGradientBackgroundState extends State<FluidGradientBackground>
           darkness,
         );
 
-        final currentTime = _stopwatch.elapsedMicroseconds / 1000000.0;
+        final currentMicroseconds = _stopwatch.elapsedMicroseconds;
+        if (_lastMicroseconds == 0) {
+          _lastMicroseconds = currentMicroseconds;
+        }
+        final deltaMicroseconds = currentMicroseconds - _lastMicroseconds;
+        _lastMicroseconds = currentMicroseconds;
+        // 单帧时间步长钳位至 33.3ms（30fps），规避掉帧、GC 或调试挂起后的涡流位移瞬变
+        final deltaSeconds = (deltaMicroseconds / 1000000.0).clamp(0.0, 0.0333);
+        _smoothTime += deltaSeconds;
+        final currentTime = _smoothTime;
 
         // 1. 弥散流彩 / 灵动流光 (Mesh Flow: Apple Music 级凝聚态流体光斑)
         if (mode == WindowBackdropMode.meshFlow) {
-          final lightPalette = activePalette.forLightMode();
-          final darkPalette = activePalette.forDarkMode();
-          final modePalette = AlbumPalette.lerp(
-                lightPalette,
-                darkPalette,
-                darkness,
-              ) ??
-              (darkness > 0.5 ? darkPalette : lightPalette);
+          if (_lastMeshActivePalette != activePalette ||
+              _lastMeshDarkness == null ||
+              (darkness - _lastMeshDarkness!).abs() > 0.001 ||
+              _cachedMeshModePalette == null ||
+              _cachedMeshBaseGradient == null) {
+            final lightPalette = activePalette.forLightMode();
+            final darkPalette = activePalette.forDarkMode();
+            _cachedMeshModePalette = AlbumPalette.lerp(
+                  lightPalette,
+                  darkPalette,
+                  darkness,
+                ) ??
+                (darkness > 0.5 ? darkPalette : lightPalette);
 
-          final meshLightBase = buildDynamicBackgroundGradient(
-            activePalette.secondary,
-            Brightness.light,
-          );
-          final meshDarkBase = buildDynamicBackgroundGradient(
-            activePalette.secondary,
-            Brightness.dark,
-          );
-          final meshBaseGradient = _lerpGradient(
-            meshLightBase,
-            meshDarkBase,
-            darkness,
-          );
+            final meshLightBase = buildDynamicBackgroundGradient(
+              activePalette.secondary,
+              Brightness.light,
+            );
+            final meshDarkBase = buildDynamicBackgroundGradient(
+              activePalette.secondary,
+              Brightness.dark,
+            );
+            _cachedMeshBaseGradient = _lerpGradient(
+              meshLightBase,
+              meshDarkBase,
+              darkness,
+            );
+            _lastMeshActivePalette = activePalette;
+            _lastMeshDarkness = darkness;
+          }
+
+          final modePalette = _cachedMeshModePalette!;
+          final meshBaseGradient = _cachedMeshBaseGradient!;
 
           if (_meshFlowProgram == null) {
             return DecoratedBox(

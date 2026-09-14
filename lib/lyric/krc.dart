@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:qisheng_player/lyric/lyric.dart';
 
@@ -11,19 +11,23 @@ class Krc extends Lyric {
 
     final splited = krc.split("\n");
     for (final item in splited) {
+      final trimmed = item.trim();
+      if (trimmed.isEmpty) continue;
+
       if (languageFrame == null) {
-        final tag = item.substring(
-          item.indexOf("[") + 1,
-          item.indexOf("]"),
-        );
-        var splitedTag = tag.split(":");
-        final tagName = splitedTag.firstOrNull;
-        if (tagName?.contains("language") == true) {
-          languageFrame = splitedTag[1];
+        final left = trimmed.indexOf("[");
+        final right = trimmed.indexOf("]");
+        if (left != -1 && right != -1 && right > left) {
+          final tag = trimmed.substring(left + 1, right);
+          final splitedTag = tag.split(":");
+          if (splitedTag.firstOrNull?.contains("language") == true &&
+              splitedTag.length > 1) {
+            languageFrame = splitedTag.sublist(1).join(":");
+          }
         }
       }
 
-      final krcLine = KrcLine.fromLine(item);
+      final krcLine = KrcLine.fromLine(trimmed);
 
       if (krcLine == null) continue;
 
@@ -42,11 +46,9 @@ class Krc extends Lyric {
           }
         }
       }
-      int linesIt = 0, transIt = 0;
-      while ((linesIt < lines.length) || (transIt < trans.length)) {
-        lines[linesIt].translation = trans[transIt];
-        linesIt += 1;
-        transIt += 1;
+      final count = lines.length < trans.length ? lines.length : trans.length;
+      for (int i = 0; i < count; i++) {
+        lines[i].translation = trans[i];
       }
     }
 
@@ -82,9 +84,11 @@ class KrcLine extends SyncLyricLine {
   KrcLine(super.start, super.length, super.words, [super.translation]);
 
   static KrcLine? fromLine(String line, [String? translation]) {
-    final splitedLine = line.split("]");
-    final from = splitedLine[0].indexOf("[") + 1;
-    final splitedTime = splitedLine[0].substring(from).split(",");
+    final left = line.indexOf("[");
+    final right = line.indexOf("]");
+    if (left == -1 || right == -1 || right <= left) return null;
+
+    final splitedTime = line.substring(left + 1, right).split(",");
 
     if (splitedTime.length != 2) return null;
 
@@ -95,7 +99,7 @@ class KrcLine extends SyncLyricLine {
       milliseconds: int.tryParse(splitedTime[1]) ?? 0,
     );
 
-    final splitedContent = splitedLine[1].split("<");
+    final splitedContent = line.substring(right + 1).split("<");
     final List<KrcWord> words = [];
     for (final item in splitedContent) {
       final qrcWord = KrcWord.fromWord(item, start);

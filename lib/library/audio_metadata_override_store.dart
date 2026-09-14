@@ -1,6 +1,7 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/utils.dart';
@@ -12,18 +13,29 @@ class AudioMetadataOverrideStore {
 
   final Map<String, Map<String, String>> _overrides = {};
   bool _loaded = false;
+  bool get isLoaded => _loaded;
+
+  @visibleForTesting
+  void resetLoadedForTesting({bool loaded = false}) {
+    _loaded = loaded;
+  }
 
   Future<void> read() async {
     if (_loaded) return;
-    _loaded = true;
 
     try {
       final supportPath = (await getAppDataDir()).path;
       final file = File("$supportPath\\audio_override.json");
-      if (!file.existsSync()) return;
+      if (!file.existsSync()) {
+        _loaded = true;
+        return;
+      }
 
       final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return;
+      if (raw.trim().isEmpty) {
+        _loaded = true;
+        return;
+      }
       final map = json.decode(raw) as Map<String, dynamic>;
       _overrides.clear();
       for (final entry in map.entries) {
@@ -38,12 +50,18 @@ class AudioMetadataOverrideStore {
           if (album != null) "album": album,
         };
       }
+      _loaded = true;
     } catch (err, trace) {
+      _loaded = false;
       LOGGER.e(err, stackTrace: trace);
     }
   }
 
   Future<void> save() async {
+    if (!_loaded) {
+      LOGGER.w("AudioMetadataOverrideStore.save: blocked save because store is not loaded yet");
+      return;
+    }
     try {
       final supportPath = (await getAppDataDir()).path;
       await atomicWriteString(

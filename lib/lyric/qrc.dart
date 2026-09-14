@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric.dart';
 
 class Qrc extends Lyric {
   Qrc(super.lines);
@@ -22,10 +22,13 @@ class Qrc extends Lyric {
           break;
         }
 
-        final timeStr = transLine.substring(
-          transLine.indexOf("[") + 1,
-          transLine.indexOf("]"),
-        );
+        final left = transLine.indexOf("[");
+        final right = transLine.indexOf("]");
+        if (left == -1 || right == -1 || right <= left) {
+          continue;
+        }
+
+        final timeStr = transLine.substring(left + 1, right);
         // 如果是翻译行就加到歌词去
         if (int.tryParse(timeStr.split(":").first) != null) {
           final t =
@@ -67,12 +70,16 @@ class Qrc extends Lyric {
 }
 
 class QrcLine extends SyncLyricLine {
+  static final _wordTokenRegex = RegExp(r'(.*?)\((\d+),(\d+)\)');
+
   QrcLine(super.start, super.length, super.words, [super.translation]);
 
   static QrcLine? fromLine(String line, [String? translation]) {
-    final splitedLine = line.split("]");
-    final from = splitedLine[0].indexOf("[") + 1;
-    final splitedTime = splitedLine[0].substring(from).split(",");
+    final left = line.indexOf("[");
+    final right = line.indexOf("]");
+    if (left == -1 || right == -1 || right <= left) return null;
+
+    final splitedTime = line.substring(left + 1, right).split(",");
 
     if (splitedTime.length != 2) return null;
 
@@ -83,14 +90,17 @@ class QrcLine extends SyncLyricLine {
       milliseconds: int.tryParse(splitedTime[1]) ?? 0,
     );
 
-    final splitedContent = splitedLine[1].split(")");
+    final contentStr = line.substring(right + 1);
     final List<QrcWord> words = [];
-    for (final item in splitedContent) {
-      final qrcWord = QrcWord.fromWord(item);
-
-      if (qrcWord == null) continue;
-
-      words.add(qrcWord);
+    for (final match in _wordTokenRegex.allMatches(contentStr)) {
+      final content = match.group(1) ?? '';
+      final wordStart = Duration(
+        milliseconds: int.tryParse(match.group(2) ?? '') ?? 0,
+      );
+      final wordLength = Duration(
+        milliseconds: int.tryParse(match.group(3) ?? '') ?? 0,
+      );
+      words.add(QrcWord(wordStart, wordLength, content));
     }
 
     return QrcLine(start, length, words, translation);
@@ -98,23 +108,23 @@ class QrcLine extends SyncLyricLine {
 }
 
 class QrcWord extends SyncLyricWord {
+  static final _wordRegex = RegExp(r'^(.*?)\((\d+),(\d+)\)?$');
+
   QrcWord(super.start, super.length, super.content);
 
   static QrcWord? fromWord(String word) {
-    final splitedWord = word.split("(");
-    if (splitedWord.length != 2) return null;
+    final trimmed = word.trim();
+    final match = _wordRegex.firstMatch(trimmed);
+    if (match == null) return null;
 
-    final splitedTime = splitedWord[1].split(",");
-
-    if (splitedTime.length != 2) return null;
-
-    final Duration start = Duration(
-      milliseconds: int.tryParse(splitedTime[0]) ?? 0,
+    final content = match.group(1) ?? '';
+    final start = Duration(
+      milliseconds: int.tryParse(match.group(2) ?? '') ?? 0,
     );
-    final Duration length = Duration(
-      milliseconds: int.tryParse(splitedTime[1]) ?? 0,
+    final length = Duration(
+      milliseconds: int.tryParse(match.group(3) ?? '') ?? 0,
     );
 
-    return QrcWord(start, length, splitedWord[0]);
+    return QrcWord(start, length, content);
   }
 }

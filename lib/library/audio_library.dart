@@ -20,25 +20,44 @@ typedef CoverSizesLoader = Future<PictureSizes?> Function({
 
 enum AudioLibraryLoadStatus { loaded, missing, empty, invalid }
 
-class _AudioCoverProviders {
-  const _AudioCoverProviders(this.small, this.medium, this.large);
+class AudioCoverProviders {
+  const AudioCoverProviders(this.small, this.medium, this.large);
 
   final ImageProvider? small;
   final ImageProvider? medium;
   final ImageProvider? large;
 }
 
-class _AudioCoverCache {
+class AudioCoverCache {
   static const int maxProvidersEntries = 300;
   static const int maxBytesEntries = 20;
 
-  static final Map<String, Future<_AudioCoverProviders>> _providersCache = {};
+  static final Map<String, Future<AudioCoverProviders>> _providersCache = {};
   static final Map<String, Future<Uint8List?>> _bytesCache = {};
 
-  static Future<_AudioCoverProviders> getProviders(
+  static double _lastDpiRatio = 1.0;
+
+  @visibleForTesting
+  static int get providersCacheCount => _providersCache.length;
+
+  @visibleForTesting
+  static double get lastDpiRatio => _lastDpiRatio;
+
+  static void checkDpiAdaptation(double currentRatio) {
+    if ((_lastDpiRatio - currentRatio).abs() > 0.05) {
+      _providersCache.clear();
+      _lastDpiRatio = currentRatio;
+    }
+  }
+
+  static Future<AudioCoverProviders> getProviders(
     String key,
-    Future<_AudioCoverProviders> Function() loader,
+    Future<AudioCoverProviders> Function() loader,
   ) {
+    final view = PlatformDispatcher.instance.views.firstOrNull;
+    if (view != null) {
+      checkDpiAdaptation(view.devicePixelRatio);
+    }
     final existing = _providersCache.remove(key);
     if (existing != null) {
       _providersCache[key] = existing;
@@ -52,7 +71,7 @@ class _AudioCoverCache {
     _providersCache[key] = future;
     future.catchError((_) {
       _providersCache.remove(key);
-      return const _AudioCoverProviders(null, null, null);
+      return const AudioCoverProviders(null, null, null);
     });
     return future;
   }
@@ -91,11 +110,82 @@ class _AudioCoverCache {
   }
 }
 
+class IndexParsePayload {
+  final String indexPath;
+  final String artistSplitPattern;
+  const IndexParsePayload(this.indexPath, this.artistSplitPattern);
+}
+
+class IndexParseResult {
+  final List<AudioFolder> folders;
+  final List<String> roots;
+  final int version;
+  final bool isEmpty;
+  const IndexParseResult({
+    required this.folders,
+    required this.roots,
+    this.version = 114,
+    this.isEmpty = false,
+  });
+}
+
+IndexParseResult _parseIndexInIsolate(IndexParsePayload payload) {
+  final file = File(payload.indexPath);
+  if (!file.existsSync()) {
+    return const IndexParseResult(folders: [], roots: [], isEmpty: true);
+  }
+  final indexStr = file.readAsStringSync();
+  if (indexStr.trim().isEmpty) {
+    return const IndexParseResult(folders: [], roots: [], isEmpty: true);
+  }
+  final decoded = json.decode(indexStr);
+  if (decoded is! Map || decoded["folders"] is! List) {
+    throw const FormatException("index.json 缺少有效的 folders 数组");
+  }
+  final List foldersJson = decoded["folders"] as List;
+  final List rootsJson = (decoded["roots"] as List?) ?? [];
+  final List<String> roots = rootsJson.map((e) => e.toString()).toList();
+  final int version = (decoded["version"] as num?)?.toInt() ?? 114;
+
+  final List<AudioFolder> folders = [];
+  for (final folderValue in foldersJson) {
+    if (folderValue is! Map || folderValue["audios"] is! List) {
+      throw const FormatException("index.json 包含无效的文件夹条目");
+    }
+    final folderMap = folderValue;
+    final List audiosJson = folderMap["audios"] as List;
+    final List<Audio> audios = [];
+    for (final audioValue in audiosJson) {
+      if (audioValue is! Map) {
+        throw const FormatException("index.json 包含无效的音频条目");
+      }
+      audios.add(
+        Audio.fromMap(
+          audioValue,
+          artistSplitPattern: payload.artistSplitPattern,
+        ),
+      );
+    }
+    folders.add(AudioFolder.fromMap(folderMap, audios));
+  }
+
+  return IndexParseResult(
+    folders: folders,
+    roots: roots,
+    version: version,
+  );
+}
+
+@visibleForTesting
+IndexParseResult parseIndexInIsolate(IndexParsePayload payload) =>
+    _parseIndexInIsolate(payload);
+
 /// from index.json
 class AudioLibrary {
   List<AudioFolder> folders;
+  List<String> roots = [];
 
-  AudioLibrary._(this.folders);
+  AudioLibrary._(this.folders, {List<String>? roots}) : roots = roots ?? [];
 
   /// 所有音乐
   List<Audio> audioCollection = [];
@@ -120,6 +210,8 @@ class AudioLibrary {
   /// 目前 index 结构：
   /// ```json
   /// {
+  ///     "version": 114,
+  ///     "roots": [...],
   ///     "folders": [
   ///         {
   ///             "audios": [
@@ -129,8 +221,7 @@ class AudioLibrary {
   ///             ...
   ///         },
   ///         ...
-  ///     ],
-  ///     "version": 113
+  ///     ]
   /// }
   /// ```
   static Future<AudioLibraryLoadStatus> initFromIndex() async {
@@ -142,35 +233,17 @@ class AudioLibrary {
         return AudioLibraryLoadStatus.missing;
       }
 
-      final indexStr = await indexFile.readAsString();
-      if (indexStr.trim().isEmpty) {
+      final splitPattern = AppSettings.instance.artistSplitPattern;
+      final result = await compute(
+        _parseIndexInIsolate,
+        IndexParsePayload(indexPath, splitPattern),
+      );
+
+      if (result.isEmpty) {
         return AudioLibraryLoadStatus.empty;
       }
-      final decoded = json.decode(indexStr);
-      if (decoded is! Map || decoded["folders"] is! List) {
-        throw const FormatException("index.json 缺少有效的 folders 数组");
-      }
-      final List foldersJson = decoded["folders"] as List;
-      final List<AudioFolder> folders = [];
 
-      for (final folderValue in foldersJson) {
-        if (folderValue is! Map || folderValue["audios"] is! List) {
-          throw const FormatException("index.json 包含无效的文件夹条目");
-        }
-        final folderMap = folderValue;
-        final List audiosJson = folderMap["audios"] as List;
-        final List<Audio> audios = [];
-        for (final audioValue in audiosJson) {
-          if (audioValue is! Map) {
-            throw const FormatException("index.json 包含无效的音频条目");
-          }
-          final audioMap = audioValue;
-          audios.add(Audio.fromMap(audioMap));
-        }
-        folders.add(AudioFolder.fromMap(folderMap, audios));
-      }
-
-      _instance = AudioLibrary._(folders);
+      _instance = AudioLibrary._(result.folders, roots: result.roots);
 
       await AudioMetadataOverrideStore.instance.read();
       AudioMetadataOverrideStore.instance.applyToLibrary(instance);
@@ -278,10 +351,23 @@ class AudioFolder {
   /// secs since UNIX EPOCH
   int latest;
 
-  AudioFolder(this.audios, this.path, this.modified, this.latest);
+  final bool pendingRetry;
 
-  factory AudioFolder.fromMap(Map map, List<Audio> audios) =>
-      AudioFolder(audios, map["path"], map["modified"], map["latest"]);
+  AudioFolder(
+    this.audios,
+    this.path,
+    this.modified,
+    this.latest, {
+    this.pendingRetry = false,
+  });
+
+  factory AudioFolder.fromMap(Map map, List<Audio> audios) => AudioFolder(
+        audios,
+        map["path"],
+        map["modified"],
+        map["latest"],
+        pendingRetry: map["pending_retry"] == true,
+      );
 
   @override
   String toString() {
@@ -290,6 +376,7 @@ class AudioFolder {
       "path": path,
       "modified":
           DateTime.fromMillisecondsSinceEpoch(modified * 1000).toString(),
+      "pending_retry": pendingRetry,
     }.toString();
   }
 }
@@ -371,15 +458,24 @@ class Audio {
     this.created,
     this.by, {
     CoverSizesLoader? coverSizesLoaderForTesting,
+    String? artistSplitPattern,
   })  : _coverSizesLoader =
             coverSizesLoaderForTesting ?? getPictureSizesFromPath,
         splitedArtists = artist.split(
-          RegExp(AppSettings.instance.artistSplitPattern),
+          RegExp(artistSplitPattern ?? _resolveSplitPattern()),
         ) {
-    _normalizeCorruptedMetadata();
+    _normalizeCorruptedMetadata(artistSplitPattern: artistSplitPattern);
   }
 
-  factory Audio.fromMap(Map map) => Audio(
+  static String _resolveSplitPattern() {
+    try {
+      return AppSettings.instance.artistSplitPattern;
+    } catch (_) {
+      return r'[、/]';
+    }
+  }
+
+  factory Audio.fromMap(Map map, {String? artistSplitPattern}) => Audio(
         map["title"],
         map["artist"],
         map["album"],
@@ -398,6 +494,7 @@ class Audio {
         map["modified"],
         map["created"],
         map["by"],
+        artistSplitPattern: artistSplitPattern,
       );
 
   Map toMap() => {
@@ -488,8 +585,10 @@ class Audio {
   }
 
   /// 读取音乐文件的图片，自动适应缩放
-  Future<_AudioCoverProviders> _loadCoverProviders() async {
-    final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
+  Future<AudioCoverProviders> _loadCoverProviders() async {
+    final view = PlatformDispatcher.instance.views.firstOrNull;
+    final ratio = view?.devicePixelRatio ?? 1.0;
+    AudioCoverCache.checkDpiAdaptation(ratio);
     final sizes = await _coverSizesLoader(
       path: mediaPath,
       smallWidth: (48 * ratio).round(),
@@ -501,17 +600,17 @@ class Audio {
     );
     if (sizes == null) {
       final online = await OnlineCoverStore.instance.getCover(this);
-      return _AudioCoverProviders(online, online, online);
+      return AudioCoverProviders(online, online, online);
     }
-    return _AudioCoverProviders(
+    return AudioCoverProviders(
       sizes.small == null ? null : MemoryImage(sizes.small!),
       sizes.medium == null ? null : MemoryImage(sizes.medium!),
       sizes.large == null ? null : MemoryImage(sizes.large!),
     );
   }
 
-  Future<_AudioCoverProviders> get _coverProviders {
-    return _AudioCoverCache.getProviders(mediaPath, _loadCoverProviders);
+  Future<AudioCoverProviders> get _coverProviders {
+    return AudioCoverCache.getProviders(mediaPath, _loadCoverProviders);
   }
 
   /// 缓存ImageProvider而不是Uint8List（bytes）
@@ -524,7 +623,7 @@ class Audio {
 
   /// 读取音乐文件中的原始封面字节，供调色板提取使用。
   Future<Uint8List?> get coverBytes {
-    return _AudioCoverCache.getBytes(mediaPath, () {
+    return AudioCoverCache.getBytes(mediaPath, () {
       return getOriginalPictureFromPath(path: mediaPath).then((pic) {
         if (pic == null || pic.isEmpty) return null;
         return pic;
@@ -533,12 +632,12 @@ class Audio {
   }
 
   void clearCoverCache() {
-    _AudioCoverCache.invalidate(mediaPath);
+    AudioCoverCache.invalidate(mediaPath);
   }
 
   @visibleForTesting
   static void clearCoverCacheForTesting() {
-    _AudioCoverCache.clearAll();
+    AudioCoverCache.clearAll();
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片
@@ -581,25 +680,32 @@ class Audio {
     return 0;
   }
 
-  void _normalizeCorruptedMetadata() {
+  void _normalizeCorruptedMetadata({String? artistSplitPattern}) {
     title = _sanitizeMetadataText(
       title,
       fallback: _fallbackTitleFromPath(mediaPath),
     );
     artist = _sanitizeMetadataText(artist, fallback: "未知艺术家");
     album = _sanitizeMetadataText(album, fallback: "未知专辑");
-    splitedArtists = _normalizeArtistNames(artist);
+    splitedArtists = _normalizeArtistNames(
+      artist,
+      artistSplitPattern: artistSplitPattern,
+    );
     if (splitedArtists.isEmpty) {
       splitedArtists = ["未知艺术家"];
     }
     artist = splitedArtists.join(" / ");
   }
 
-  static List<String> _normalizeArtistNames(String input) {
+  static List<String> _normalizeArtistNames(
+    String input, {
+    String? artistSplitPattern,
+  }) {
     final seen = <String>{};
     final result = <String>[];
-    for (final raw
-        in input.split(RegExp(AppSettings.instance.artistSplitPattern))) {
+    for (final raw in input.split(
+      RegExp(artistSplitPattern ?? _resolveSplitPattern()),
+    )) {
       final name = _sanitizeMetadataText(raw, fallback: "").trim();
       if (name.isEmpty || name == "UNKNOWN" || name == "未知艺术家") continue;
       if (seen.add(name.toLowerCase())) result.add(name);

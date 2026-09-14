@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -186,8 +185,17 @@ class _AdaptiveWaveformSliderState extends State<AdaptiveWaveformSlider>
   @override
   void didUpdateWidget(covariant AdaptiveWaveformSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.spectrumActive && !_rhythmController.isAnimating) {
-      _rhythmController.repeat();
+    if (widget.spectrumActive != oldWidget.spectrumActive) {
+      if (widget.spectrumActive) {
+        if (!_rhythmController.isAnimating) {
+          _rhythmController.repeat();
+        }
+      } else {
+        if (_rhythmController.isAnimating) {
+          _rhythmController.stop();
+        }
+        _smoothedConfidence = 0.0;
+      }
     }
   }
 
@@ -364,11 +372,6 @@ class _AdaptiveWaveformSliderState extends State<AdaptiveWaveformSlider>
 
                           if (targetConfidence == 0.0 && _smoothedConfidence <= 0.005) {
                             _smoothedConfidence = 0.0;
-                            if (_rhythmController.isAnimating) {
-                              _rhythmController.stop();
-                            }
-                          } else if (widget.spectrumActive && !_rhythmController.isAnimating) {
-                            _rhythmController.repeat();
                           }
 
                           // 2. 实时频谱能量提取与多频段加权
@@ -446,46 +449,40 @@ class _AdaptiveWaveformSliderState extends State<AdaptiveWaveformSlider>
                     left: bubbleLeft,
                     bottom: widget.height + 8.0,
                     child: IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            width: bubbleWidth,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainer
-                                  .withValues(alpha: 0.78),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                width: 1.0,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.22),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                      child: Container(
+                        width: bubbleWidth,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainer
+                              .withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Text(
-                              Duration(
-                                milliseconds: tooltipSeconds.isFinite
-                                    ? (tooltipSeconds * 1000).round()
-                                    : 0,
-                              ).toStringHMMSS(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurface,
-                                letterSpacing: 0,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
+                          ],
+                        ),
+                        child: Text(
+                          Duration(
+                            milliseconds: tooltipSeconds.isFinite
+                                ? (tooltipSeconds * 1000).round()
+                                : 0,
+                          ).toStringHMMSS(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurface,
+                            letterSpacing: 0,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ),

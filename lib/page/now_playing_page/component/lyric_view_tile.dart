@@ -9,6 +9,7 @@ import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -66,10 +67,8 @@ class _LyricViewTileState extends State<LyricViewTile> {
             LyricTextAlign.center => Alignment.center,
             LyricTextAlign.right => Alignment.centerRight,
           },
-          child: AnimatedPadding(
-            duration: motion.controlTransitionDuration,
-            curve: motion.normal,
-            padding: EdgeInsets.symmetric(vertical: isMainLine ? 4 : 0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2.0),
             child: InkWell(
               enableFeedback: false,
               onTap: widget.onTap,
@@ -538,10 +537,12 @@ class _LyricTransitionTileState extends State<LyricTransitionTile> {
       width: 80.0,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 18, 12, 6),
-        child: CustomPaint(
-          painter: LyricTransitionPainter(
-            scheme,
-            controller,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: LyricTransitionPainter(
+              scheme,
+              controller,
+            ),
           ),
         ),
       ),
@@ -607,6 +608,7 @@ class LyricTransitionTileController extends ChangeNotifier {
 
   double progress = 0;
   late final StreamSubscription positionStreamSub;
+  late final StreamSubscription playerStateSub;
 
   double sizeFactor = 0;
   late final Ticker factorTicker;
@@ -614,6 +616,18 @@ class LyricTransitionTileController extends ChangeNotifier {
 
   LyricTransitionTileController([this.lrcLine, this.syncLine]) {
     positionStreamSub = playbackService.positionStream.listen(_updateProgress);
+    playerStateSub = playbackService.playerStateStream.listen((state) {
+      if (_disposed) return;
+      if (state == PlayerState.playing && progress < 1.0) {
+        if (!factorTicker.isActive) {
+          factorTicker.start();
+        }
+      } else {
+        if (factorTicker.isActive) {
+          factorTicker.stop();
+        }
+      }
+    });
     // 使用真实时间轴（elapsed）计算呼吸律动，彻底解决 120Hz/144Hz 高刷屏动画速度加倍的 BUG
     factorTicker = Ticker((elapsed) {
       if (_disposed) return;
@@ -622,7 +636,9 @@ class LyricTransitionTileController extends ChangeNotifier {
       sizeFactor = (0.5 + 0.5 * sin(seconds * (2 * pi / 1.5))).clamp(0.0, 1.0);
       notifyListeners();
     });
-    factorTicker.start();
+    if (playbackService.playerState == PlayerState.playing) {
+      factorTicker.start();
+    }
   }
 
   void _updateProgress(double position) {
@@ -653,6 +669,7 @@ class LyricTransitionTileController extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     positionStreamSub.cancel();
+    playerStateSub.cancel();
     factorTicker.dispose();
     super.dispose();
   }

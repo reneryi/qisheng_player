@@ -97,7 +97,7 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
                         itemBuilder: (context, index) {
                           final item = queue[index];
                           return _PlaylistViewItem(
-                            key: ValueKey(item.path),
+                            key: ValueKey('${item.path}_$index'),
                             index: index,
                             dense: widget.dense,
                             isCurrent: index == playbackService.playlistIndex,
@@ -113,7 +113,7 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
                         itemBuilder: (context, index) {
                           final item = queue[index];
                           return _PlaylistViewItem(
-                            key: ValueKey(item.path),
+                            key: ValueKey('${item.path}_$index'),
                             index: index,
                             dense: widget.dense,
                             isCurrent: index == playbackService.playlistIndex,

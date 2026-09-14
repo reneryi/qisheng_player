@@ -201,4 +201,10 @@ class __ArtistSeparatorEditDialogState
       ),
     );
   }
+
+  @override
+  void dispose() {
+    currEditController.dispose();
+    super.dispose();
+  }
 }

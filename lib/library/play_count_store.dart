@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
@@ -18,26 +18,39 @@ class PlayCountStore {
   PlayCountStore.forTesting({
     required Future<void> Function(Map<String, int>) persist,
     this.saveDebounceDuration = const Duration(milliseconds: 500),
-  }) : _persistForTesting = persist;
+    bool loaded = true,
+  })  : _persistForTesting = persist,
+        _loaded = loaded;
 
   final Map<String, int> _counts = {};
   final Duration saveDebounceDuration;
   final Future<void> Function(Map<String, int>)? _persistForTesting;
   Timer? _saveDebounce;
   bool _loaded = false;
+  bool get isLoaded => _loaded;
+
+  @visibleForTesting
+  void resetLoadedForTesting({bool loaded = false}) {
+    _loaded = loaded;
+  }
 
   Future<void> read() async {
     if (_loaded) return;
-    _loaded = true;
 
     try {
       final supportPath = (await getAppDataDir()).path;
       final playCountPath = "$supportPath\\play_count.json";
       final file = File(playCountPath);
-      if (!file.existsSync()) return;
+      if (!file.existsSync()) {
+        _loaded = true;
+        return;
+      }
 
       final jsonStr = await file.readAsString();
-      if (jsonStr.trim().isEmpty) return;
+      if (jsonStr.trim().isEmpty) {
+        _loaded = true;
+        return;
+      }
       final map = json.decode(jsonStr) as Map<String, dynamic>;
       _counts.clear();
       for (final entry in map.entries) {
@@ -46,12 +59,18 @@ class PlayCountStore {
           _counts[entry.key] = value.toInt().clamp(0, 1 << 30);
         }
       }
+      _loaded = true;
     } catch (err, trace) {
+      _loaded = false;
       LOGGER.e(err, stackTrace: trace);
     }
   }
 
   Future<void> save() async {
+    if (!_loaded) {
+      LOGGER.w("PlayCountStore.save: blocked save because store is not loaded yet");
+      return;
+    }
     _saveDebounce?.cancel();
     _saveDebounce = null;
     try {

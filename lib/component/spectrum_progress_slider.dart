@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -229,40 +228,40 @@ class _SpectrumProgressSliderState extends State<SpectrumProgressSlider> {
                               .clamp(0.0, math.max(0.0, width - 64)),
                           bottom: widget.height + 6,
                           child: IgnorePointer(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: BackdropFilter(
-                                filter:
-                                    ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: scheme.surfaceContainer.withValues(
-                                      alpha: 0.82,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: scheme.outlineVariant.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: scheme.surfaceContainer.withValues(
+                                  alpha: 0.94,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: scheme.outlineVariant.withValues(
+                                    alpha: 0.5,
                                   ),
-                                  child: SizedBox(
-                                    width: 64,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 4),
-                                      child: Text(
-                                        Duration(
-                                          milliseconds:
-                                              (tooltipValue * 1000).round(),
-                                        ).toStringHMMSS(),
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: scheme.onSurface,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.20),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: SizedBox(
+                                width: 64,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 4),
+                                  child: Text(
+                                    Duration(
+                                      milliseconds:
+                                          (tooltipValue * 1000).round(),
+                                    ).toStringHMMSS(),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),

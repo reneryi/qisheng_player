@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter; // 引入 ImageFilter 支持气泡毛玻璃滤镜
 import 'package:qisheng_player/utils.dart'; // 引入 utils 以使用 duration 格式化扩展
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
@@ -202,44 +201,37 @@ class _WaveformSliderState extends State<WaveformSlider>
                         .clamp(0.0, math.max(0.0, totalWidth - 64.0)),
                     bottom: widget.height + 6.0,
                     child: IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: BackdropFilter(
-                          filter:
-                              ImageFilter.blur(sigmaX: 8, sigmaY: 8), // 毛玻璃滤镜
-                          child: Container(
-                            width: 64,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainer
-                                  .withValues(alpha: 0.74),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.14),
-                                  blurRadius: 10,
-                                  spreadRadius: -2,
-                                ),
-                              ],
+                      child: Container(
+                        width: 64,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainer
+                              .withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Text(
-                              Duration(
-                                      milliseconds:
-                                          (tooltipValue * 1000).round())
-                                  .toStringHMMSS(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0,
-                              ),
-                            ),
+                          ],
+                        ),
+                        child: Text(
+                          Duration(
+                                  milliseconds:
+                                      (tooltipValue * 1000).round())
+                              .toStringHMMSS(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
                           ),
                         ),
                       ),

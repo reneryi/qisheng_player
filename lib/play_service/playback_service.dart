@@ -95,11 +95,13 @@ abstract class PlaybackController extends ChangeNotifier {
   ValueNotifier<double> get volumeDspNotifier;
   double get volumeDsp;
   ValueNotifier<PlayMode> get playMode;
+  ValueNotifier<bool> get shuffle;
   ValueListenable<List<double>> get audioSpectrum => _emptyAudioSpectrum;
   ValueListenable<bool> get wasapiExclusive => _defaultWasapiExclusive;
 
   void useExclusiveMode(bool exclusive) {}
   void setPlayMode(PlayMode playMode);
+  void useShuffle(bool flag);
   void setVolumeDsp(double volume);
   void seek(double position);
   void start();
@@ -115,12 +117,23 @@ abstract class PlaybackController extends ChangeNotifier {
 /// 鍙€氱煡 now playing 鍙樻洿
 class PlaybackService extends PlaybackController {
   final PlayService playService;
-
   late StreamSubscription _playerStateStreamSub;
   late StreamSubscription _smtcEventStreamSub;
   late StreamSubscription<double> _rawPositionStreamSub;
+  final BassPlayer _player;
+  final SmtcFlutter _smtc;
+  final PlaybackPreference? _preferenceOverride;
+  PlaybackPreference get _pref =>
+      _preferenceOverride ?? AppPreference.instance.playbackPref;
 
-  PlaybackService(this.playService) {
+  PlaybackService(
+    this.playService, {
+    BassPlayer? player,
+    SmtcFlutter? smtc,
+    PlaybackPreference? preferenceOverride,
+  })  : _player = player ?? BassPlayer(),
+        _smtc = smtc ?? SmtcFlutter(),
+        _preferenceOverride = preferenceOverride {
     _playerStateStreamSub = playerStateStream.listen((event) {
       if (event == PlayerState.completed) {
         _autoNextAudio();
@@ -147,10 +160,6 @@ class PlaybackService extends PlaybackController {
 
     _rawPositionStreamSub = _player.positionStream.listen(_handleRawPosition);
   }
-
-  final _player = BassPlayer();
-  final _smtc = SmtcFlutter();
-  final _pref = AppPreference.instance.playbackPref;
   final _positionStreamController = StreamController<double>.broadcast();
   late final AudioSpectrumNotifier _audioSpectrum = AudioSpectrumNotifier(
     sample: _sampleAudioSpectrum,
@@ -201,22 +210,20 @@ class PlaybackService extends PlaybackController {
   final ValueNotifier<List<Audio>> playlist = ValueNotifier([]);
   List<Audio> _playlistBackup = [];
   int? _lastManualRandomSourceIndex;
+  final List<int> _playbackHistory = [];
+  bool _isNavigatingHistory = false;
 
   late final _playMode = ValueNotifier(_pref.playMode);
   ValueNotifier<PlayMode> get playMode => _playMode;
 
   void setPlayMode(PlayMode playMode) {
     if (this.playMode.value == playMode) return;
-    final shouldShuffle = playMode == PlayMode.loop;
-    if (shouldShuffle != shuffle.value) {
-      _applyShuffleState(shouldShuffle);
-    }
     this.playMode.value = playMode;
     _pref.playMode = playMode;
     _rememberPlaybackSession(save: true);
   }
 
-  late final _shuffle = ValueNotifier(_pref.playMode == PlayMode.loop);
+  late final _shuffle = ValueNotifier(_pref.shuffle);
   ValueNotifier<bool> get shuffle => _shuffle;
 
   void _applyShuffleState(bool flag) {
@@ -224,10 +231,13 @@ class PlaybackService extends PlaybackController {
 
     if (nowPlaying != null) {
       if (flag) {
-        playlist.value = List<Audio>.from(playlist.value);
-        playlist.value.remove(nowPlaying!);
-        playlist.value.shuffle();
-        playlist.value.insert(0, nowPlaying!);
+        if (_playlistBackup.isEmpty) {
+          _playlistBackup = List<Audio>.from(playlist.value);
+        }
+        final currentAudio = nowPlaying!;
+        final remaining = List<Audio>.from(playlist.value)..remove(currentAudio);
+        remaining.shuffle();
+        playlist.value = [currentAudio, ...remaining];
         _playlistIndex = 0;
       } else {
         final restored = _playlistBackup.isEmpty
@@ -353,11 +363,21 @@ class PlaybackService extends PlaybackController {
     _player.setVolumeDsp(_resolveOutputVolumeDsp(audio));
   }
 
-  /// 修改解码时的音量（不影响 Windows 绯荤粺闊抽噺锛?
+  Timer? _volumeSaveDebounce;
+
+  void _scheduleVolumeSave() {
+    _volumeSaveDebounce?.cancel();
+    _volumeSaveDebounce = Timer(const Duration(milliseconds: 500), () {
+      unawaited(AppPreference.instance.save());
+    });
+  }
+
+  /// 修改解码时的音量（不影响 Windows 系统音量）
   void setVolumeDsp(double volume) {
     _pref.volumeDsp = volume;
     _volumeDsp.value = volume;
     _applyOutputVolume(nowPlaying);
+    _scheduleVolumeSave();
   }
 
   void setEnableVolumeLeveling(bool enabled) {
@@ -365,6 +385,7 @@ class PlaybackService extends PlaybackController {
     _pref.enableVolumeLeveling = enabled;
     _enableVolumeLeveling.value = enabled;
     _applyOutputVolume(nowPlaying);
+    _scheduleVolumeSave();
   }
 
   void setVolumeLevelingPreampDb(double preampDb) {
@@ -372,37 +393,74 @@ class PlaybackService extends PlaybackController {
     _pref.volumeLevelingPreampDb = clipped;
     _volumeLevelingPreampDb.value = clipped;
     _applyOutputVolume(nowPlaying);
+    _scheduleVolumeSave();
   }
 
   Stream<double> get positionStream => _positionStreamController.stream;
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
 
-  /// 1. 更新 [_playlistIndex] 一[audioIndex]
-  /// 2. 更新 [nowPlaying] 一playlist[_nowPlayingIndex]
-  /// 3. _bassPlayer.setSource
-  /// 4. 设置解码音量
-  /// 4. 鑾峰彇姝岃瘝 **灏?[_nextLyricLine] 置为0**
-  /// 5. 播放
-  /// 6. 通知并更新主题色
-  void _loadAndPlay(int audioIndex, List<Audio> playlist) {
-    try {
-      _playlistIndex = audioIndex;
-      nowPlaying = playlist[audioIndex];
-      _cueAutoNextTriggered = false;
-      _audioSpectrum.decayToSilence();
-      _player.setSource(nowPlaying!.mediaPath);
-      if (nowPlaying!.isCueTrack) {
-        _player.seek((nowPlaying!.cueStartMs ?? 0) / 1000.0);
+  /// 两阶段提交播放事务（2-Phase Commit）：
+  /// 1. 验证目标文件并初始化底层音频流（_player.setSource & _player.start）
+  /// 2. 成功后正式提交 [_playlistIndex] 与 [nowPlaying] 状态并通知 UI
+  /// 3. 失败时进行安全回滚或自动向后跳过，杜绝虚假播放
+  void _loadAndPlay(
+    int audioIndex,
+    List<Audio> playlist, {
+    bool isAutoNext = false,
+    Set<int>? failedIndices,
+  }) {
+    if (audioIndex < 0 || audioIndex >= playlist.length) {
+      return;
+    }
+    final targetAudio = playlist[audioIndex];
+    final prevIndex = _playlistIndex;
+    final prevNowPlaying = nowPlaying;
+    if (!_isNavigatingHistory && prevIndex != null && prevIndex != audioIndex) {
+      _playbackHistory.add(prevIndex);
+      if (_playbackHistory.length > 50) {
+        _playbackHistory.removeAt(0);
       }
-      _applyOutputVolume(nowPlaying);
+    }
 
-      playService.lyricService.updateLyric();
+    try {
+      _audioSpectrum.decayToSilence();
+      _player.setSource(targetAudio.mediaPath);
+      if (!_player.hasSource) {
+        throw const FormatException("Source initialization failed");
+      }
+
+      // FLOW-04: 阶段 2 提前提交状态：确保在 seek 和 start 之前已挂载正确的当前分轨元数据与 cueEndMs，
+      // 防止底层流启动后 33ms 进度轮询器误用旧分轨 cue 边界触发第 0 秒连环跳首。
+      _playlistIndex = audioIndex;
+      nowPlaying = targetAudio;
+      _cueAutoNextTriggered = false;
+
+      if (targetAudio.isCueTrack) {
+        _player.seek((targetAudio.cueStartMs ?? 0) / 1000.0);
+      }
+      _applyOutputVolume(targetAudio);
 
       _player.start();
-      unawaited(PlayCountStore.instance.increase(nowPlaying!));
+      if (!_player.hasSource) {
+        throw const FormatException("Stream start failed");
+      }
+
+      try {
+        playService.lyricService.updateLyric();
+      } catch (lyricErr) {
+        LOGGER.w("[load and play] lyric update failed: $lyricErr");
+      }
+
+      try {
+        unawaited(PlayCountStore.instance.increase(nowPlaying!));
+      } catch (_) {}
+
       notifyListeners();
-      ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+
+      try {
+        ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+      } catch (_) {}
 
       _smtc.updateState(state: SMTCState.playing);
       _smtc.updateDisplay(
@@ -427,7 +485,32 @@ class PlaybackService extends PlaybackController {
       });
     } catch (err) {
       LOGGER.e("[load and play] $err");
-      showTextOnSnackBar(err.toString());
+      if (isAutoNext) {
+        final failed = failedIndices ?? <int>{};
+        failed.add(audioIndex);
+        showTextOnSnackBar('无法播放 "${targetAudio.displayTitle}"，正在跳过...');
+        _autoNextAudio(failedIndices: failed);
+        return;
+      }
+
+      // 手动触发播放失败时保护现有状态不被污染；若底层流已破坏则安全复位为停止
+      if (!_player.hasSource) {
+        _playlistIndex = prevIndex;
+        nowPlaying = prevNowPlaying;
+        _cueAutoNextTriggered = false;
+        _audioSpectrum.decayToSilence();
+        _smtc.updateState(state: SMTCState.paused);
+        unawaited(
+          playService.desktopLyricService.canSendMessage.then((canSend) {
+            if (!canSend) return;
+            playService.desktopLyricService.sendPlayerStateMessage(false);
+          }),
+        );
+      }
+      showTextOnSnackBar(
+        '无法播放 "${targetAudio.displayTitle}": 文件不存在或格式不支持',
+      );
+      notifyListeners();
     }
   }
 
@@ -438,6 +521,7 @@ class PlaybackService extends PlaybackController {
 
   /// 播放playlist[audioIndex]并设置播放列表为playlist
   void play(int audioIndex, List<Audio> playlist) {
+    _playbackHistory.clear();
     if (shuffle.value) {
       this.playlist.value = List.from(playlist);
       final willPlay = this.playlist.value.removeAt(audioIndex);
@@ -453,10 +537,12 @@ class PlaybackService extends PlaybackController {
   }
 
   void shuffleAndPlay(List<Audio> audios) {
+    _playbackHistory.clear();
     playlist.value = List.from(audios);
     playlist.value.shuffle();
     _playlistBackup = List.from(audios);
 
+    _pref.shuffle = true;
     shuffle.value = true;
 
     _loadAndPlay(0, playlist.value);
@@ -468,7 +554,19 @@ class PlaybackService extends PlaybackController {
       final updated = List<Audio>.from(playlist.value)
         ..insert(_playlistIndex! + 1, audio);
       playlist.value = updated;
-      _playlistBackup = List.from(updated);
+      if (!shuffle.value) {
+        _playlistBackup = List.from(updated);
+      } else {
+        final backup = List<Audio>.from(_playlistBackup);
+        final backupIndex =
+            nowPlaying != null ? backup.indexOf(nowPlaying!) : -1;
+        if (backupIndex != -1) {
+          backup.insert(backupIndex + 1, audio);
+        } else {
+          backup.add(audio);
+        }
+        _playlistBackup = backup;
+      }
       _rememberPlaybackSession(save: true);
     }
   }
@@ -481,86 +579,212 @@ class PlaybackService extends PlaybackController {
     }
     final updated = List<Audio>.from(playlist.value)..add(audio);
     playlist.value = updated;
-    _playlistBackup = List<Audio>.from(updated);
+    if (!shuffle.value) {
+      _playlistBackup = List<Audio>.from(updated);
+    } else {
+      _playlistBackup = List<Audio>.from(_playlistBackup)..add(audio);
+    }
     _rememberPlaybackSession(save: true);
   }
 
   void useShuffle(bool flag) {
-    if (nowPlaying == null) return;
     if (flag == shuffle.value) return;
 
     _applyShuffleState(flag);
-    _playMode.value = flag ? PlayMode.loop : PlayMode.forward;
-    _pref.playMode = _playMode.value;
+    _pref.shuffle = flag;
     _rememberPlaybackSession(save: true);
   }
 
-  void _nextAudio_forward() {
-    if (_playlistIndex == null) return;
+  void _nextAudio_forward({Set<int>? failedIndices}) {
+    final currentPlaylist = playlist.value;
+    if (currentPlaylist.isEmpty) return;
+    final failed = failedIndices ?? <int>{};
 
-    if (_playlistIndex! < playlist.value.length - 1) {
-      _loadAndPlay(_playlistIndex! + 1, playlist.value);
+    int candidate = (_playlistIndex ?? -1) + 1;
+    while (candidate < currentPlaylist.length && failed.contains(candidate)) {
+      candidate++;
+    }
+
+    if (candidate < currentPlaylist.length) {
+      _loadAndPlay(
+        candidate,
+        currentPlaylist,
+        isAutoNext: true,
+        failedIndices: failed,
+      );
     } else {
       pause();
+      if (failed.length >= currentPlaylist.length) {
+        showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      }
       notifyListeners();
     }
   }
 
-  void _nextAudio_loop() {
-    if (_playlistIndex == null) return;
+  void _nextAudio_loop({Set<int>? failedIndices}) {
+    final currentPlaylist = playlist.value;
+    if (currentPlaylist.isEmpty) return;
+    final failed = failedIndices ?? <int>{};
 
-    int newIndex = _playlistIndex! + 1;
-    if (newIndex >= playlist.value.length) {
-      newIndex = 0;
+    if (failed.length >= currentPlaylist.length) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
+      return;
     }
 
-    _loadAndPlay(newIndex, playlist.value);
+    int startIndex = _playlistIndex ?? -1;
+    int newIndex = (startIndex + 1) % currentPlaylist.length;
+    int attempts = 0;
+    while (failed.contains(newIndex) && attempts < currentPlaylist.length) {
+      newIndex = (newIndex + 1) % currentPlaylist.length;
+      attempts++;
+    }
+
+    if (failed.contains(newIndex) || attempts >= currentPlaylist.length) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
+      return;
+    }
+
+    _loadAndPlay(
+      newIndex,
+      currentPlaylist,
+      isAutoNext: failedIndices != null,
+      failedIndices: failed,
+    );
   }
 
-  void _nextAudio_singleLoop() {
-    if (_playlistIndex == null) return;
+  void _nextAudio_singleLoop({Set<int>? failedIndices}) {
+    final currentPlaylist = playlist.value;
+    if (currentPlaylist.isEmpty) return;
+    final failed = failedIndices ?? <int>{};
 
-    _loadAndPlay(_playlistIndex!, playlist.value);
+    if (failed.length >= currentPlaylist.length) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
+      return;
+    }
+
+    final currentIndex = _playlistIndex ?? 0;
+    if (failed.contains(currentIndex)) {
+      int nextIndex = (currentIndex + 1) % currentPlaylist.length;
+      int attempts = 0;
+      while (failed.contains(nextIndex) && attempts < currentPlaylist.length) {
+        nextIndex = (nextIndex + 1) % currentPlaylist.length;
+        attempts++;
+      }
+      if (failed.contains(nextIndex) || attempts >= currentPlaylist.length) {
+        pause();
+        showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+        notifyListeners();
+        return;
+      }
+      _loadAndPlay(
+        nextIndex,
+        currentPlaylist,
+        isAutoNext: true,
+        failedIndices: failed,
+      );
+      return;
+    }
+
+    _loadAndPlay(
+      currentIndex,
+      currentPlaylist,
+      isAutoNext: failedIndices != null,
+      failedIndices: failed,
+    );
   }
 
-  void _autoNextAudio() {
+  void _autoNextAudio({Set<int>? failedIndices}) {
+    final currentPlaylist = playlist.value;
+    final failed = failedIndices ?? <int>{};
+    if (currentPlaylist.isEmpty || failed.length >= currentPlaylist.length) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
+      return;
+    }
+
+    if (playMode.value == PlayMode.singleLoop) {
+      _nextAudio_singleLoop(failedIndices: failed);
+      return;
+    }
+
+    if (shuffle.value) {
+      _nextAudio_shuffleRandom(failedIndices: failed);
+      return;
+    }
+
     switch (playMode.value) {
       case PlayMode.forward:
-        _nextAudio_forward();
+        _nextAudio_forward(failedIndices: failed);
         break;
       case PlayMode.loop:
-        _nextAudio_shuffleRandom();
+        _nextAudio_loop(failedIndices: failed);
         break;
       case PlayMode.singleLoop:
-        _nextAudio_singleLoop();
+        _nextAudio_singleLoop(failedIndices: failed);
         break;
     }
   }
 
-  void _nextAudio_shuffleRandom() {
-    if (_playlistIndex == null || playlist.value.isEmpty) return;
+  @visibleForTesting
+  void autoNextAudio({Set<int>? failedIndices}) =>
+      _autoNextAudio(failedIndices: failedIndices);
 
-    final currentIndex = _playlistIndex!;
-    final allIndexes = List<int>.generate(playlist.value.length, (i) => i);
+  void _nextAudio_shuffleRandom({Set<int>? failedIndices}) {
+    final currentPlaylist = playlist.value;
+    if (currentPlaylist.isEmpty) return;
+    final failed = failedIndices ?? <int>{};
 
-    // 闅忔満鍒囨瓕鏃堕粯璁や笉閲嶅褰撳墠姝屾洸锛涘垪琛ㄨ緝闀挎椂鍐嶉澶栭伩鍏嶁€滅珛鍒诲洖鍒颁笂娆℃潵婧愨€濄€?
-    final blocked = <int>{currentIndex};
-    if (playlist.value.length > 2 && _lastManualRandomSourceIndex != null) {
+    if (failed.length >= currentPlaylist.length) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
+      return;
+    }
+
+    final currentIndex = _playlistIndex;
+    final allIndexes = List<int>.generate(currentPlaylist.length, (i) => i);
+
+    final blocked = <int>{
+      ...failed,
+      if (currentIndex != null) currentIndex,
+    };
+    if (currentPlaylist.length > 2 && _lastManualRandomSourceIndex != null) {
       blocked.add(_lastManualRandomSourceIndex!);
     }
 
     var candidates = allIndexes.where((i) => !blocked.contains(i)).toList();
-    if (candidates.isEmpty && playlist.value.length > 1) {
-      candidates = allIndexes.where((i) => i != currentIndex).toList();
+    if (candidates.isEmpty && currentPlaylist.length > 1) {
+      candidates = allIndexes
+          .where((i) => !failed.contains(i) && i != currentIndex)
+          .toList();
     }
     if (candidates.isEmpty) {
-      _nextAudio_singleLoop();
+      candidates = allIndexes.where((i) => !failed.contains(i)).toList();
+    }
+    if (candidates.isEmpty) {
+      pause();
+      showTextOnSnackBar("播放列表中的所有曲目均无法播放");
+      notifyListeners();
       return;
     }
 
     final randomIndex = candidates[math.Random().nextInt(candidates.length)];
-    _lastManualRandomSourceIndex = currentIndex;
-    _loadAndPlay(randomIndex, playlist.value);
+    if (currentIndex != null) {
+      _lastManualRandomSourceIndex = currentIndex;
+    }
+    _loadAndPlay(
+      randomIndex,
+      currentPlaylist,
+      isAutoNext: failedIndices != null,
+      failedIndices: failed,
+    );
   }
 
   /// 手动下一曲时默认循环播放列表
@@ -576,6 +800,20 @@ class PlaybackService extends PlaybackController {
   /// 手动上一曲时默认循环播放列表
   void lastAudio() {
     if (shuffle.value) {
+      while (_playbackHistory.isNotEmpty) {
+        final prevIndex = _playbackHistory.removeLast();
+        if (prevIndex >= 0 &&
+            prevIndex < playlist.value.length &&
+            prevIndex != _playlistIndex) {
+          _isNavigatingHistory = true;
+          try {
+            _loadAndPlay(prevIndex, playlist.value);
+          } finally {
+            _isNavigatingHistory = false;
+          }
+          return;
+        }
+      }
       _nextAudio_shuffleRandom();
       return;
     }
@@ -688,7 +926,38 @@ class PlaybackService extends PlaybackController {
         play(0, audios);
         return;
       }
+
+      if (!_player.hasSource) {
+        try {
+          _player.setSource(nowPlaying!.mediaPath);
+          final restorePosition =
+              _pref.lastPosition.clamp(0.0, length).toDouble();
+          if (nowPlaying!.isCueTrack) {
+            final cueStartSec = (nowPlaying!.cueStartMs ?? 0) / 1000.0;
+            _player.seek(cueStartSec + restorePosition);
+          } else {
+            _player.seek(restorePosition);
+          }
+          _applyOutputVolume(nowPlaying);
+        } catch (reloadErr) {
+          LOGGER.e("[start reload source]: $reloadErr");
+          showTextOnSnackBar(
+            '无法播放 "${nowPlaying!.displayTitle}": 文件不存在或格式不支持',
+          );
+          notifyListeners();
+          return;
+        }
+      }
+
+      if (!_player.hasSource) {
+        return;
+      }
+
       _player.start();
+      if (!_player.hasSource) {
+        return;
+      }
+
       _smtc.updateState(state: SMTCState.playing);
       _updateSmtcTimePropertiesThrottled(
         (position * 1000).floor(),
@@ -768,19 +1037,26 @@ class PlaybackService extends PlaybackController {
     );
   }
 
-  void rememberPlaybackSession({bool save = false}) {
-    _rememberPlaybackSession(save: save);
+  void rememberPlaybackSession({bool save = false, bool updatePlaylist = true}) {
+    _rememberPlaybackSession(save: save, updatePlaylist: updatePlaylist);
   }
 
-  void _rememberPlaybackSession({bool save = false}) {
+  void _rememberPlaybackSession({
+    bool save = false,
+    bool updatePlaylist = true,
+  }) {
     final audio = nowPlaying;
     _pref
       ..lastAudioPath = audio?.path
-      ..lastPlaylistPaths =
-          playlist.value.map((audio) => audio.path).toList(growable: false)
       ..lastPlaylistIndex = _playlistIndex ?? 0
       ..lastPosition =
-          audio == null ? 0.0 : position.clamp(0.0, length).toDouble();
+          audio == null ? 0.0 : position.clamp(0.0, length).toDouble()
+      ..shuffle = shuffle.value;
+
+    if (updatePlaylist || save) {
+      _pref.lastPlaylistPaths =
+          playlist.value.map((audio) => audio.path).toList(growable: false);
+    }
 
     if (save) {
       unawaited(AppPreference.instance.save());
@@ -789,7 +1065,7 @@ class PlaybackService extends PlaybackController {
 
   void _rememberPlaybackSessionThrottled() {
     if (nowPlaying == null) return;
-    _rememberPlaybackSession();
+    _rememberPlaybackSession(updatePlaylist: false);
     final now = DateTime.now();
     if (now.difference(_lastSessionSaveAt).inSeconds < 5) return;
     _lastSessionSaveAt = now;
@@ -824,14 +1100,20 @@ class PlaybackService extends PlaybackController {
       index = 0;
     }
 
+    final targetAudio = restoredPlaylist[index];
     try {
       playlist.value = List<Audio>.from(restoredPlaylist);
       _playlistBackup = List<Audio>.from(restoredPlaylist);
+
+      _player.setSource(targetAudio.mediaPath);
+      if (!_player.hasSource) {
+        throw const FormatException("Source initialization failed");
+      }
+
       _playlistIndex = index;
-      nowPlaying = restoredPlaylist[index];
+      nowPlaying = targetAudio;
       _cueAutoNextTriggered = false;
 
-      _player.setSource(nowPlaying!.mediaPath);
       final restorePosition = _pref.lastPosition.clamp(0.0, length).toDouble();
       if (nowPlaying!.isCueTrack) {
         final cueStartSec = (nowPlaying!.cueStartMs ?? 0) / 1000.0;
@@ -840,9 +1122,15 @@ class PlaybackService extends PlaybackController {
         _player.seek(restorePosition);
       }
       _applyOutputVolume(nowPlaying);
-      playService.lyricService.updateLyric();
+      try {
+        playService.lyricService.updateLyric();
+      } catch (lyricErr) {
+        LOGGER.w("[restore playback session] lyric update failed: $lyricErr");
+      }
       notifyListeners();
-      ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+      try {
+        ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+      } catch (_) {}
 
       _smtc.updateState(state: SMTCState.paused);
       _smtc.updateDisplay(
@@ -858,14 +1146,26 @@ class PlaybackService extends PlaybackController {
       );
     } catch (err, trace) {
       LOGGER.e("[restore playback session] $err", stackTrace: trace);
+      _playlistIndex = null;
+      nowPlaying = null;
+      _cueAutoNextTriggered = false;
+      notifyListeners();
     }
   }
 
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
-    _rememberPlaybackSession();
+    _volumeSaveDebounce?.cancel();
+    _rememberPlaybackSession(save: true);
     _audioSpectrum.dispose();
+    _wasapiExclusive.dispose();
+    _enableVolumeLeveling.dispose();
+    _volumeLevelingPreampDb.dispose();
+    _volumeDsp.dispose();
+    playlist.dispose();
+    _playMode.dispose();
+    _shuffle.dispose();
     await Future.wait([
       _playerStateStreamSub.cancel(),
       _smtcEventStreamSub.cancel(),
