@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -33,6 +32,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   AnimationController? _brightnessTransitionController;
 
   bool _isAppLifecycleVisible = true;
+  WindowBackdropMode? _lastBackdropMode;
 
   @visibleForTesting
   bool get isTickerActive => _animController.isAnimating;
@@ -73,12 +73,28 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   double _smoothTime = 0.0;
   int _lastMicroseconds = 0;
 
+  @visibleForTesting
+  double? testPhysicalTime;
+
+  /// 高精度单调物理时钟（秒），确保水波纹管理器、着色器 uniforms 和交互事件运行在统一的时间基准上
+  double get _currentPhysicalTime {
+    final t = testPhysicalTime;
+    if (t != null && t.isFinite) return t;
+    return _stopwatch.elapsedMicroseconds / 1000000.0;
+  }
+
+  @visibleForTesting
+  WaterRippleManager get rippleManager => _rippleManager;
+
+  @visibleForTesting
+  double get currentPhysicalTime => _currentPhysicalTime;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AppSettings.instance.backgroundVersion.addListener(_syncTickerState);
-    WindowControls.isWindowVisible.addListener(_syncTickerState);
+    WindowControls.isWindowVisible.addListener(_onWindowVisibleChanged);
 
     // 60/120fps VSync 动画时钟，直接驱动 CustomPainter，绝不在每帧触发全局 setState
     _animController = AnimationController(
@@ -95,8 +111,18 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
         state != AppLifecycleState.paused;
     if (_isAppLifecycleVisible != isVisible) {
       _isAppLifecycleVisible = isVisible;
+      if (!isVisible) {
+        _rippleManager.resetPointerState();
+      }
       _syncTickerState();
     }
+  }
+
+  void _onWindowVisibleChanged() {
+    if (!WindowControls.isWindowVisible.value) {
+      _rippleManager.resetPointerState();
+    }
+    _syncTickerState();
   }
 
   void _syncTickerState([WindowBackdropMode? explicitMode]) {
@@ -141,7 +167,13 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final theme = Provider.of<ThemeProvider>(context);
-    final targetPalette = theme.effectiveWindowBackdropMode ==
+    final mode = theme.effectiveWindowBackdropMode;
+    if (_lastBackdropMode != null && _lastBackdropMode != mode) {
+      _rippleManager.resetPointerState();
+    }
+    _lastBackdropMode = mode;
+
+    final targetPalette = mode ==
             WindowBackdropMode.prismaticGlass
         ? theme.auroraPalette
         : theme.meshFlowPalette;
@@ -196,35 +228,55 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AppSettings.instance.backgroundVersion.removeListener(_syncTickerState);
-    WindowControls.isWindowVisible.removeListener(_syncTickerState);
+    WindowControls.isWindowVisible.removeListener(_onWindowVisibleChanged);
     _animController.dispose();
     _paletteTransitionController?.dispose();
     _brightnessTransitionController?.dispose();
     super.dispose();
   }
 
-  void _onPointerHover(PointerHoverEvent event, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-    final currentTime = _stopwatch.elapsedMicroseconds / 1000000.0;
+  void _handlePointerMove(PointerEvent event, Size size) {
+    if (!size.isFinite || size.width <= 0 || size.height <= 0) return;
+    if (!event.localPosition.dx.isFinite || !event.localPosition.dy.isFinite) return;
+    final currentTime = _currentPhysicalTime;
     final normalized = Offset(
-      event.localPosition.dx / size.width,
-      event.localPosition.dy / size.height,
+      (event.localPosition.dx / size.width).clamp(0.0, 1.0),
+      (event.localPosition.dy / size.height).clamp(0.0, 1.0),
     );
     _rippleManager.onPointerMove(
       normalizedPos: normalized,
       screenSize: size,
       currentTime: currentTime,
+      pointerId: event.pointer,
     );
   }
 
+  void _onPointerHover(PointerEvent event, Size size) {
+    _handlePointerMove(event, size);
+  }
+
   void _onPointerDown(PointerDownEvent event, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-    final currentTime = _stopwatch.elapsedMicroseconds / 1000000.0;
+    if (!size.isFinite || size.width <= 0 || size.height <= 0) return;
+    if (!event.localPosition.dx.isFinite || !event.localPosition.dy.isFinite) return;
+    final currentTime = _currentPhysicalTime;
     final normalized = Offset(
-      event.localPosition.dx / size.width,
-      event.localPosition.dy / size.height,
+      (event.localPosition.dx / size.width).clamp(0.0, 1.0),
+      (event.localPosition.dy / size.height).clamp(0.0, 1.0),
     );
-    _rippleManager.addClickRipple(normalized, currentTime);
+    _rippleManager.addClickRipple(normalized, currentTime, event.pointer);
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (event.kind == ui.PointerDeviceKind.touch ||
+        event.kind == ui.PointerDeviceKind.trackpad ||
+        event.kind == ui.PointerDeviceKind.stylus ||
+        event.kind == ui.PointerDeviceKind.invertedStylus) {
+      _rippleManager.resetPointerState(event.pointer);
+    }
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _rippleManager.resetPointerState(event.pointer);
   }
 
   @override
@@ -240,10 +292,14 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
           builder: (context, constraints) {
             final size = Size(constraints.maxWidth, constraints.maxHeight);
 
-            final listensForPointer = theme.effectiveWindowBackdropMode ==
-                WindowBackdropMode.waterRipple;
+            final listensForPointer = backgroundFile == null &&
+                theme.effectiveWindowBackdropMode ==
+                    WindowBackdropMode.waterRipple;
             return MouseRegion(
               cursor: SystemMouseCursors.basic,
+              onExit: listensForPointer
+                  ? (_) => _rippleManager.resetPointerState()
+                  : null,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
@@ -256,8 +312,14 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
                   behavior: HitTestBehavior.opaque,
                   onPointerHover:
                       listensForPointer ? (e) => _onPointerHover(e, size) : null,
+                  onPointerMove:
+                      listensForPointer ? (e) => _handlePointerMove(e, size) : null,
                   onPointerDown:
                       listensForPointer ? (e) => _onPointerDown(e, size) : null,
+                  onPointerUp:
+                      listensForPointer ? _onPointerUp : null,
+                  onPointerCancel:
+                      listensForPointer ? _onPointerCancel : null,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -417,16 +479,18 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
             return const ColoredBox(color: Color(0xFF0C1014));
           }
 
+          final rippleTime = _currentPhysicalTime;
+
           try {
             final spectrum =
                 PlayService.instance.playbackService.audioSpectrum.value;
             if (spectrum.isNotEmpty) {
-              _rippleManager.onBassSample(spectrum, currentTime);
+              _rippleManager.onBassSample(spectrum, rippleTime);
             }
           } catch (_) {}
 
-          _rippleManager.updateAmbientRain(currentTime);
-          _rippleManager.pruneExpired(currentTime);
+          _rippleManager.updateAmbientRain(rippleTime);
+          _rippleManager.pruneExpired(rippleTime);
 
           return Stack(
             fit: StackFit.expand,
@@ -436,8 +500,8 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
                 size: size,
                 painter: _WaterRipplePainter(
                   program: _waterRippleProgram!,
-                  time: currentTime,
-                  ripples: _rippleManager.ripples,
+                  time: rippleTime,
+                  ripples: List<RippleSource>.from(_rippleManager.ripples),
                 ),
               ),
             ],
@@ -532,7 +596,7 @@ class _MeshFlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
+    if (!size.isFinite || size.width <= 0 || size.height <= 0 || !time.isFinite) return;
     final shader = program.fragmentShader();
 
     // uniforms 传递
@@ -646,15 +710,27 @@ class RippleSource {
   final RippleType type;
 }
 
+/// 指针手势轨迹状态（隔离多点触控与笔画基准）
+class _PointerTrailState {
+  _PointerTrailState({
+    required this.lastPos,
+    required this.lastTime,
+    required this.lastMoveTime,
+  });
+
+  Offset lastPos;
+  double lastTime;
+  double lastMoveTime;
+}
+
 /// 独立多波源水波纹物理管理器 (零 setState，纯 GPU 驱动，全时自然随机细雨仿真)
 class WaterRippleManager {
   static const int maxRipples = 16;
   final List<RippleSource> _ripples = [];
 
-  // 轨迹微澜节流状态
-  double _lastTrailTime = 0.0;
-  Offset _lastTrailPos = const Offset(-1.0, -1.0);
-  double _lastMoveTime = 0.0;
+  // 多指针独立手势轨迹状态 (多点触控与指针隔离，杜绝跨触点瞬移串扰)
+  final Map<int, _PointerTrailState> _pointerStates = {};
+  Size _lastScreenSize = Size.zero;
 
   // 点击波纹节流与防重叠状态
   double _lastClickTime = 0.0;
@@ -670,20 +746,47 @@ class WaterRippleManager {
 
   List<RippleSource> get ripples => _ripples;
 
-  void addClickRipple(Offset normalizedPos, double currentTime) {
+  void addClickRipple(Offset normalizedPos, double currentTime, [int pointerId = 0]) {
+    if (!currentTime.isFinite ||
+        !normalizedPos.dx.isFinite ||
+        !normalizedPos.dy.isFinite) {
+      return;
+    }
+    final clampedPos = Offset(
+      normalizedPos.dx.clamp(0.0, 1.0),
+      normalizedPos.dy.clamp(0.0, 1.0),
+    );
+
+    if (_lastClickTime > currentTime + 1.0) {
+      _lastClickTime = 0.0;
+    }
+
     // 快速重复点击同一位置去抖：100ms 内且距离小于 0.02 时平滑跳过，防止多层生硬重叠
-    if (_lastClickPos.dx >= 0 && (currentTime - _lastClickTime) < 0.10) {
-      final delta = normalizedPos - _lastClickPos;
+    if (_lastClickPos.dx >= 0 && (currentTime - _lastClickTime).abs() < 0.10) {
+      final delta = clampedPos - _lastClickPos;
       if (delta.distance < 0.02) {
         return;
       }
     }
-    _lastClickPos = normalizedPos;
+    _lastClickPos = clampedPos;
     _lastClickTime = currentTime;
+
+    // 同步手势轨迹基准点，确保后续拖拽（Drag）直接以点击点为起点计算位移，无需丢失首段交互
+    final state = _pointerStates.putIfAbsent(
+      pointerId,
+      () => _PointerTrailState(
+        lastPos: clampedPos,
+        lastTime: currentTime,
+        lastMoveTime: currentTime,
+      ),
+    );
+    state.lastPos = clampedPos;
+    state.lastTime = currentTime;
+    state.lastMoveTime = currentTime;
 
     _addRipple(
       RippleSource(
-        origin: normalizedPos,
+        origin: clampedPos,
         birthTime: currentTime,
         duration: 2.0,
         amplitude: 0.32,
@@ -700,36 +803,78 @@ class WaterRippleManager {
     required Offset normalizedPos,
     required Size screenSize,
     required double currentTime,
+    int pointerId = 0,
   }) {
-    if (screenSize.width <= 0 || screenSize.height <= 0) return;
+    if (!screenSize.isFinite ||
+        screenSize.width <= 0 ||
+        screenSize.height <= 0) {
+      return;
+    }
+    if (!normalizedPos.dx.isFinite ||
+        !normalizedPos.dy.isFinite ||
+        !currentTime.isFinite) {
+      return;
+    }
 
-    if (_lastTrailPos.dx < 0) {
-      _lastTrailPos = normalizedPos;
-      _lastTrailTime = currentTime;
-      _lastMoveTime = currentTime;
+    final clampedPos = Offset(
+      normalizedPos.dx.clamp(0.0, 1.0),
+      normalizedPos.dy.clamp(0.0, 1.0),
+    );
+
+    // 窗口尺寸突变（如最大化/还原/全屏切换/窗口拉伸）：清空旧坐标系基准，避免跨尺寸瞬移巨浪
+    if (_lastScreenSize != Size.zero &&
+        (screenSize.width != _lastScreenSize.width ||
+            screenSize.height != _lastScreenSize.height)) {
+      _lastScreenSize = screenSize;
+      _pointerStates.clear();
+      _pointerStates[pointerId] = _PointerTrailState(
+        lastPos: clampedPos,
+        lastTime: currentTime,
+        lastMoveTime: currentTime,
+      );
+      return;
+    }
+    _lastScreenSize = screenSize;
+
+    final state = _pointerStates[pointerId];
+    if (state == null) {
+      _pointerStates[pointerId] = _PointerTrailState(
+        lastPos: clampedPos,
+        lastTime: currentTime,
+        lastMoveTime: currentTime,
+      );
+      return;
+    }
+
+    // 空闲停顿（> 2.0s）、时间回退（逆序跳变）或首次移动：判定为新交互手势笔画起点，重置基准点
+    if (state.lastPos.dx < 0 ||
+        (currentTime - state.lastMoveTime) > 2.0 ||
+        currentTime < state.lastMoveTime ||
+        currentTime < state.lastTime) {
+      state.lastPos = clampedPos;
+      state.lastTime = currentTime;
+      state.lastMoveTime = currentTime;
       return;
     }
 
     final pixelDelta = Offset(
-      (normalizedPos.dx - _lastTrailPos.dx) * screenSize.width,
-      (normalizedPos.dy - _lastTrailPos.dy) * screenSize.height,
+      (clampedPos.dx - state.lastPos.dx) * screenSize.width,
+      (clampedPos.dy - state.lastPos.dy) * screenSize.height,
     );
     final dist = pixelDelta.distance;
-    final timeSinceLastTrail = currentTime - _lastTrailTime;
-    final timeSinceLastMove = math.max(0.001, currentTime - _lastMoveTime);
-    _lastMoveTime = currentTime;
+    final timeSinceLastTrail = currentTime - state.lastTime;
+    state.lastMoveTime = currentTime;
 
     // 空间-时间双阈值节流：位移门槛加大到 >= 85px 且时间间隔加大到 >= 220ms (轻快稀疏舒展)
     if (dist >= 85.0 && timeSinceLastTrail >= 0.220) {
       final speed =
-          (dist / (timeSinceLastMove * 1000.0)).clamp(0.0, 1.0); // 速度估算
-      // 过滤慢速微移操作
+          (dist / (timeSinceLastTrail * 1000.0)).clamp(0.0, 1.0);
       if (speed >= 0.08) {
         final amplitude = (speed * 0.26 + 0.05).clamp(0.08, 0.18);
 
         _addRipple(
           RippleSource(
-            origin: normalizedPos,
+            origin: clampedPos,
             birthTime: currentTime,
             duration: 0.65,
             amplitude: amplitude,
@@ -740,15 +885,19 @@ class WaterRippleManager {
           ),
           currentTime,
         );
-
-        _lastTrailPos = normalizedPos;
-        _lastTrailTime = currentTime;
       }
+
+      // 无论是否触发微澜（含过滤掉的慢速微移），均推进位移与时间基准点，避免慢移后基准滞留导致后续动作被永久抑制
+      state.lastPos = clampedPos;
+      state.lastTime = currentTime;
     }
   }
 
   void onBassSample(List<double> spectrum, double currentTime) {
-    if (spectrum.isEmpty) return;
+    if (!currentTime.isFinite || spectrum.isEmpty) return;
+    if (currentTime < _lastBassTime) {
+      _lastBassTime = 0.0;
+    }
 
     // 计算 Sub-Bass 频段 (0 ~ 120Hz，前 3 个 bins) 能量
     final subBassCount = math.min(spectrum.length, 3);
@@ -785,10 +934,22 @@ class WaterRippleManager {
   }
 
   void updateAmbientRain(double currentTime) {
+    if (!currentTime.isFinite) return;
+    if (_nextRainDropTime > currentTime + 5.0 || _nextRainDropTime < currentTime - 10.0) {
+      _nextRainDropTime = 0.0;
+    }
+
     pruneExpired(currentTime);
 
-    // 首次启动或初始化：一次性散落 3 个处于不同扩散阶段的舒缓雨滴
-    if (_nextRainDropTime == 0.0) {
+    final currentCount = _ripples
+        .where((r) =>
+            r.type == RippleType.rain &&
+            (currentTime - r.birthTime) >= 0.0 &&
+            (currentTime - r.birthTime) < r.duration)
+        .length;
+
+    // 首次启动或活跃雨滴归零（例如后台唤醒或模式切回）：一次性散落 3 个处于不同扩散周期的舒缓雨滴
+    if (_nextRainDropTime == 0.0 || currentCount == 0) {
       final initialOffsets = [
         Offset(
             0.20 + _random.nextDouble() * 0.25, 0.25 + _random.nextDouble() * 0.25),
@@ -819,11 +980,6 @@ class WaterRippleManager {
     }
 
     // 保证画面中维持至少 3 个活跃雨滴（舒缓补入）
-    final currentCount = _ripples
-        .where((r) =>
-            r.type == RippleType.rain &&
-            (currentTime - r.birthTime) < r.duration)
-        .length;
     if (currentCount < 3) {
       _spawnRainDrop(currentTime);
       _nextRainDropTime = currentTime + 1.1 + _random.nextDouble() * 0.9;
@@ -860,22 +1016,63 @@ class WaterRippleManager {
   }
 
   void _addRipple(RippleSource ripple, double currentTime) {
-    _ripples.removeWhere((r) => (currentTime - r.birthTime) > r.duration);
+    pruneExpired(currentTime);
 
     if (_ripples.length >= maxRipples) {
-      _ripples.removeAt(0);
+      // 保证交互波纹（鼠标移动/点击）不截断背景环境雨滴与低音共振波纹生命周期：
+      // 优先逐出最旧的轨迹微澜 (trail)，其次逐出最旧的点击波纹 (click)
+      final trailIndex = _ripples.indexWhere((r) => r.type == RippleType.trail);
+      if (trailIndex != -1) {
+        _ripples.removeAt(trailIndex);
+      } else {
+        final clickIndex =
+            _ripples.indexWhere((r) => r.type == RippleType.click);
+        if (clickIndex != -1) {
+          _ripples.removeAt(clickIndex);
+        } else if (ripple.type == RippleType.trail ||
+            ripple.type == RippleType.click) {
+          // 绝对保护自然雨滴与低音共振：若已满且全为环境波纹，拒绝交互波纹挤占环境波纹
+          return;
+        } else {
+          _ripples.removeAt(0);
+        }
+      }
     }
     _ripples.add(ripple);
   }
 
   void pruneExpired(double currentTime) {
-    _ripples.removeWhere((r) => (currentTime - r.birthTime) > r.duration);
+    if (!currentTime.isFinite) return;
+    _ripples.removeWhere((r) =>
+        (currentTime - r.birthTime) > r.duration ||
+        r.birthTime > (currentTime + 0.05));
+  }
+
+  void resetPointerState([int? pointerId]) {
+    if (pointerId != null) {
+      _pointerStates.remove(pointerId);
+    } else {
+      _pointerStates.clear();
+      _lastScreenSize = Size.zero;
+    }
+    _lastClickTime = 0.0;
+    _lastClickPos = const Offset(-1.0, -1.0);
+  }
+
+  @visibleForTesting
+  void reset() {
+    _ripples.clear();
+    resetPointerState();
+    _nextRainDropTime = 0.0;
+    _lastBassTime = 0.0;
+    _bassAvgEnergy = 0.0;
   }
 }
 
 /// 交互水波纹着色器绘制器 (16 独立波源物理干涉叠加与单次遍历解析导数法线，雨天纯净冷灰玄青光学)
-class _WaterRipplePainter extends CustomPainter {
-  const _WaterRipplePainter({
+@visibleForTesting
+class WaterRipplePainter extends CustomPainter {
+  const WaterRipplePainter({
     required this.program,
     required this.time,
     required this.ripples,
@@ -887,7 +1084,9 @@ class _WaterRipplePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
+    if (!time.isFinite || !size.isFinite || size.width <= 0 || size.height <= 0) {
+      return;
+    }
     final shader = program.fragmentShader();
 
     shader.setFloat(0, size.width);
@@ -904,6 +1103,26 @@ class _WaterRipplePainter extends CustomPainter {
 
       if (i < activeCount) {
         final r = ripples[i];
+        if (!r.origin.dx.isFinite ||
+            !r.origin.dy.isFinite ||
+            !r.birthTime.isFinite ||
+            !r.amplitude.isFinite ||
+            !r.speed.isFinite ||
+            !r.frequency.isFinite ||
+            !r.damping.isFinite ||
+            !r.duration.isFinite) {
+          shader.setFloat(rIndex + 0, 0.0);
+          shader.setFloat(rIndex + 1, 0.0);
+          shader.setFloat(rIndex + 2, 0.0);
+          shader.setFloat(rIndex + 3, 0.0);
+
+          shader.setFloat(pIndex + 0, 0.0);
+          shader.setFloat(pIndex + 1, 0.0);
+          shader.setFloat(pIndex + 2, 0.0);
+          shader.setFloat(pIndex + 3, 0.0);
+          continue;
+        }
+
         shader.setFloat(rIndex + 0, r.origin.dx);
         shader.setFloat(rIndex + 1, r.origin.dy);
         shader.setFloat(rIndex + 2, r.birthTime);
@@ -945,8 +1164,10 @@ class _WaterRipplePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _WaterRipplePainter oldDelegate) => true;
+  bool shouldRepaint(covariant WaterRipplePainter oldDelegate) => true;
 }
+
+typedef _WaterRipplePainter = WaterRipplePainter;
 
 /// 极光漫染绘制器（多点调和的静态高斯漫射光晕，呈现 Apple Music 级海报微光质感）
 class _AuroraGlowPainter extends CustomPainter {
@@ -962,7 +1183,7 @@ class _AuroraGlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
+    if (!size.isFinite || size.width <= 0 || size.height <= 0) return;
 
     final rect = Offset.zero & size;
     final maxDim = math.max(size.width, size.height);

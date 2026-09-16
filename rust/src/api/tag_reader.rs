@@ -1411,6 +1411,9 @@ fn resize_loaded_picture(
     width: u32,
     height: u32,
 ) -> Option<Vec<u8>> {
+    if width == 0 || height == 0 {
+        return None;
+    }
     let pic_ratio = loaded_pic.width() as f32 / loaded_pic.height() as f32;
     let (result_width, result_height) = if pic_ratio > 1.0 {
         (width, (width as f32 / pic_ratio).round() as u32)
@@ -1444,9 +1447,21 @@ pub fn get_picture_sizes_from_path(
         Ok(image) => image,
         Err(_) => {
             return Some(PictureSizes {
-                small: Some(original.clone()),
-                medium: Some(original.clone()),
-                large: Some(original),
+                small: if small_width > 0 && small_height > 0 {
+                    Some(original.clone())
+                } else {
+                    None
+                },
+                medium: if medium_width > 0 && medium_height > 0 {
+                    Some(original.clone())
+                } else {
+                    None
+                },
+                large: if large_width > 0 && large_height > 0 {
+                    Some(original)
+                } else {
+                    None
+                },
             });
         }
     };
@@ -1884,7 +1899,8 @@ fn update_index_internal(
     let mut index_path = PathBuf::from(index_path_str);
     index_path.push("index.json");
     let index_bytes = fs::read(&index_path)?;
-    let mut index: serde_json::Value = serde_json::from_slice(&index_bytes)?;
+    let initial_index: serde_json::Value = serde_json::from_slice(&index_bytes)?;
+    let mut index = initial_index.clone();
 
     let version = index["version"].as_u64();
     if version.is_none() {
@@ -1946,11 +1962,24 @@ fn update_index_internal(
         // 单次遍历分区
         let mut cue_files = Vec::new();
         let mut audio_files = Vec::new();
+        let mut read_dir_failed = false;
 
-        for entry in dir.filter_map(|e| e.ok()) {
+        for entry_res in dir {
+            let entry = match entry_res {
+                Ok(e) => e,
+                Err(err) => {
+                    log_to_dart(format!("update_index 目录遍历发生异常 {:?}: {}", folder_path, err));
+                    read_dir_failed = true;
+                    break;
+                }
+            };
             let ft = match entry.file_type() {
                 Ok(t) => t,
-                Err(_) => continue,
+                Err(err) => {
+                    log_to_dart(format!("update_index 获取文件类型异常 {:?}: {}", entry.path(), err));
+                    read_dir_failed = true;
+                    break;
+                }
             };
             if ft.is_file() {
                 let entry_path = entry.path();
@@ -1962,6 +1991,13 @@ fn update_index_internal(
                     }
                 }
             }
+        }
+
+        // 遇到网络抖动或单次 I/O 异常时，立即中止覆写、标记 pending_retry = true 并保留已有缓存曲目
+        if read_dir_failed {
+            folder_item["pending_retry"] = serde_json::json!(true);
+            updated += 1;
+            continue;
         }
 
         let cached_audios = folder_item["audios"].as_array().cloned().unwrap_or_default();
@@ -2006,10 +2042,20 @@ fn update_index_internal(
                 continue;
             }
 
+            let cached_item = cached_map.get(&norm_path);
+
             let metadata = match fs::metadata(audio_path) {
                 Ok(m) => m,
                 Err(err) => {
                     log_to_dart(format!("update_index: 读取文件元数据失败 {:?}: {}", audio_path, err));
+                    // 单文件元数据读取失败时，回退保留原有的 cached_item
+                    if let Some(cached) = cached_item {
+                        let created = cached["created"].as_u64().unwrap_or(0);
+                        if created > latest {
+                            latest = created;
+                        }
+                        new_audios.push(cached.clone());
+                    }
                     continue;
                 }
             };
@@ -2022,19 +2068,41 @@ fn update_index_internal(
                 .unwrap_or(0);
             let file_len = metadata.len();
 
-            let cached_item = cached_map.get(&norm_path);
-
             let should_reparse = force_refresh_all || match cached_item {
                 Some(cached) => {
                     let cached_mtime = cached["modified"].as_u64().unwrap_or(0);
                     let cached_size = cached["size"].as_u64();
-                    file_mtime > cached_mtime || cached_size != Some(file_len)
+                    cached_mtime != file_mtime || cached_size != Some(file_len)
                 }
                 None => true,
             };
 
             if should_reparse {
-                if let Some(parsed_audio) = Audio::read_from_path(audio_path) {
+                let parsed_opt = Audio::read_from_path(audio_path);
+                let is_successful_parse = match &parsed_opt {
+                    Some(audio) => audio.by.is_some() && (audio.duration > 0 || !is_unknown_text(&audio.artist)),
+                    None => false,
+                };
+
+                if is_successful_parse {
+                    let parsed_audio = parsed_opt.unwrap();
+                    let mut audio_json = parsed_audio.to_json_value();
+                    audio_json["size"] = serde_json::json!(file_len);
+                    let created = audio_json["created"].as_u64().unwrap_or(0);
+                    if created > latest {
+                        latest = created;
+                    }
+                    new_audios.push(audio_json);
+                } else if let Some(cached) = cached_item {
+                    // 单文件元数据解析失败时，回退保留原有的 cached_item
+                    let mut reused = cached.clone();
+                    reused["size"] = serde_json::json!(file_len);
+                    let created = reused["created"].as_u64().unwrap_or(0);
+                    if created > latest {
+                        latest = created;
+                    }
+                    new_audios.push(reused);
+                } else if let Some(parsed_audio) = parsed_opt {
                     let mut audio_json = parsed_audio.to_json_value();
                     audio_json["size"] = serde_json::json!(file_len);
                     let created = audio_json["created"].as_u64().unwrap_or(0);
@@ -2117,7 +2185,21 @@ fn update_index_internal(
     index["version"] = serde_json::json!(CURRENT_INDEX_VERSION);
     index["roots"] = serde_json::json!(roots);
 
-    atomic_write_bytes(&index_path, index.to_string().as_bytes())?;
+    let has_changed = index != initial_index;
+    if has_changed {
+        atomic_write_bytes(&index_path, index.to_string().as_bytes())?;
+    }
+
+    if let Some(sink) = sink {
+        let _ = sink.add(IndexActionState {
+            progress: 1.0,
+            message: if has_changed {
+                "changed".to_string()
+            } else {
+                "unchanged".to_string()
+            },
+        });
+    }
     Ok(())
 }
 
@@ -2644,6 +2726,128 @@ mod tests {
         let audio = audio.unwrap();
         // 验证 by 标记包含 Lofty，说明 Lofty 纯内存解析成功并直接返回
         assert_eq!(audio.by.as_deref(), Some("Lofty"), "Lofty memory parsing should be prioritized");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_single_file_parse_failure_falls_back_to_cached_item() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("test_fallback_{}_{}", std::process::id(), unique));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let album_dir = temp_dir.join("corrupt_album");
+        fs::create_dir_all(&album_dir).unwrap();
+        let bad_wav = album_dir.join("corrupt_song.wav");
+        // 写入破坏字节，模拟单文件损坏或锁死无法提取标签
+        fs::write(&bad_wav, b"NOT_A_VALID_WAV_HEADER_CORRUPTED_DATA").unwrap();
+
+        let meta = fs::metadata(&bad_wav).unwrap();
+        let file_len = meta.len();
+        let file_mtime = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        let index_path = temp_dir.join("index.json");
+        fs::write(
+            &index_path,
+            serde_json::json!({
+                "version": CURRENT_INDEX_VERSION,
+                "roots": [temp_dir.to_string_lossy().to_string()],
+                "folders": [
+                    {
+                        "path": album_dir.to_string_lossy().to_string(),
+                        "modified": 1000,
+                        "latest": 1000,
+                        "pending_retry": false,
+                        "audios": [
+                            {
+                                "path": bad_wav.to_string_lossy().to_string(),
+                                "title": "Saved Precious Title",
+                                "artist": "Precious Artist",
+                                "album": "Precious Album",
+                                "duration": 240,
+                                "modified": file_mtime.saturating_sub(10), // 触发重新提取分支
+                                "created": 1000,
+                                "size": file_len
+                            }
+                        ]
+                    }
+                ]
+            }).to_string(),
+        ).unwrap();
+
+        update_index_internal(&temp_dir.to_string_lossy(), None).unwrap();
+
+        let index: serde_json::Value =
+            serde_json::from_slice(&fs::read(&index_path).unwrap()).unwrap();
+        let audios = index["folders"][0]["audios"].as_array().unwrap();
+        assert_eq!(audios.len(), 1, "曲目绝不能因为单文件提取失败而在索引中蒸发");
+        assert_eq!(audios[0]["title"], "Saved Precious Title", "必须回退保留原有 cached 记录");
+        assert_eq!(audios[0]["artist"], "Precious Artist");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_bidirectional_mtime_change_triggers_reparse() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("test_bidirectional_{}_{}", std::process::id(), unique));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let album_dir = temp_dir.join("reverted_album");
+        fs::create_dir_all(&album_dir).unwrap();
+        let song_wav = album_dir.join("reverted.wav");
+        create_dummy_wav_with_duration(&song_wav, 1);
+
+        let meta = fs::metadata(&song_wav).unwrap();
+        let file_len = meta.len();
+        let actual_mtime = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        // 模拟缓存中 mtime 大于实际文件 mtime（如备份还原或时间被改小）
+        let cached_mtime = actual_mtime + 500;
+
+        let index_path = temp_dir.join("index.json");
+        fs::write(
+            &index_path,
+            serde_json::json!({
+                "version": CURRENT_INDEX_VERSION,
+                "roots": [temp_dir.to_string_lossy().to_string()],
+                "folders": [
+                    {
+                        "path": album_dir.to_string_lossy().to_string(),
+                        "modified": 9999999999u64,
+                        "latest": actual_mtime,
+                        "pending_retry": false,
+                        "audios": [
+                            {
+                                "path": song_wav.to_string_lossy().to_string(),
+                                "title": "Stale Reverted Title",
+                                "artist": "Artist",
+                                "album": "Album",
+                                "duration": 1,
+                                "modified": cached_mtime, // cached_mtime != actual_mtime
+                                "created": actual_mtime,
+                                "size": file_len
+                            }
+                        ]
+                    }
+                ]
+            }).to_string(),
+        ).unwrap();
+
+        update_index_internal(&temp_dir.to_string_lossy(), None).unwrap();
+
+        let index: serde_json::Value =
+            serde_json::from_slice(&fs::read(&index_path).unwrap()).unwrap();
+        let audios = index["folders"][0]["audios"].as_array().unwrap();
+        assert_eq!(audios.len(), 1);
+        // 双向校验触发重新提取
+        assert_eq!(audios[0]["modified"], actual_mtime);
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

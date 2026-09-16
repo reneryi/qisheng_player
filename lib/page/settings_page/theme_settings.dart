@@ -267,41 +267,53 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
     return SettingsTile(
       description: "窗口底座材质",
       hint: "包含默认、弥散流彩、水波纹与极光漫染。当前实际模式：$effectiveModeLabel$fallbackHint",
-      action: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _buildBackdropChip(WindowBackdropMode.defaultGradient, "默认"),
-          _buildBackdropChip(WindowBackdropMode.meshFlow, "弥散流彩"),
-          _buildBackdropChip(WindowBackdropMode.waterRipple, "水波纹"),
-          _buildBackdropChip(WindowBackdropMode.prismaticGlass, "极光漫染"),
-        ],
+      action: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: SegmentedButton<WindowBackdropMode>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment<WindowBackdropMode>(
+              value: WindowBackdropMode.defaultGradient,
+              icon: Icon(Symbols.gradient, size: 18),
+              label: Text("默认"),
+            ),
+            ButtonSegment<WindowBackdropMode>(
+              value: WindowBackdropMode.meshFlow,
+              icon: Icon(Symbols.bubble_chart, size: 18),
+              label: Text("弥散流彩"),
+            ),
+            ButtonSegment<WindowBackdropMode>(
+              value: WindowBackdropMode.waterRipple,
+              icon: Icon(Symbols.waves, size: 18),
+              label: Text("水波纹"),
+            ),
+            ButtonSegment<WindowBackdropMode>(
+              value: WindowBackdropMode.prismaticGlass,
+              icon: Icon(Symbols.lens_blur, size: 18),
+              label: Text("极光漫染"),
+            ),
+          ],
+          selected: {theme.windowBackdropMode},
+          onSelectionChanged: (newSelection) async {
+            final mode = newSelection.first;
+            if (mode == theme.windowBackdropMode) return;
+            final result = await ThemeProvider.instance.applyWindowBackdropMode(
+              mode,
+            );
+            setState(() {
+              settings.windowBackdropMode = mode;
+              _latestResult = result;
+            });
+            await settings.saveSettings();
+            if (result.appliedMode != mode && mounted) {
+              showTextOnSnackBar(
+                "背景材质已从 ${_modeLabel(mode.name)} 回退为 ${_modeLabel(result.appliedMode.name)}",
+              );
+            }
+          },
+        ),
       ),
-    );
-  }
-
-  Widget _buildBackdropChip(WindowBackdropMode mode, String label) {
-    final theme = context.watch<ThemeProvider>();
-    final isSelected = theme.windowBackdropMode == mode;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) async {
-        if (!selected || mode == theme.windowBackdropMode) return;
-        final result = await ThemeProvider.instance.applyWindowBackdropMode(
-          mode,
-        );
-        setState(() {
-          settings.windowBackdropMode = mode;
-          _latestResult = result;
-        });
-        await settings.saveSettings();
-        if (result.appliedMode != mode && mounted) {
-          showTextOnSnackBar(
-            "背景材质已从 ${_modeLabel(mode.name)} 回退为 ${_modeLabel(result.appliedMode.name)}",
-          );
-        }
-      },
     );
   }
 }

@@ -133,20 +133,26 @@ class PlaybackPreference {
         "lastPosition": lastPosition,
       };
 
-  factory PlaybackPreference.fromMap(Map map) => PlaybackPreference(
-        PlayMode.fromString(map["playMode"]) ?? PlayMode.forward,
-        map["volumeDsp"] ?? 1.0,
-        map["enableVolumeLeveling"] ?? false,
-        (map["volumeLevelingPreampDb"] as num?)?.toDouble() ?? 0.0,
-        map["lastAudioPath"]?.toString(),
-        (map["lastPlaylistPaths"] as List?)
-                ?.map((item) => item.toString())
-                .toList() ??
-            const [],
-        (map["lastPlaylistIndex"] as num?)?.toInt() ?? 0,
-        (map["lastPosition"] as num?)?.toDouble() ?? 0.0,
-        map["shuffle"] ?? false,
-      );
+  factory PlaybackPreference.fromMap(Map map) {
+    final shuffle = map["shuffle"] ?? false;
+    final playMode = shuffle
+        ? PlayMode.forward
+        : (PlayMode.fromString(map["playMode"]) ?? PlayMode.forward);
+    return PlaybackPreference(
+      playMode,
+      map["volumeDsp"] ?? 1.0,
+      map["enableVolumeLeveling"] ?? false,
+      (map["volumeLevelingPreampDb"] as num?)?.toDouble() ?? 0.0,
+      map["lastAudioPath"]?.toString(),
+      (map["lastPlaylistPaths"] as List?)
+              ?.map((item) => item.toString())
+              .toList() ??
+          const [],
+      (map["lastPlaylistIndex"] as num?)?.toInt() ?? 0,
+      (map["lastPosition"] as num?)?.toDouble() ?? 0.0,
+      shuffle,
+    );
+  }
 }
 
 class DesktopLyricPreference {

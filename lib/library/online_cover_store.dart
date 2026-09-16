@@ -112,7 +112,7 @@ class OnlineCoverStore {
 
   final Map<String, String> _cachedPathMap = {};
   final Map<String, int> _failedAudioPaths = {};
-  final Map<String, Future<ImageProvider?>> _inflightSearches = {};
+  final Map<String, Future<File?>> _inflightFileSearches = {};
   final Future<List<SongSearchResult>> Function(Audio) _search;
   final int Function() _nowMilliseconds;
   final Future<void> Function(Map<String, int>)? _persistFailuresForTesting;
@@ -225,32 +225,40 @@ class OnlineCoverStore {
     return onlineCoverCacheKey(path);
   }
 
-  Future<ImageProvider?> getCover(Audio audio) async {
+  Future<File?> getCoverFile(Audio audio) async {
     await read();
     final lookupPath = audio.mediaPath;
     final cached = _cachedPathMap[lookupPath] ?? _cachedPathMap[audio.path];
-    if (cached != null && File(cached).existsSync()) {
-      return FileImage(File(cached));
+    if (cached != null) {
+      final file = File(cached);
+      if (file.existsSync()) {
+        return file;
+      }
     }
     if (_hasRecentFailure(audio.path)) {
       return null;
     }
 
-    final inflight = _inflightSearches[lookupPath];
+    final inflight = _inflightFileSearches[lookupPath];
     if (inflight != null) return inflight;
 
-    final future = _searchAndCacheCover(audio, lookupPath);
-    _inflightSearches[lookupPath] = future;
+    final future = _searchAndCacheCoverFile(audio, lookupPath);
+    _inflightFileSearches[lookupPath] = future;
     try {
       return await future;
     } finally {
-      if (identical(_inflightSearches[lookupPath], future)) {
-        _inflightSearches.remove(lookupPath);
+      if (identical(_inflightFileSearches[lookupPath], future)) {
+        _inflightFileSearches.remove(lookupPath);
       }
     }
   }
 
-  Future<ImageProvider?> _searchAndCacheCover(
+  Future<ImageProvider?> getCover(Audio audio) async {
+    final file = await getCoverFile(audio);
+    return file != null ? FileImage(file) : null;
+  }
+
+  Future<File?> _searchAndCacheCoverFile(
     Audio audio,
     String lookupPath,
   ) async {
@@ -269,16 +277,16 @@ class OnlineCoverStore {
       await _markFailed(audio.path);
       return null;
     }
-    final cover = await setCoverFromUrl(
+    final file = await setCoverFileFromUrl(
       audio: audio,
       url: hit.coverUrl!,
       targetPath: lookupPath,
     );
-    if (cover == null) await _markFailed(audio.path);
-    return cover;
+    if (file == null) await _markFailed(audio.path);
+    return file;
   }
 
-  Future<ImageProvider?> setCoverFromUrl({
+  Future<File?> setCoverFileFromUrl({
     required Audio audio,
     required String url,
     String? targetPath,
@@ -316,7 +324,8 @@ class OnlineCoverStore {
 
       final dir = await _coverCacheDir();
       final cachePath = "${dir.path}\\${_cacheNameForPath(lookupPath)}$extension";
-      await File(cachePath).writeAsBytes(bytes, flush: true);
+      final file = File(cachePath);
+      await file.writeAsBytes(bytes, flush: true);
       _cachedPathMap[lookupPath] = cachePath;
       final removedLookup = _failedAudioPaths.remove(lookupPath) != null;
       final removedAudio = _failedAudioPaths.remove(audio.path) != null;
@@ -324,13 +333,26 @@ class OnlineCoverStore {
         await _saveFailures();
       }
       await save();
-      return FileImage(File(cachePath));
+      return file;
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
       return null;
     } finally {
       client?.close(force: true);
     }
+  }
+
+  Future<ImageProvider?> setCoverFromUrl({
+    required Audio audio,
+    required String url,
+    String? targetPath,
+  }) async {
+    final file = await setCoverFileFromUrl(
+      audio: audio,
+      url: url,
+      targetPath: targetPath,
+    );
+    return file != null ? FileImage(file) : null;
   }
 
   void removeByPath(String path) {

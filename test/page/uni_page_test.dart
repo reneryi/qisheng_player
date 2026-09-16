@@ -939,4 +939,59 @@ void main() {
       72.0,
     );
   });
+
+  testWidgets(
+      'clicking locate button clears active side index label highlight', (
+    tester,
+  ) async {
+    final preference = PagePreference(
+      0,
+      SortOrder.ascending,
+      ContentView.list,
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ThemeProvider>.value(
+        value: ThemeProvider.instance,
+        child: MaterialApp(
+          theme: _buildTheme(),
+          home: Scaffold(
+            body: UniPage<int>(
+              pref: preference,
+              title: '歌曲',
+              contentList: const [1, 2, 3],
+              contentBuilder: (_, item, __, ___) => SizedBox(
+                height: 64,
+                child: Text('$item'),
+              ),
+              enableShufflePlay: false,
+              enableSortMethod: false,
+              enableSortOrder: false,
+              enableContentViewSwitch: false,
+              sideIndexLabels: const ['A', 'B'],
+              sideIndexResolver: (_, label) => label == 'B' ? 1 : 0,
+              locateTo: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Text getLabelText(String label) => tester.widget<Text>(find.text(label));
+    expect(getLabelText('B').style?.fontWeight, FontWeight.w500);
+
+    // 点击字母 B
+    await tester.tap(find.text('B'));
+    await tester.pumpAndSettle();
+    expect(getLabelText('B').style?.fontWeight, FontWeight.w700);
+
+    // 点击定位按钮
+    await tester.tap(find.byKey(const ValueKey('uni-page-locate-button')));
+    await tester.pumpAndSettle();
+
+    // B 的高亮灭掉，恢复正常字重
+    expect(getLabelText('B').style?.fontWeight, FontWeight.w500);
+    expect(tester.takeException(), isNull);
+  });
 }

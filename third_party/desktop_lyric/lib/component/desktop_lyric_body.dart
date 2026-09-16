@@ -32,9 +32,15 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
   void _onDialogOpenChanged() {
     if (!mounted) return;
     final nowOpen = isDialogOpen.value;
-    if (_lastDialogOpen && !nowOpen) {
-      // 弹窗退出时触发双重钳制安全恢复（尺寸下限 142px + 屏幕工作区坐标安全钳制）
-      restoreLyricWindowSizeAndPosition();
+    if (nowOpen) {
+      if (isHovering) {
+        setState(() {
+          isHovering = false;
+        });
+      }
+    } else if (_lastDialogOpen && !nowOpen) {
+      // 弹窗退出时仅在必要时兜底恢复（尺寸下限 142px + 屏幕工作区坐标安全钳制）
+      restoreLyricWindowSizeAndPositionIfNeeded();
     }
     _lastDialogOpen = nowOpen;
   }
@@ -60,6 +66,7 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
           final effectiveHover = isHovering && !dialogOpen;
           return MouseRegion(
             onEnter: (_) {
+              if (dialogOpen) return;
               setState(() {
                 isHovering = true;
               });
@@ -72,14 +79,16 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onPanStart: (details) {
+                if (dialogOpen) return;
                 windowManager.startDragging();
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
+                duration: dialogOpen
+                    ? Duration.zero
+                    : const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
-                margin: dialogOpen
-                    ? EdgeInsets.zero
-                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 width: double.infinity,
                 height: double.infinity,
                 decoration: BoxDecoration(
@@ -87,7 +96,8 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
                       ? (isDark
                           ? Color.alphaBlend(
                               Color(theme.primary).withValues(alpha: 0.10),
-                              const Color(0xFF141923).withValues(alpha: 0.78),
+                              const Color(0xFF141923)
+                                  .withValues(alpha: 0.78),
                             )
                           : Color.alphaBlend(
                               Color(theme.primary).withValues(alpha: 0.05),
@@ -99,12 +109,13 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Colors.white.withValues(alpha: isDark ? 0.08 : 0.70),
+                            Colors.white
+                                .withValues(alpha: isDark ? 0.08 : 0.70),
                             Colors.transparent,
                           ],
                         )
                       : null,
-                  borderRadius: BorderRadius.circular(dialogOpen ? 0 : 18.0),
+                  borderRadius: BorderRadius.circular(18.0),
                   border: Border.all(
                     color: effectiveHover
                         ? (isDark
@@ -133,11 +144,13 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
                       : null,
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(dialogOpen ? 0 : 18.0),
+                  borderRadius: BorderRadius.circular(18.0),
                   child: Center(
-                    child: Opacity(
+                    child: AnimatedOpacity(
                       opacity: dialogOpen ? 0.0 : 1.0,
-                      child: DesktopLyricForeground(isHovering: isHovering),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      child: DesktopLyricForeground(isHovering: effectiveHover),
                     ),
                   ),
                 ),

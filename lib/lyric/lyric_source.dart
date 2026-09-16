@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/utils.dart';
 
@@ -52,6 +53,54 @@ class LyricSource {
 }
 
 Map<String, LyricSource> LYRIC_SOURCES = {};
+bool _lyricSourcesLoaded = false;
+
+bool get isLyricSourcesLoaded => _lyricSourcesLoaded;
+
+@visibleForTesting
+void resetLyricSourcesLoadedForTesting({bool loaded = false}) {
+  _lyricSourcesLoaded = loaded;
+}
+
+void removeLyricSourceByPath(String path) {
+  if (LYRIC_SOURCES.remove(path) != null) {
+    unawaited(saveLyricSources());
+  }
+}
+
+void removeLyricSourcesByPaths(Iterable<String> paths) {
+  bool changed = false;
+  for (final path in paths) {
+    if (LYRIC_SOURCES.remove(path) != null) {
+      changed = true;
+    }
+  }
+  if (changed) {
+    unawaited(saveLyricSources());
+  }
+}
+
+/// 主动维护入口：清理不存在物理文件且非虚拟分轨标识的脏配置
+Future<int> pruneMissingLyricSources() async {
+  if (!_lyricSourcesLoaded) {
+    await readLyricSources();
+  }
+  final toRemove = <String>[];
+  for (final key in LYRIC_SOURCES.keys) {
+    // 保护 CUE 虚拟分轨标识（包含 #CUE:）
+    if (key.contains('#CUE:')) continue;
+    if (!File(key).existsSync()) {
+      toRemove.add(key);
+    }
+  }
+  for (final key in toRemove) {
+    LYRIC_SOURCES.remove(key);
+  }
+  if (toRemove.isNotEmpty) {
+    await saveLyricSources();
+  }
+  return toRemove.length;
+}
 
 /// 串行写入任务队列，确保并发调用 saveLyricSources() 时严格按序落盘，杜绝 Windows 文件占用冲突 (errno 32)
 Future<void> _saveQueue = Future.value();
@@ -63,6 +112,7 @@ Future<void> readLyricSources() async {
     final file = File(lyricSourcePath);
     if (!file.existsSync()) {
       LYRIC_SOURCES.clear();
+      _lyricSourcesLoaded = true;
       return;
     }
 
@@ -80,18 +130,19 @@ Future<void> readLyricSources() async {
 
     if (lyricSourceStr == null || lyricSourceStr.trim().isEmpty) {
       LYRIC_SOURCES.clear();
+      _lyricSourcesLoaded = true;
       return;
     }
     final dynamic decoded = json.decode(lyricSourceStr);
     if (decoded is! Map) {
       LYRIC_SOURCES.clear();
+      _lyricSourcesLoaded = false;
       return;
     }
 
     final Map<String, LyricSource> newSources = {};
     for (final item in decoded.entries) {
       if (item.value is! Map) continue;
-      if (File(item.key.toString()).existsSync() == false) continue;
       try {
         newSources[item.key.toString()] =
             LyricSource.fromMap(item.value as Map);
@@ -101,13 +152,23 @@ Future<void> readLyricSources() async {
     }
     LYRIC_SOURCES.clear();
     LYRIC_SOURCES.addAll(newSources);
+    _lyricSourcesLoaded = true;
   } catch (err, trace) {
     LYRIC_SOURCES.clear();
+    _lyricSourcesLoaded = false;
     LOGGER.e(err, stackTrace: trace);
   }
 }
 
 Future<void> saveLyricSources() {
+  if (!_lyricSourcesLoaded) {
+    if (LYRIC_SOURCES.isEmpty) {
+      LOGGER.w("saveLyricSources: 歌词源尚未就绪或加载异常，跳过空数据落盘以防覆写磁盘文件");
+      return Future.value();
+    }
+    _lyricSourcesLoaded = true;
+  }
+
   // 同步抓取当前时刻的内存快照，杜绝在排队或并发读取交织时数据被磁盘旧值覆盖
   final Map<String, Map> lyricSourceMaps = {};
   for (final item in LYRIC_SOURCES.entries) {

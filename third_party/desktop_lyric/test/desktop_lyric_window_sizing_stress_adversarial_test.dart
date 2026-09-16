@@ -452,4 +452,91 @@ void main() {
       expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
     });
   });
+
+  group('Dimension 6: Dialog Transition Lifecycle & Zero-Premature-Resize Invariants', () {
+    testWidgets('Font dialog does NOT shrink window while exit animation is running',
+        (tester) async {
+      setupDesktopViewport(tester);
+
+      await tester.pumpWidget(const DesktopLyricApp());
+      await tester.pumpAndSettle();
+
+      final BuildContext bodyContext = tester.element(find.byType(DesktopLyricBody));
+
+      // 1. Open dialog
+      showLyricFontSelectorDialog(bodyContext);
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(isDialogOpen.value, isTrue);
+      expect(currentWindowHeight, equals(620.0));
+      expect(find.byType(LyricFontSelectorDialog), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      final dialogContext = tester.element(find.byType(LyricFontSelectorDialog));
+
+      // 2. Trigger pop (exit animation begins)
+      Navigator.of(dialogContext).pop();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // At 50ms into 220ms exit transition:
+      // Dialog MUST still exist in tree and window MUST NOT have shrunk to 142px!
+      expect(find.byType(LyricFontSelectorDialog), findsOneWidget);
+      expect(isDialogOpen.value, isTrue,
+          reason: 'isDialogOpen must remain true during exit animation to prevent premature lyric flash');
+      expect(currentWindowHeight, equals(620.0),
+          reason: 'Window height must NOT shrink while dialog is still animating out');
+
+      // Advance to 150ms
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(LyricFontSelectorDialog), findsOneWidget);
+      expect(isDialogOpen.value, isTrue);
+      expect(currentWindowHeight, equals(620.0));
+
+      // 3. Complete transition
+      await tester.pumpAndSettle();
+      expect(find.byType(LyricFontSelectorDialog), findsNothing);
+      expect(isDialogOpen.value, isFalse);
+      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, lessThan(200.0));
+    });
+
+    testWidgets('Color dialog does NOT shrink window while exit animation is running',
+        (tester) async {
+      setupDesktopViewport(tester);
+
+      await tester.pumpWidget(const DesktopLyricApp());
+      await tester.pumpAndSettle();
+
+      final BuildContext bodyContext = tester.element(find.byType(DesktopLyricBody));
+
+      // 1. Open color dialog
+      showDesktopLyricColorDialog(bodyContext);
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(isDialogOpen.value, isTrue);
+      expect(currentWindowHeight, equals(560.0));
+      expect(find.byType(DesktopLyricColorDialog), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      final dialogContext = tester.element(find.byType(DesktopLyricColorDialog));
+
+      // 2. Trigger pop (exit animation begins)
+      Navigator.of(dialogContext).pop();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // At 50ms into exit transition:
+      expect(find.byType(DesktopLyricColorDialog), findsOneWidget);
+      expect(isDialogOpen.value, isTrue,
+          reason: 'isDialogOpen must remain true during exit animation to prevent premature lyric flash');
+      expect(currentWindowHeight, equals(560.0),
+          reason: 'Window height must NOT shrink while dialog is still animating out');
+
+      // 3. Complete transition
+      await tester.pumpAndSettle();
+      expect(find.byType(DesktopLyricColorDialog), findsNothing);
+      expect(isDialogOpen.value, isFalse);
+      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, lessThan(200.0));
+    });
+  });
 }

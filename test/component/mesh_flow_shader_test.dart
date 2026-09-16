@@ -25,11 +25,26 @@ void main() {
     picture.dispose();
   });
 
-  testWidgets('water ripple shader asset compiles', (tester) async {
+  testWidgets('water ripple shader asset compiles, uniforms 0..147 match, and canvas draws', (tester) async {
     final program = await tester.runAsync(
       () => ui.FragmentProgram.fromAsset('shaders/water_ripple.frag'),
     );
     expect(program, isNotNull);
+    final shader = program!.fragmentShader();
+    // Test setting all 148 floats (indices 0..147: size(2), time(1), count(1), ripples 16*4(64), params 16*4(64), 4 colors 4*4(16))
+    for (int i = 0; i <= 147; i++) {
+      shader.setFloat(i, 0.5);
+    }
+    // Strict boundary test: setting index 148 must throw ArgumentError / RangeError
+    expect(() => shader.setFloat(148, 0.5), throwsA(isA<ArgumentError>()));
+
+    // Verify canvas execution with the shader
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint()..shader = shader;
+    canvas.drawRect(const ui.Rect.fromLTWH(0, 0, 800, 600), paint);
+    final picture = recorder.endRecording();
+    picture.dispose();
   });
 
   testWidgets('lens glass shader asset compiles', (tester) async {

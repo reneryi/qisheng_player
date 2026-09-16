@@ -6,11 +6,13 @@ import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/library_reload_service.dart';
+import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class DefaultLyricSourceControl extends StatefulWidget {
@@ -72,38 +74,41 @@ class _LyricSaveOptionsControlState extends State<LyricSaveOptionsControl> {
     return SettingsTile(
       description: "设歌词默认保存方式",
       action: Wrap(
-        spacing: 8.0,
-        runSpacing: 4.0,
+        spacing: 10.0,
+        runSpacing: 8.0,
         children: [
-          FilterChip(
-            label: const Text("写入内嵌标签"),
-            avatar: const Icon(Symbols.save_rounded, size: 16),
+          _LyricOptionButton(
+            label: "写入内嵌标签",
+            icon: Symbols.save_rounded,
+            tooltip: "获取歌词后默认写入音频文件内嵌标签（ID3v2 / FLAC / MP4）",
             selected: settings.lyricSaveWriteTag,
-            onSelected: (val) {
+            onTap: () {
               setState(() {
-                settings.lyricSaveWriteTag = val;
+                settings.lyricSaveWriteTag = !settings.lyricSaveWriteTag;
               });
               settings.saveSettings();
             },
           ),
-          FilterChip(
-            label: const Text("保存同级 .lrc"),
-            avatar: const Icon(Symbols.description_rounded, size: 16),
+          _LyricOptionButton(
+            label: "保存同级 .lrc",
+            icon: Symbols.description_rounded,
+            tooltip: "获取歌词后在音频同级目录生成同名 .lrc 歌词文件",
             selected: settings.lyricSaveExportLrc,
-            onSelected: (val) {
+            onTap: () {
               setState(() {
-                settings.lyricSaveExportLrc = val;
+                settings.lyricSaveExportLrc = !settings.lyricSaveExportLrc;
               });
               settings.saveSettings();
             },
           ),
-          FilterChip(
-            label: const Text("应用到播放器"),
-            avatar: const Icon(Symbols.play_circle_rounded, size: 16),
+          _LyricOptionButton(
+            label: "应用到播放器",
+            icon: Symbols.play_circle_rounded,
+            tooltip: "获取歌词后直接应用并同步显示于当前播放器",
             selected: settings.lyricSaveApplyPlayer,
-            onSelected: (val) {
+            onTap: () {
               setState(() {
-                settings.lyricSaveApplyPlayer = val;
+                settings.lyricSaveApplyPlayer = !settings.lyricSaveApplyPlayer;
               });
               settings.saveSettings();
             },
@@ -114,6 +119,166 @@ class _LyricSaveOptionsControlState extends State<LyricSaveOptionsControl> {
   }
 }
 
+class _LyricOptionButton extends StatelessWidget {
+  const _LyricOptionButton({
+    required this.label,
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accents = context.accents;
+    final surfaces = context.surfaces;
+    final isDark = scheme.brightness == Brightness.dark;
+
+    final activeBg = accents.accentContainer;
+    final inactiveBg = isDark
+        ? scheme.surfaceContainerLow
+        : scheme.surfaceContainerHighest.withValues(alpha: 0.45);
+
+    final activeFg = accents.onAccent;
+    final inactiveFg = scheme.onSurface.withValues(alpha: 0.78);
+
+    final activeBorder = accents.accent.withValues(alpha: 0.55);
+    final inactiveBorder = scheme.outlineVariant.withValues(alpha: 0.45);
+
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(surfaces.radiusXl),
+          splashColor: accents.hoverTint,
+          highlightColor: Colors.transparent,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? activeBg : inactiveBg,
+              borderRadius: BorderRadius.circular(surfaces.radiusXl),
+              border: Border.all(
+                color: selected ? activeBorder : inactiveBorder,
+                width: selected ? 1.4 : 1.0,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: accents.accentGlow.withValues(alpha: 0.20),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 17,
+                  color: selected
+                      ? activeFg
+                      : scheme.onSurfaceVariant.withValues(alpha: 0.70),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? activeFg : inactiveFg,
+                    fontSize: 13.5,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected ? activeFg : Colors.transparent,
+                    border: Border.all(
+                      color: selected
+                          ? activeFg
+                          : scheme.onSurfaceVariant.withValues(alpha: 0.40),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: selected
+                      ? Icon(
+                          Symbols.check_rounded,
+                          size: 13,
+                          color: activeBg,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class LyricMaintenanceTile extends StatefulWidget {
+  const LyricMaintenanceTile({super.key});
+
+  @override
+  State<LyricMaintenanceTile> createState() => _LyricMaintenanceTileState();
+}
+
+class _LyricMaintenanceTileState extends State<LyricMaintenanceTile> {
+  bool _cleaning = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "歌词源维护",
+      action: FilledButton.tonalIcon(
+        icon: _cleaning
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Symbols.cleaning_services_rounded),
+        label: const Text("清理失效记录"),
+        onPressed: _cleaning
+            ? null
+            : () async {
+                setState(() => _cleaning = true);
+                try {
+                  final count = await pruneMissingLyricSources();
+                  if (context.mounted) {
+                    showTextOnSnackBar("已清理 $count 条失效歌词映射（已保护 CUE 分轨）");
+                  }
+                } catch (err) {
+                  if (context.mounted) {
+                    showTextOnSnackBar("清理失败：$err");
+                  }
+                } finally {
+                  if (mounted) setState(() => _cleaning = false);
+                }
+              },
+      ),
+    );
+  }
+}
 
 class AudioLibraryEditor extends StatelessWidget {
   const AudioLibraryEditor({super.key});

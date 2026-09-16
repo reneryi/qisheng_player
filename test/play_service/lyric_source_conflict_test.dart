@@ -120,12 +120,15 @@ void main() {
       expect(LYRIC_SOURCES[audioFile3.path]?.neteaseSongId, 'NETEASE_666');
     });
 
-    test('已删除的音频文件在 readLyricSources 时会被自动过滤，保持数据库干净', () async {
+    test('CUE分轨与离线音频在 readLyricSources 时被完整保护，脏配置清理移交主动维护', () async {
       final existingFile = File(p.join(tempDir.path, 'valid.flac'))..createSync();
+      final cueTrackPath = p.join(tempDir.path, 'album.cue#CUE:01');
       final deletedPath = p.join(tempDir.path, 'removed.flac');
 
       LYRIC_SOURCES[existingFile.path] =
           LyricSource(LyricSourceType.qq, qqSongId: 123);
+      LYRIC_SOURCES[cueTrackPath] =
+          LyricSource(LyricSourceType.kugou, kugouSongHash: 'CUE_HASH');
       LYRIC_SOURCES[deletedPath] =
           LyricSource(LyricSourceType.netease, neteaseSongId: '456');
 
@@ -134,9 +137,19 @@ void main() {
 
       await readLyricSources();
 
+      // 验证 readLyricSources 不会抹除离线文件和 CUE 虚拟分轨
       expect(LYRIC_SOURCES.containsKey(existingFile.path), isTrue);
+      expect(LYRIC_SOURCES.containsKey(cueTrackPath), isTrue);
+      expect(LYRIC_SOURCES.containsKey(deletedPath), isTrue);
+      expect(LYRIC_SOURCES.length, 3);
+
+      // 执行主动维护清理：清理不存在的物理文件，但保护 CUE 虚拟分轨
+      final cleanedCount = await pruneMissingLyricSources();
+      expect(cleanedCount, 1);
+      expect(LYRIC_SOURCES.containsKey(existingFile.path), isTrue);
+      expect(LYRIC_SOURCES.containsKey(cueTrackPath), isTrue, reason: 'CUE 分轨必须受到保护');
       expect(LYRIC_SOURCES.containsKey(deletedPath), isFalse);
-      expect(LYRIC_SOURCES.length, 1);
+      expect(LYRIC_SOURCES.length, 2);
     });
   });
 

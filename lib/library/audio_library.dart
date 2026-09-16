@@ -589,18 +589,29 @@ class Audio {
     final view = PlatformDispatcher.instance.views.firstOrNull;
     final ratio = view?.devicePixelRatio ?? 1.0;
     AudioCoverCache.checkDpiAdaptation(ratio);
+    final smallW = (48 * ratio).round();
+    final mediumW = (200 * ratio).round();
+    final largeW = (400 * ratio).round();
     final sizes = await _coverSizesLoader(
       path: mediaPath,
-      smallWidth: (48 * ratio).round(),
-      smallHeight: (48 * ratio).round(),
-      mediumWidth: (200 * ratio).round(),
-      mediumHeight: (200 * ratio).round(),
-      largeWidth: (400 * ratio).round(),
-      largeHeight: (400 * ratio).round(),
+      smallWidth: smallW,
+      smallHeight: smallW,
+      mediumWidth: mediumW,
+      mediumHeight: mediumW,
+      largeWidth: largeW,
+      largeHeight: largeW,
     );
     if (sizes == null) {
-      final online = await OnlineCoverStore.instance.getCover(this);
-      return AudioCoverProviders(online, online, online);
+      final file = await OnlineCoverStore.instance.getCoverFile(this);
+      if (file == null) {
+        return const AudioCoverProviders(null, null, null);
+      }
+      final fileImage = FileImage(file);
+      return AudioCoverProviders(
+        ResizeImage.resizeIfNeeded(smallW, smallW, fileImage),
+        ResizeImage.resizeIfNeeded(mediumW, mediumW, fileImage),
+        ResizeImage.resizeIfNeeded(largeW, largeW, fileImage),
+      );
     }
     return AudioCoverProviders(
       sizes.small == null ? null : MemoryImage(sizes.small!),

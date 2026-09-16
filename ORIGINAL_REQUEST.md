@@ -504,3 +504,34 @@ Integrity mode: demo
 ### 构建与测试
 - [ ] `desktop_lyric.exe` 成功重新编译并同步到播放器执行路径。
 - [ ] 桌面歌词与主播放器关联的所有单元及集成测试 100% 通过。
+
+## 2026-09-16T08:29:47Z
+
+This is a single self-contained fix; keep it small and focused.
+修复播放器在水波纹背景（Water Ripple）模式下，因渲染管线与事件监听层时钟基准割裂导致的“鼠标移动无法产生跟随水波纹，反而不断重置并刷新 3 个随机环境波纹”的交互缺陷。
+
+Working directory: e:\PyCharmSave\qisheng_player
+Integrity mode: development
+
+## Requirements
+
+### R1. 统一背景渲染与交互事件的时间基准
+消除 `lib/component/fluid_gradient_background.dart` 中事件监听（`_onPointerHover`, `_onPointerDown`）与渲染绘制（`_WaterRipplePainter`）的时间源不一致问题，确保波纹管理器 `WaterRippleManager`、着色器 uniforms 和交互事件运行在统一、单调递增的物理时钟轴上。
+
+### R2. 恢复鼠标波纹跟随与点击涟漪
+恢复在水波纹模式下平滑移动鼠标时于光标位置持续激发跟随波纹，以及点击时在点击坐标处精准激发涟漪的正常交互表现。
+
+### R3. 解耦交互波纹与环境自然雨滴生命周期
+鼠标移动与点击不得干扰或提前截断背景自然雨滴（`RippleType.rain`）和低音共振波纹（`RippleType.bass`）的生命周期，杜绝鼠标移动引发环境雨滴被清空并重新初始化的现象。
+
+## Acceptance Criteria
+
+### 交互表现与渲染
+- [ ] 水波纹背景模式下，鼠标在窗口内平滑移动，波纹随鼠标轨迹实时生成并自然向外扩散衰减。
+- [ ] 水波纹背景模式下，鼠标点击能在点击位置生成清晰的同心扩散涟漪。
+- [ ] 鼠标移动或点击过程中，原有的 3~4 个自然随机雨滴涟漪持续独立扩散演化，不再出现闪烁、清空或异常重置。
+
+### 自动化验证与稳定性
+- [ ] 运行 `flutter test test/component/fluid_gradient_background_test.dart` 全部通过。
+- [ ] 补充针对水波纹时钟基准与鼠标移动事件时间同步的自动化测试用例，确保无回归风险。
+

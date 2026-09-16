@@ -69,8 +69,16 @@ Future<AudioLibraryLoadStatus> _loadLibraryState({
 
 Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
   try {
+    var hasChanged = false;
     await for (final action in updateIndex(indexPath: supportPath)) {
       LOGGER.i("[update index silent] ${action.progress}: ${action.message}");
+      if (action.message == "changed") {
+        hasChanged = true;
+      }
+    }
+    if (!hasChanged) {
+      LOGGER.i("[update index silent] index unchanged, skip reloading library state");
+      return;
     }
     final status = await _loadLibraryState(reconcilePlayback: true);
     if (status != AudioLibraryLoadStatus.loaded) {

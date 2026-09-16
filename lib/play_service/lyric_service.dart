@@ -63,21 +63,18 @@ class LyricService extends LyricController {
 
   void _listenToPositionStream() {
     _positionStreamSubscription = _playbackService.positionStream.listen((pos) {
+      final lyric = _currentLyric;
+      if (lyric == null || lyric.lines.isEmpty) return;
       final version = _lyricLoadVersion;
-      currLyricFuture.then((value) {
-        if (version != _lyricLoadVersion) return;
-        if (value == null) return;
-        if (value.lines.isEmpty) return;
 
-        // 播放位置可能因为托盘隐藏恢复、循环播放、设备恢复或底层跳变而
-        // 回退/跳跃。这里不能只向前推进，否则到达最后一句后就无法纠正，
-        // 会导致所有歌词视图长期停在旧行或最后一句。
-        final nextLyricLine = _resolveNextLyricLine(value, pos);
-        if (_nextLyricLine != nextLyricLine) {
-          _nextLyricLine = nextLyricLine;
-          _notifyCurrentLyricLine(value, version: version);
-        }
-      });
+      // 播放位置可能因为托盘隐藏恢复、循环播放、设备恢复或底层跳变而
+      // 回退/跳跃。这里不能只向前推进，否则到达最后一句后就无法纠正，
+      // 会导致所有歌词视图长期停在旧行或最后一句。
+      final nextLyricLine = _resolveNextLyricLine(lyric, pos);
+      if (_nextLyricLine != nextLyricLine) {
+        _nextLyricLine = nextLyricLine;
+        _notifyCurrentLyricLine(lyric, version: version);
+      }
     });
   }
 
@@ -99,6 +96,10 @@ class LyricService extends LyricController {
 
   Audio? _getNowPlaying() => _playbackService.nowPlaying;
 
+  /// 同步持有的当前歌词对象引用，避免每 50ms 频繁挂载 microtask 堆积
+  Lyric? _currentLyric;
+  Lyric? get currentLyric => _currentLyric;
+
   /// 供 widget 使用
   Future<Lyric?> currLyricFuture = Future.value(null);
 
@@ -111,11 +112,48 @@ class LyricService extends LyricController {
   }
 
   int _resolveNextLyricLine(Lyric lyric, double position) {
-    if (lyric.lines.isEmpty) return 0;
-    final next = lyric.lines.indexWhere(
-      (element) => element.start.inMilliseconds / 1000 > position,
-    );
-    return next == -1 ? lyric.lines.length : next;
+    final lines = lyric.lines;
+    if (lines.isEmpty) return 0;
+
+    final k = _nextLyricLine;
+    final n = lines.length;
+
+    // 1. O(1) 快路径：仍处于当前歌词行时间区间内（命中绝大多数 20Hz 播放帧）
+    if (k == 0) {
+      if (position < lines[0].start.inMilliseconds / 1000.0) return 0;
+      if (n == 1 || position < lines[1].start.inMilliseconds / 1000.0) return 1;
+    } else if (k < n) {
+      final prevStart = lines[k - 1].start.inMilliseconds / 1000.0;
+      final nextStart = lines[k].start.inMilliseconds / 1000.0;
+      if (position >= prevStart && position < nextStart) {
+        return k;
+      }
+      // 2. O(1) 快路径：正常播放单步推进到紧随其后的下一句
+      if (position >= nextStart) {
+        if (k + 1 == n ||
+            position < lines[k + 1].start.inMilliseconds / 1000.0) {
+          return k + 1;
+        }
+      }
+    } else {
+      // k == n，处于最后一行
+      if (position >= lines[n - 1].start.inMilliseconds / 1000.0) {
+        return n;
+      }
+    }
+
+    // 3. O(log N) 二分回退：发生快进、倒带、进度拖拽或循环重播等跨越跳转时使用二分定位
+    int low = 0;
+    int high = n;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (lines[mid].start.inMilliseconds / 1000.0 > position) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return low;
   }
 
   late final StreamController<int> _lyricLineStreamController =
@@ -128,6 +166,11 @@ class LyricService extends LyricController {
   /// 重新计算歌词进行到第几行
   void findCurrLyricLine() {
     final version = _lyricLoadVersion;
+    final lyric = _currentLyric;
+    if (lyric != null) {
+      _findAndNotifyCurrentLyricLine(lyric, version: version);
+      return;
+    }
     currLyricFuture.then((value) {
       if (version != _lyricLoadVersion) return;
       _findAndNotifyCurrentLyricLine(value, version: version);
@@ -139,6 +182,7 @@ class LyricService extends LyricController {
     required int version,
   }) {
     if (version != _lyricLoadVersion) return;
+    _currentLyric = lyric;
     if (lyric == null) return;
     if (lyric.lines.isEmpty) return;
 
@@ -166,6 +210,11 @@ class LyricService extends LyricController {
 
   void refreshCurrentLyricLine() {
     final version = _lyricLoadVersion;
+    final lyric = _currentLyric;
+    if (lyric != null) {
+      _notifyCurrentLyricLine(lyric, version: version);
+      return;
+    }
     currLyricFuture.then((value) {
       if (version != _lyricLoadVersion) return;
       if (value == null) return;
@@ -182,6 +231,7 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _currentLyric = null;
     _nextLyricLine = 0;
 
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
@@ -216,6 +266,7 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _currentLyric = null;
     _nextLyricLine = 0;
 
     currLyricFuture = _getLocalLyric(nowPlaying);
@@ -233,6 +284,7 @@ class LyricService extends LyricController {
 
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _currentLyric = null;
     _nextLyricLine = 0;
 
     if (nowPlaying.isCueTrack) {
@@ -266,13 +318,11 @@ class LyricService extends LyricController {
   void useSpecificLyric(Lyric lyric) {
     currLyricFuture.ignore();
     final version = ++_lyricLoadVersion;
+    _currentLyric = lyric;
     _nextLyricLine = 0;
 
     currLyricFuture = Future.value(lyric);
-    currLyricFuture.then((value) {
-      if (version != _lyricLoadVersion) return;
-      _findAndNotifyCurrentLyricLine(value, version: version);
-    });
+    _findAndNotifyCurrentLyricLine(lyric, version: version);
 
     notifyListeners();
   }

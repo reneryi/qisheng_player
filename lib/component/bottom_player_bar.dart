@@ -713,7 +713,14 @@ class _ShuffleModeControl extends StatelessWidget {
       builder: (context, shuffle, _) {
         return _TransportIconButton(
           tooltip: shuffle ? '关闭随机播放' : '随机播放',
-          onPressed: () => playback.useShuffle(!shuffle),
+          onPressed: () {
+            if (!shuffle) {
+              playback.setPlayMode(PlayMode.forward);
+              playback.useShuffle(true);
+            } else {
+              playback.useShuffle(false);
+            }
+          },
           icon: Symbols.shuffle,
           dense: dense,
           selected: shuffle,
@@ -731,25 +738,41 @@ class _SequenceModeControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = context.read<PlaybackController>();
-    return ValueListenableBuilder<PlayMode>(
-      valueListenable: playback.playMode,
-      builder: (context, playMode, _) {
-        final next = switch (playMode) {
-          PlayMode.forward => PlayMode.loop,
-          PlayMode.loop => PlayMode.singleLoop,
-          PlayMode.singleLoop => PlayMode.forward,
-        };
-        final (tooltip, icon, selected) = switch (playMode) {
-          PlayMode.forward => ('顺序播放', Symbols.repeat, false),
-          PlayMode.loop => ('列表循环', Symbols.repeat, true),
-          PlayMode.singleLoop => ('单曲循环', Symbols.repeat_one_on, true),
-        };
-        return _TransportIconButton(
-          tooltip: tooltip,
-          onPressed: () => playback.setPlayMode(next),
-          icon: icon,
-          dense: dense,
-          selected: selected,
+    return ValueListenableBuilder<bool>(
+      valueListenable: playback.shuffle,
+      builder: (context, shuffle, _) {
+        return ValueListenableBuilder<PlayMode>(
+          valueListenable: playback.playMode,
+          builder: (context, playMode, _) {
+            final next = switch (playMode) {
+              PlayMode.forward => PlayMode.loop,
+              PlayMode.loop => PlayMode.singleLoop,
+              PlayMode.singleLoop => PlayMode.forward,
+            };
+            final (tooltip, icon, selected) = shuffle
+                ? ('顺序播放', Symbols.repeat, false)
+                : switch (playMode) {
+                    PlayMode.forward => ('顺序播放', Symbols.repeat, false),
+                    PlayMode.loop => ('列表循环', Symbols.repeat, true),
+                    PlayMode.singleLoop => ('单曲循环', Symbols.repeat_one_on, true),
+                  };
+            return _TransportIconButton(
+              tooltip: tooltip,
+              onPressed: () {
+                if (shuffle) {
+                  // 在随机播放下点击顺序/循环按钮：
+                  // 第一次点击：退出随机播放（随机灭掉），响应顺序播放（列表循环）
+                  playback.useShuffle(false);
+                  playback.setPlayMode(PlayMode.loop);
+                } else {
+                  playback.setPlayMode(next);
+                }
+              },
+              icon: icon,
+              dense: dense,
+              selected: selected,
+            );
+          },
         );
       },
     );

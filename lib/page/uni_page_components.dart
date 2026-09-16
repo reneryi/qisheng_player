@@ -7,6 +7,7 @@ import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/page/playlists_page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
@@ -687,6 +688,7 @@ class DeleteSelectedAudios extends StatelessWidget {
     }
 
     AudioLibrary.instance.removeAudiosByPaths(pathsToRemove);
+    removeLyricSourcesByPaths(pathsToRemove);
     for (final path in pathsToRemove) {
       OnlineCoverStore.instance.removeByPath(path);
       removeAudioFromAllPlaylistsByPath(path);

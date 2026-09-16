@@ -304,7 +304,13 @@ List<LyricFontFamilyGroup> parseFontFamilyGroups(
 
 /// 弹出桌面歌词字体选择弹窗
 Future<void> showLyricFontSelectorDialog(BuildContext context) async {
+  if (isDialogOpen.value) return;
   isDialogOpen.value = true;
+  final navigator = Navigator.of(context);
+  final themes = InheritedTheme.capture(
+    from: context,
+    to: navigator.context,
+  );
   Offset? originPos;
   try {
     try {
@@ -323,10 +329,11 @@ Future<void> showLyricFontSelectorDialog(BuildContext context) async {
           targetWidth: targetWidth,
           targetHeight: targetHeight,
         );
-        await windowManager.setPosition(safePos);
-        await windowManager.setSize(Size(targetWidth, targetHeight)).timeout(
-          const Duration(milliseconds: 100),
-        );
+        await windowManager.setBounds(
+          null,
+          position: safePos,
+          size: Size(targetWidth, targetHeight),
+        ).timeout(const Duration(milliseconds: 100));
       }
     } catch (_) {
       // Window manager not available in test environment
@@ -334,20 +341,53 @@ Future<void> showLyricFontSelectorDialog(BuildContext context) async {
 
     if (!context.mounted) return;
 
-    await showDialog<void>(
-      context: context,
+    final route = RawDialogRoute<void>(
       barrierColor: Colors.transparent,
       barrierDismissible: true,
-      builder: (context) => const LyricFontSelectorDialog(),
+      barrierLabel: 'Dismiss',
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, anim1, anim2) {
+        const Widget pageChild = LyricFontSelectorDialog();
+        return themes.wrap(pageChild);
+      },
+      transitionBuilder: (dialogContext, anim1, anim2, child) {
+        final curvedAnim = CurvedAnimation(
+          parent: anim1,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1.0).animate(curvedAnim),
+          child: FadeTransition(
+            opacity: curvedAnim,
+            child: child,
+          ),
+        );
+      },
     );
+
+    navigator.push(route);
+    await route.completed;
   } finally {
-    isDialogOpen.value = false;
     try {
+      final targetHeight = calculateRequiredLyricWindowHeight(
+        lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
+        translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
+        fontFamily: TEXT_DISPLAY_CONTROLLER.lyricFontFamily,
+      );
       if (originPos != null) {
-        await windowManager.setPosition(originPos);
+        await windowManager.setBounds(
+          null,
+          position: originPos,
+          size: Size(800.0, targetHeight),
+        ).timeout(const Duration(milliseconds: 100));
+      } else {
+        await windowManager.setSize(Size(800.0, targetHeight)).timeout(
+          const Duration(milliseconds: 100),
+        );
       }
-      resizeWithForegroundSize();
     } catch (_) {}
+    isDialogOpen.value = false;
   }
 }
 

@@ -116,10 +116,10 @@ void main() {
   vec3 view_dir  = vec3(0.0, 0.0, 1.0);
 
   // 池塘自然水色体系 (冷墨玄青水体，通透清澈)
-  vec3 deep_pond    = vec3(0.045, 0.065, 0.088); // 幽深玄青水底
-  vec3 shallow_pond = vec3(0.105, 0.150, 0.190); // 浅层水光漫射
-  vec3 sky_ambient  = vec3(0.35, 0.45, 0.55);    // 阴天天光倒影
-  vec3 sun_sheen    = vec3(0.85, 0.92, 0.98);    // 温润天光微泛光
+  vec3 deep_pond    = u_water_deep.rgb;     // 幽深玄青水底
+  vec3 shallow_pond = u_water_shallow.rgb;  // 浅层水光漫射
+  vec3 sky_ambient  = u_sky_color.rgb;      // 阴天天光倒影
+  vec3 sun_sheen    = u_specular_color.rgb; // 温润天光微泛光
 
   // 光学折射畸变采样 (水面凹凸扭曲深水光线)
   vec2 refr_offset = normal.xy * 0.015;

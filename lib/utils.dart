@@ -23,36 +23,107 @@ Future<void> atomicWriteStringWithBeforeCommit(
   return _atomicWriteString(path, content, beforeCommit: beforeCommit);
 }
 
+@visibleForTesting
+Future<void> atomicWriteStringForTesting(
+  String path,
+  String content, {
+  FutureOr<void> Function()? beforeCommit,
+  FutureOr<void> Function(File temp, File target, int attempt)? onRename,
+}) {
+  return _atomicWriteString(
+    path,
+    content,
+    beforeCommit: beforeCommit,
+    onRename: onRename,
+  );
+}
+
 Future<void> _atomicWriteString(
   String path,
   String content, {
   FutureOr<void> Function()? beforeCommit,
+  FutureOr<void> Function(File temp, File target, int attempt)? onRename,
 }) async {
   final target = File(path);
   await target.parent.create(recursive: true);
+
+  final backup = File('$path.bak');
+  final targetExists = await target.exists();
+  bool backupCreated = false;
+
+  if (targetExists) {
+    try {
+      await target.copy(backup.path);
+      backupCreated = true;
+    } catch (err) {
+      LOGGER.w('atomicWriteString: 创建备份文件 $path.bak 失败: $err');
+    }
+  }
+
   final sequence = _atomicWriteSequence++;
   final temp = File(
     '$path.${pid}_${DateTime.now().microsecondsSinceEpoch}_$sequence.tmp',
   );
+
+  bool renameSucceeded = false;
   try {
     await temp.writeAsString(content, flush: true);
     if (beforeCommit != null) await beforeCommit();
-    // 优先尝试原子 rename 替换；若因 OneDrive/防病毒软件加锁触发拒绝访问 (errno 5)，进行微退避重试并降级直接写入
-    bool replaced = false;
-    for (int attempt = 0; attempt < 3; attempt++) {
+
+    // 尝试原子 rename 替换目标文件；重试 5 次并采用指数退避 (20ms, 40ms, 80ms, 160ms, 320ms)
+    const backoffs = [
+      Duration(milliseconds: 20),
+      Duration(milliseconds: 40),
+      Duration(milliseconds: 80),
+      Duration(milliseconds: 160),
+      Duration(milliseconds: 320),
+    ];
+    FileSystemException? lastException;
+    for (int attempt = 0; attempt < 5; attempt++) {
       try {
-        await temp.rename(path);
-        replaced = true;
+        if (onRename != null) {
+          await onRename(temp, target, attempt);
+        } else {
+          await temp.rename(path);
+        }
+        renameSucceeded = true;
         break;
-      } on FileSystemException {
-        if (attempt < 2) {
-          await Future.delayed(Duration(milliseconds: (attempt + 1) * 15));
+      } on FileSystemException catch (e) {
+        lastException = e;
+        if (attempt < 4) {
+          await Future.delayed(backoffs[attempt]);
         }
       }
     }
-    if (!replaced) {
-      await target.writeAsString(content, flush: true);
+
+    if (!renameSucceeded) {
+      throw lastException ??
+          FileSystemException(
+            'Failed to rename temp file to target after 5 retries',
+            temp.path,
+          );
     }
+
+    // 覆写成功后清理 .bak
+    if (backupCreated) {
+      try {
+        if (await backup.exists()) {
+          await backup.delete();
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    // 写入中断或失败时自动还原旧文件
+    if (backupCreated) {
+      try {
+        if (await backup.exists()) {
+          await backup.copy(path);
+        }
+      } catch (restoreErr) {
+        LOGGER.e('atomicWriteString: 还原旧文件失败: $restoreErr');
+      }
+    }
+    rethrow;
   } finally {
     try {
       if (await temp.exists()) {

@@ -456,15 +456,19 @@ void main() {
       LYRIC_SOURCES.clear();
       await readLyricSources();
 
-      // 验证内存中幽灵记录被自动剪除
+      // 验证读取时完整保护离线/未挂载文件，不会静默抹除
+      expect(LYRIC_SOURCES.containsKey(deletedAudio1.path), isTrue);
+      expect(LYRIC_SOURCES.containsKey(deletedAudio2.path), isTrue);
+      expect(LYRIC_SOURCES.length, 4);
+
+      // 主动调用维护清理入口
+      final cleanedCount = await pruneMissingLyricSources();
+      expect(cleanedCount, 2);
       expect(LYRIC_SOURCES.containsKey(deletedAudio1.path), isFalse);
       expect(LYRIC_SOURCES.containsKey(deletedAudio2.path), isFalse);
       expect(LYRIC_SOURCES.length, 2);
       expect(LYRIC_SOURCES.containsKey(validAudio1.path), isTrue);
       expect(LYRIC_SOURCES.containsKey(validAudio2.path), isTrue);
-
-      // 重新执行持久化落盘
-      await saveLyricSources();
 
       // 直接解析磁盘文件，验证磁盘中已彻底清除被删除的文件
       final jsonFile = await getLyricSourceJsonFile();

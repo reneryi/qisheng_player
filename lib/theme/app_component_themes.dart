@@ -605,6 +605,41 @@ class AppComponentThemes {
     );
   }
 
+  static ChipThemeData chipTheme(
+    ColorScheme scheme,
+    AppSurfaceTokens surfaces,
+    AppAccentTokens accents,
+    AppVisualTokens visuals,
+  ) {
+    return ChipThemeData(
+      backgroundColor: scheme.surfaceContainerLow,
+      selectedColor: accents.accentContainer,
+      secondarySelectedColor: accents.accentContainer,
+      deleteIconColor: scheme.onSurfaceVariant,
+      checkmarkColor: accents.onAccent,
+      labelStyle: TextStyle(
+        color: scheme.onSurface,
+        fontWeight: FontWeight.w500,
+        fontSize: 13.5,
+      ),
+      secondaryLabelStyle: TextStyle(
+        color: accents.onAccent,
+        fontWeight: FontWeight.w600,
+        fontSize: 13.5,
+      ),
+      side: BorderSide(
+        color: scheme.outlineVariant.withValues(alpha: 0.45),
+        width: 1.0,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(surfaces.radiusXl),
+      ),
+      elevation: 0,
+      pressElevation: 1.0,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    );
+  }
+
   static WidgetStateProperty<EdgeInsetsGeometry> _pressablePadding(
     EdgeInsets base,
     AppVisualTokens visuals,

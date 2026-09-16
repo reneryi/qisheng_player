@@ -701,6 +701,7 @@ class _UniPageState<T> extends State<UniPage<T>>
     setState(() {
       currSortMethod = sortMethod;
       widget.pref.sortMethod = widget.sortMethods?.indexOf(sortMethod) ?? 0;
+      _activeSideIndexLabel = null;
       _sortContent();
     });
   }
@@ -709,6 +710,7 @@ class _UniPageState<T> extends State<UniPage<T>>
     setState(() {
       currSortOrder = sortOrder;
       widget.pref.sortOrder = sortOrder;
+      _activeSideIndexLabel = null;
       _sortContent();
     });
   }
@@ -845,6 +847,11 @@ class _UniPageState<T> extends State<UniPage<T>>
   }
 
   void _jumpToLocateTarget() {
+    if (_activeSideIndexLabel != null) {
+      setState(() {
+        _activeSideIndexLabel = null;
+      });
+    }
     final locateIndexResolver = widget.locateIndexResolver;
     if (locateIndexResolver != null) {
       final target = locateIndexResolver(widget.contentList);

@@ -14,14 +14,17 @@ class LibraryReloadCoordinator {
     required LibraryLoadOperation loadLibrary,
     required LibraryDependentLoadOperation loadPlaylists,
     required List<LibraryDependentLoadOperation> loadIndependentStores,
+    LibraryDependentLoadOperation? beforeLibraryLoad,
   })  : _loadLibrary = loadLibrary,
         _loadPlaylists = loadPlaylists,
-        _loadIndependentStores = loadIndependentStores;
+        _loadIndependentStores = loadIndependentStores,
+        _beforeLibraryLoad = beforeLibraryLoad;
 
   factory LibraryReloadCoordinator.production() {
     return LibraryReloadCoordinator(
+      beforeLibraryLoad: flushPlaylistsSave,
       loadLibrary: AudioLibrary.initFromIndex,
-      loadPlaylists: readPlaylists,
+      loadPlaylists: syncPlaylistsWithLibrary,
       loadIndependentStores: [
         readLyricSources,
         PlayCountStore.instance.read,
@@ -30,6 +33,7 @@ class LibraryReloadCoordinator {
     );
   }
 
+  final LibraryDependentLoadOperation? _beforeLibraryLoad;
   final LibraryLoadOperation _loadLibrary;
   final LibraryDependentLoadOperation _loadPlaylists;
   final List<LibraryDependentLoadOperation> _loadIndependentStores;
@@ -61,6 +65,9 @@ class LibraryReloadCoordinator {
   }
 
   Future<AudioLibraryLoadStatus> _reloadCore() async {
+    if (_beforeLibraryLoad != null) {
+      await _beforeLibraryLoad!();
+    }
     final status = await _loadLibrary();
     if (status != AudioLibraryLoadStatus.loaded) return status;
 

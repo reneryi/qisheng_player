@@ -246,6 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               DefaultLyricSourceControl(),
               LyricSaveOptionsControl(),
+              LyricMaintenanceTile(),
               VolumeLevelingSwitch(),
               VolumeLevelingPreampControl(),
               ArtistSeparatorEditor(),

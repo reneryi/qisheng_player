@@ -235,9 +235,11 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
                 await file.delete();
               }
               AudioLibrary.instance.removeAudioByPath(nowPlaying.path);
+              removeLyricSourceByPath(nowPlaying.path);
               OnlineCoverStore.instance.removeByPath(nowPlaying.mediaPath);
               if (nowPlaying.path != nowPlaying.mediaPath) {
                 OnlineCoverStore.instance.removeByPath(nowPlaying.path);
+                removeLyricSourceByPath(nowPlaying.mediaPath);
               }
               removeAudioFromAllPlaylistsByPath(nowPlaying.path);
               playbackService.removeAudioFromPlaylistByPath(nowPlaying.path);

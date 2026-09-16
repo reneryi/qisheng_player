@@ -163,6 +163,12 @@ class AppTheme {
         accents,
         visuals,
       ),
+      chipTheme: AppComponentThemes.chipTheme(
+        colorScheme,
+        surfaces,
+        accents,
+        visuals,
+      ),
       tabBarTheme: AppComponentThemes.tabBarTheme(colorScheme, accents),
       tooltipTheme: TooltipThemeData(
         enableFeedback: false,

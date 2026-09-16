@@ -122,9 +122,14 @@ Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
         targetWidth: 800.0,
         targetHeight: targetHeight,
       );
-      await windowManager.setPosition(safePos);
+      await windowManager.setBounds(
+        null,
+        position: safePos,
+        size: Size(800.0, targetHeight),
+      );
+    } else {
+      await windowManager.setSize(Size(800.0, targetHeight));
     }
-    await windowManager.setSize(Size(800.0, targetHeight));
   } catch (_) {
     try {
       await windowManager.setSize(Size(800.0, targetHeight));
@@ -132,10 +137,30 @@ Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
   }
 }
 
+/// 仅在当前物理窗口仍处于弹窗大尺寸时执行安全回退，避免重复调用 SetBounds 引发二次闪烁
+Future<void> restoreLyricWindowSizeAndPositionIfNeeded() async {
+  final targetHeight = calculateRequiredLyricWindowHeight(
+    lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
+    translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
+    fontFamily: TEXT_DISPLAY_CONTROLLER.lyricFontFamily,
+  );
+  try {
+    final sz = await windowManager.getSize().timeout(const Duration(milliseconds: 80));
+    if (sz.height > targetHeight + 10.0 || (sz.width - 800.0).abs() > 10.0) {
+      await restoreLyricWindowSizeAndPosition();
+    }
+  } catch (_) {
+    // 单元测试中 getSize 可能抛出或不存在，直接回退确保测试行为一致
+    await restoreLyricWindowSizeAndPosition();
+  }
+}
+
 /// 在保证正确布局的前提下按当前歌词与字号调整窗口大小，彻底消除 10px 亏空与副歌词截断
 void resizeWithForegroundSize() {
+  if (isDialogOpen.value) return;
   try {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isDialogOpen.value) return;
       try {
         double? lyricTextHeight;
         double? translationTextHeight;

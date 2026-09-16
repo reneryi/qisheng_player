@@ -8,6 +8,7 @@ import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/play_service/audio_spectrum.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
+import 'package:qisheng_player/play_service/playback_session_store.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/src/rust/api/smtc_flutter.dart';
 import 'package:qisheng_player/theme_provider.dart';
@@ -542,6 +543,8 @@ class PlaybackService extends PlaybackController {
     playlist.value.shuffle();
     _playlistBackup = List.from(audios);
 
+    _playMode.value = PlayMode.forward;
+    _pref.playMode = PlayMode.forward;
     _pref.shuffle = true;
     shuffle.value = true;
 
@@ -1046,11 +1049,14 @@ class PlaybackService extends PlaybackController {
     bool updatePlaylist = true,
   }) {
     final audio = nowPlaying;
+    final curPos =
+        audio == null ? 0.0 : position.clamp(0.0, length).toDouble();
+    final curIndex = _playlistIndex ?? 0;
+
     _pref
       ..lastAudioPath = audio?.path
-      ..lastPlaylistIndex = _playlistIndex ?? 0
-      ..lastPosition =
-          audio == null ? 0.0 : position.clamp(0.0, length).toDouble()
+      ..lastPlaylistIndex = curIndex
+      ..lastPosition = curPos
       ..shuffle = shuffle.value;
 
     if (updatePlaylist || save) {
@@ -1060,6 +1066,11 @@ class PlaybackService extends PlaybackController {
 
     if (save) {
       unawaited(AppPreference.instance.save());
+      unawaited(PlaybackSessionStore.saveSnapshot(
+        audioPath: audio?.path,
+        playlistIndex: curIndex,
+        position: curPos,
+      ));
     }
   }
 
@@ -1069,11 +1080,18 @@ class PlaybackService extends PlaybackController {
     final now = DateTime.now();
     if (now.difference(_lastSessionSaveAt).inSeconds < 5) return;
     _lastSessionSaveAt = now;
-    unawaited(AppPreference.instance.save());
+
+    // 关键优化：仅保存轻量级进度快照 (< 100 字节)，彻底解耦全量偏好序列化与落盘
+    unawaited(PlaybackSessionStore.saveSnapshot(
+      audioPath: nowPlaying?.path,
+      playlistIndex: _playlistIndex ?? 0,
+      position: position.clamp(0.0, length).toDouble(),
+    ));
   }
 
   Future<void> restoreLastSession() async {
-    final lastAudioPath = _pref.lastAudioPath;
+    final snapshot = await PlaybackSessionStore.readSnapshot();
+    final lastAudioPath = snapshot?.audioPath ?? _pref.lastAudioPath;
     if (lastAudioPath == null || lastAudioPath.isEmpty) return;
 
     final allAudios = AudioLibrary.instance.audioCollection;
@@ -1114,7 +1132,8 @@ class PlaybackService extends PlaybackController {
       nowPlaying = targetAudio;
       _cueAutoNextTriggered = false;
 
-      final restorePosition = _pref.lastPosition.clamp(0.0, length).toDouble();
+      final sessionPosition = snapshot?.position ?? _pref.lastPosition;
+      final restorePosition = sessionPosition.clamp(0.0, length).toDouble();
       if (nowPlaying!.isCueTrack) {
         final cueStartSec = (nowPlaying!.cueStartMs ?? 0) / 1000.0;
         _player.seek(cueStartSec + restorePosition);

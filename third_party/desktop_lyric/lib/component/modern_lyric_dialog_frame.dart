@@ -28,7 +28,6 @@ class ModernLyricDialogFrame extends StatelessWidget {
         DesktopLyricController.instance.isDarkMode.value;
     final theme = context.watch<ThemeChangedMessage>();
     final primary = Color(theme.primary);
-    const blurSigma = 0.0;
 
     return Center(
       child: Material(
@@ -60,10 +59,8 @@ class ModernLyricDialogFrame extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24.0),
-                // 安全降级：在纯透明窗口中将模糊半径归零，消除 saveLayer 预乘 Alpha 杂色与无效高斯卷积
                 child: BackdropFilter(
-                  filter:
-                      ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                  filter: ImageFilter.blur(sigmaX: 0.0, sigmaY: 0.0),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(24.0),

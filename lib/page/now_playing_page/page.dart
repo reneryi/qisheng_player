@@ -23,6 +23,7 @@ import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
+import 'package:qisheng_player/lyric/lyric_source.dart';
 import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/now_playing_page/component/lyric_depth_effect.dart';
