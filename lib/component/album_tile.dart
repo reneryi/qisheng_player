@@ -1,3 +1,4 @@
+import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/component/album_artwork_hero.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -44,7 +45,10 @@ class _AlbumTileState extends State<AlbumTile> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: ArtworkStore.instance, builder:(context,_)=>_buildArtwork(context));
+
+  Widget _buildArtwork(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final placeholder = Container(
       width: 48,
@@ -84,9 +88,7 @@ class _AlbumTileState extends State<AlbumTile> {
           child: Row(
             children: [
               FutureBuilder(
-                future: widget.album.works.isEmpty
-                    ? Future<ImageProvider?>.value()
-                    : widget.album.works.first.cover,
+                future: widget.album.cover,
                 builder: (context, snapshot) {
                   if (snapshot.data == null) {
                     return RepaintBoundary(

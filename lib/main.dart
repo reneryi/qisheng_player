@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:qisheng_player/src/rust/api/metadata_editor.dart';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -77,7 +78,8 @@ Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
       }
     }
     if (!hasChanged) {
-      LOGGER.i("[update index silent] index unchanged, skip reloading library state");
+      LOGGER.i(
+          "[update index silent] index unchanged, skip reloading library state");
       return;
     }
     final status = await _loadLibraryState(reconcilePlayback: true);
@@ -101,6 +103,16 @@ Future<void> main() async {
   await migrateAppData();
 
   final supportPath = (await getAppDataDir()).path;
+  try {
+    for (final warning
+        in await recoverAudioMetadata(supportPath: supportPath)) {
+      LOGGER.w('标签编辑恢复：$warning');
+    }
+  } catch (error, stackTrace) {
+    // Recovery errors must remain visible, but should not prevent the user from
+    // starting the player and repairing the library from the UI.
+    LOGGER.e('标签编辑恢复失败', error: error, stackTrace: stackTrace);
+  }
   if (File("$supportPath\\settings.json").existsSync()) {
     await AppSettings.readFromJson();
     await loadPrefFont();

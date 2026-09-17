@@ -33,8 +33,10 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
     this.multiSelectController,
     this.multiSelectViewActions,
     this.primaryPicHeroTag,
+    this.artworkActions = const [],
   });
 
+  final List<Widget> artworkActions;
   final PagePreference pref;
   final P primaryContent;
   final Future<ImageProvider?> primaryPic;
@@ -167,7 +169,7 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
     List<Widget> actions,
   ) {
     Widget? primaryAction;
-    var secondaryActions = <Widget>[...actions];
+    var secondaryActions = <Widget>[...widget.artworkActions, ...actions];
     if (multiSelectController != null) {
       if (multiSelectController.enableMultiSelectView) {
         final multiSelectActions =

@@ -2,10 +2,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/audio_edit_service.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/music_matcher.dart';
-import 'package:qisheng_player/src/rust/api/tag_reader.dart' as tag_writer;
 import 'package:qisheng_player/utils.dart';
 
 /// 歌词文件与内嵌标签存储管理辅助类。
@@ -40,7 +40,6 @@ class LyricFileHelper {
     }
     return sanitized.isEmpty ? 'unnamed' : sanitized;
   }
-
 
   /// 获取音频对应的外挂 .lrc 文件保存完整路径。
   /// - 普通单曲：同名同目录的 `xxx.lrc`
@@ -77,7 +76,9 @@ class LyricFileHelper {
     }
 
     final separator = Platform.pathSeparator;
-    return dir.endsWith(separator) ? '$dir$fileName' : '$dir$separator$fileName';
+    return dir.endsWith(separator)
+        ? '$dir$fileName'
+        : '$dir$separator$fileName';
   }
 
   /// 将标准 LRC 歌词文本安全写入同级外挂 .lrc 文件。
@@ -107,10 +108,8 @@ class LyricFileHelper {
     }
 
     try {
-      final ok = await tag_writer.writeLyricToFile(
-        path: audio.mediaPath,
-        lyricText: lrcText,
-      );
+      final ok =
+          await const AudioEditService().writeEmbeddedLyrics(audio, lrcText);
       if (!ok) {
         LOGGER.e('[LyricFileHelper] 歌词写入内嵌标签失败: ${audio.mediaPath}');
       }
@@ -188,5 +187,6 @@ class LyricFileHelper {
 
 extension LyricToLrcExtension on Lyric {
   String toLrcString({bool includeTranslation = true}) =>
-      LyricFileHelper.lyricToLrcString(this, includeTranslation: includeTranslation);
+      LyricFileHelper.lyricToLrcString(this,
+          includeTranslation: includeTranslation);
 }

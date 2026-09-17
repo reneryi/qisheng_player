@@ -24,15 +24,19 @@ class AudioDetailPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: AudioLibrary.revision,
+    builder:(context,_,__) => _buildCurrent(context));
+
+  Widget _buildCurrent(BuildContext context) {
+    final audio = AudioLibrary.instance.audioCollection.where((a)=>a.path==this.audio.path).firstOrNull ?? this.audio;
     final artists = List.generate(audio.splitedArtists.length, (i) {
-      return AudioLibrary.instance.artistCollection[audio.splitedArtists[i]] ??
-          Artist(name: audio.splitedArtists[i])
-        ..works.add(audio);
+      final name = audio.splitedArtists[i];
+      return AudioLibrary.instance.artistCollection[name] ??
+          (Artist(name: name)..works.add(audio));
     });
-    final album = AudioLibrary.instance.albumCollection[audio.album] ??
-        Album(name: audio.album)
-      ..works.add(audio);
+    final album = AudioLibrary.instance.albumCollection[audio.albumKey] ??
+        (Album(name: audio.album)..works.add(audio));
 
     return PageScaffold(
       title: audio.displayTitle,

@@ -22,9 +22,10 @@ class LyricSource {
   int? qqSongId;
   String? kugouSongHash;
   String? neteaseSongId;
+  String? cachedText;
 
   LyricSource(this.source,
-      {this.qqSongId, this.kugouSongHash, this.neteaseSongId});
+      {this.qqSongId, this.kugouSongHash, this.neteaseSongId, this.cachedText});
 
   static LyricSource fromMap(Map map) {
     if (map["source"] == "qq") {
@@ -34,7 +35,8 @@ class LyricSource {
     } else if (map["source"] == "netease") {
       return LyricSource(LyricSourceType.netease, neteaseSongId: map["id"]);
     } else {
-      return LyricSource(LyricSourceType.local);
+      return LyricSource(LyricSourceType.local,
+          cachedText: map['text'] as String?);
     }
   }
 
@@ -47,7 +49,11 @@ class LyricSource {
       case LyricSourceType.netease:
         return {"source": source.name, "id": neteaseSongId};
       case LyricSourceType.local:
-        return {"source": source.name, "id": null};
+        return {
+          "source": source.name,
+          "id": null,
+          if (cachedText != null) 'text': cachedText
+        };
     }
   }
 }
@@ -160,7 +166,7 @@ Future<void> readLyricSources() async {
   }
 }
 
-Future<void> saveLyricSources() {
+Future<void> saveLyricSources({bool propagateErrors = false}) {
   if (!_lyricSourcesLoaded) {
     if (LYRIC_SOURCES.isEmpty) {
       LOGGER.w("saveLyricSources: 歌词源尚未就绪或加载异常，跳过空数据落盘以防覆写磁盘文件");
@@ -177,12 +183,12 @@ Future<void> saveLyricSources() {
   final lyricSourceJson = json.encode(lyricSourceMaps);
 
   // 链式顺序排队执行，确保即使外部并发保存，也严格按序单线程串行落盘，并在发生异常时保持队列畅通
-  _saveQueue = _saveQueue
-      .then((_) => _executeSaveLyricSourcesWithRetry(lyricSourceJson))
-      .catchError((err, trace) {
+  final pending = _saveQueue
+      .then((_) => _executeSaveLyricSourcesWithRetry(lyricSourceJson));
+  _saveQueue = pending.catchError((err, trace) {
     LOGGER.e(err, stackTrace: trace);
   });
-  return _saveQueue;
+  return propagateErrors ? pending : _saveQueue;
 }
 
 Future<void> _executeSaveLyricSourcesWithRetry(String lyricSourceJson) async {

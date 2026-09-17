@@ -8,6 +8,25 @@ String _latin1Mojibake(String value) {
 }
 
 void main() {
+  test('album identity separates same names by album artist or directory', () {
+    Audio make(String path, {String albumArtist = ''}) => Audio.fromMap({
+          'title': 'Song',
+          'artist': 'Artist',
+          'album': 'Greatest Hits',
+          'album_artist': albumArtist,
+          'path': path,
+          'modified': 1,
+          'created': 1,
+        });
+
+    expect(make(r'E:\A\one.flac').albumKey,
+        isNot(make(r'E:\B\two.flac').albumKey));
+    expect(make(r'E:\A\one.flac', albumArtist: 'Artist').albumKey,
+        make(r'E:\B\two.flac', albumArtist: 'Artist').albumKey);
+    expect(make(r'E:\A\one.flac', albumArtist: 'Artist').albumKey,
+        isNot(make(r'E:\A\two.flac', albumArtist: 'Other').albumKey));
+  });
+
   test('Audio.fromMap keeps composer and arranger nullable for old index data',
       () {
     final audio = Audio.fromMap({
@@ -150,5 +169,37 @@ void main() {
     });
 
     expect(audio.title, '歌🎀');
+  });
+
+  test('AudioLibrary deduplicates audios across overlapping folders and in album/artist works', () {
+    final audio1 = Audio.fromMap({
+      'title': 'Catch My Breath',
+      'artist': 'Kelly Clarkson',
+      'album': 'Catch My Breath',
+      'path': r'E:\Music\catch.flac',
+      'modified': 1,
+      'created': 1,
+    });
+    final audio2 = Audio.fromMap({
+      'title': 'Catch My Breath',
+      'artist': 'Kelly Clarkson',
+      'album': 'Catch My Breath',
+      'path': r'E:\Music\catch.flac',
+      'modified': 1,
+      'created': 1,
+    });
+
+    final folder1 = AudioFolder([audio1], 'Folder1', 1, 1);
+    final folder2 = AudioFolder([audio2], 'Folder2', 1, 1);
+
+    AudioLibrary.instance.folders = [folder1, folder2];
+    AudioLibrary.instance.rebuildCollectionsFromCurrentFolders();
+
+    expect(AudioLibrary.instance.audioCollection.length, 1);
+    final album = AudioLibrary.instance.albumCollection.values
+        .firstWhere((a) => a.name == 'Catch My Breath');
+    expect(album.works.length, 1);
+    final artist = AudioLibrary.instance.artistCollection['Kelly Clarkson'];
+    expect(artist?.works.length, 1);
   });
 }

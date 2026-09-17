@@ -15,6 +15,11 @@ class AudioMetadataOverrideStore {
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
+  bool hasOverride(String path) => _overrides.containsKey(path);
+
+  /// Rust already removed the durable override after committing the file.
+  void forgetCommitted(String path) => _overrides.remove(path);
+
   @visibleForTesting
   void resetLoadedForTesting({bool loaded = false}) {
     _loaded = loaded;
@@ -48,6 +53,8 @@ class AudioMetadataOverrideStore {
           if (title != null) "title": title,
           if (artist != null) "artist": artist,
           if (album != null) "album": album,
+          for (final key in ['album_artist', 'track', 'disc'])
+            if (value[key] != null) key: value[key].toString(),
         };
       }
       _loaded = true;
@@ -59,7 +66,8 @@ class AudioMetadataOverrideStore {
 
   Future<void> save() async {
     if (!_loaded) {
-      LOGGER.w("AudioMetadataOverrideStore.save: blocked save because store is not loaded yet");
+      LOGGER.w(
+          "AudioMetadataOverrideStore.save: blocked save because store is not loaded yet");
       return;
     }
     try {
@@ -87,6 +95,11 @@ class AudioMetadataOverrideStore {
           ? override["album"]!.trim()
           : null,
     );
+    if (override.containsKey('album_artist')) {
+      audio.albumArtist = override['album_artist']!;
+    }
+    audio.track = int.tryParse(override['track'] ?? '') ?? audio.track;
+    audio.disc = int.tryParse(override['disc'] ?? '') ?? audio.disc;
   }
 
   void applyToLibrary(AudioLibrary library) {
@@ -102,13 +115,33 @@ class AudioMetadataOverrideStore {
     required String title,
     required String artist,
     required String album,
+    String? albumArtist,
+    int? track,
+    int? disc,
   }) async {
+    await read();
+    if (!_loaded) throw StateError('无法读取已有覆盖信息');
+    final previous = _overrides[audio.path];
     _overrides[audio.path] = {
       "title": title.trim(),
       "artist": artist.trim(),
       "album": album.trim(),
+      if (albumArtist != null) 'album_artist': albumArtist,
+      if (track != null) 'track': track.toString(),
+      if (disc != null) 'disc': disc.toString(),
     };
-    applyToAudio(audio);
-    await save();
+    try {
+      final supportPath = (await getAppDataDir()).path;
+      await atomicWriteString(
+          '$supportPath\\audio_override.json', jsonEncode(_overrides));
+      applyToAudio(audio);
+    } catch (_) {
+      if (previous == null) {
+        _overrides.remove(audio.path);
+      } else {
+        _overrides[audio.path] = previous;
+      }
+      rethrow;
+    }
   }
 }

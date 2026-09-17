@@ -1,6 +1,7 @@
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/album_grid_tile.dart';
 import 'package:qisheng_player/component/album_tile.dart';
+import 'package:qisheng_player/component/batch_artwork_match_dialog.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/page/uni_page.dart';
@@ -24,6 +25,15 @@ class AlbumsPage extends StatelessWidget {
       gridBuilder: (context, item, i, multiSelectController) => AlbumGridTile(
         album: item,
         enableHero: true,
+      ),
+      primaryAction: FilledButton.tonalIcon(
+        icon: const Icon(Symbols.auto_awesome, size: 18),
+        label: const Text('一键匹配封面'),
+        onPressed: () => showBatchArtworkMatchDialog(
+          context,
+          kind: 'album',
+          albums: contentList,
+        ),
       ),
       enableShufflePlay: false,
       enableSortMethod: true,

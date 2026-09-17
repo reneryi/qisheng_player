@@ -1,3 +1,4 @@
+import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -52,7 +53,10 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: ArtworkStore.instance, builder:(context,_)=>_buildArtwork(context));
+
+  Widget _buildArtwork(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
 

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `atomic_write_bytes`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `bytes_from_latin1_or_windows1252`, `clean_metadata_text`, `contains_cjk`, `decode_cue_bytes`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `file_size_for_identity`, `is_cjk_char`, `is_cue_path`, `is_unknown_text`, `lock_index_writes`, `looks_like_mojibake`, `merge_missing_fields`, `metadata_text_score`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `repair_likely_mojibake`, `replace_file`, `resize_loaded_picture`, `sanitize_metadata_text`, `sanitize_optional_text`, `to_json_value`, `to_json_value`, `windows1252_reverse`
+// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `atomic_write_bytes`, `audio_identity_key_from_audio`, `audio_identity_key_from_json`, `build_audio_identity_key`, `build_index_from_folders_recursively_internal`, `bytes_from_latin1_or_windows1252`, `clean_metadata_text`, `contains_cjk`, `decode_cue_bytes`, `dedup_audio_folders_by_path`, `dedup_index_folders_json_by_path`, `discover_new_audio_folders_in_root`, `file_size_for_identity`, `is_cjk_char`, `is_cue_path`, `is_unknown_text`, `lock_index_writes`, `looks_like_mojibake`, `merge_missing_fields`, `metadata_text_score`, `new_with_path`, `normalize_path_for_key`, `normalize_text_for_key`, `parse_cue_timestamp_to_frames`, `parse_cue_value`, `parse_replay_gain_db`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_cue_path`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `repair_likely_mojibake`, `replace_file`, `resize_loaded_picture`, `sanitize_metadata_text`, `sanitize_optional_text`, `to_json_value`, `to_json_value`, `update_index_internal`, `windows1252_reverse`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioFolder`, `AudioIdentityParts`, `Audio`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `fmt`
 
@@ -81,18 +81,7 @@ Stream<IndexActionState> buildIndexFromFoldersRecursively(
         folders: folders, indexPath: indexPath);
 
 /// for Flutter
-/// 读取 index_path/index.json，检查更新。不可能重新读取被修改的文件夹下所有的音乐标签，这样太耗时。
-///
-/// [LOWEST_VERSION] 指定可以继承的 index 的最低版本。
-/// 如果 index version < [LOWEST_VERSION] 或者是 index 根本没有 version 再或者格式不符合要求，就转到
-/// [_update_index_below_1_1_0] 更新 index；
-/// 如果 index version >= [LOWEST_VERSION] 则进行更新。
-///
-/// 如果文件夹不存在，删除记录。
-/// 如果文件夹被修改（再次读取到的 modified > 记录的 modified），就更新它。没有则跳过它
-/// 1. 遍历该文件夹索引，判断文件是否存在，不存在则删除记录
-/// 2. 遍历该文件夹索引，如果文件被修改（再次读取到的 modified > 记录的 modified），重新读取标签；没有则跳过它
-/// 3. 遍历该文件夹，添加新增（读取到的 created > 记录的 latest）的音乐文件
+/// 读取 index_path/index.json，检查更新。
 Stream<IndexActionState> updateIndex({required String indexPath}) =>
     RustLib.instance.api.crateApiTagReaderUpdateIndex(indexPath: indexPath);
 

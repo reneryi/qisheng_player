@@ -236,7 +236,8 @@ class PlaybackService extends PlaybackController {
           _playlistBackup = List<Audio>.from(playlist.value);
         }
         final currentAudio = nowPlaying!;
-        final remaining = List<Audio>.from(playlist.value)..remove(currentAudio);
+        final remaining = List<Audio>.from(playlist.value)
+          ..remove(currentAudio);
         remaining.shuffle();
         playlist.value = [currentAudio, ...remaining];
         _playlistIndex = 0;
@@ -289,6 +290,7 @@ class PlaybackService extends PlaybackController {
   }
 
   void _handleRawPosition(double rawPosition) {
+    if (_metadataSuspended) return;
     if (_shouldAutoNextCue(rawPosition)) {
       if (!_cueAutoNextTriggered) {
         _cueAutoNextTriggered = true;
@@ -304,7 +306,8 @@ class PlaybackService extends PlaybackController {
     _rememberPlaybackSessionThrottled();
   }
 
-  void _updateSmtcTimePropertiesThrottled(int progressMs, {bool force = false}) {
+  void _updateSmtcTimePropertiesThrottled(int progressMs,
+      {bool force = false}) {
     final now = DateTime.now();
     final elapsedMs = now.difference(_lastSmtcProgressUpdateAt).inMilliseconds;
     final diffMs = (progressMs - _lastSmtcProgressMs).abs();
@@ -411,6 +414,8 @@ class PlaybackService extends PlaybackController {
     bool isAutoNext = false,
     Set<int>? failedIndices,
   }) {
+    _metadataPlaybackEpoch++;
+    _metadataSuspended = false;
     if (audioIndex < 0 || audioIndex >= playlist.length) {
       return;
     }
@@ -873,6 +878,8 @@ class PlaybackService extends PlaybackController {
     }
 
     if (updated.isEmpty) {
+      _metadataPlaybackEpoch++;
+      _metadataSuspended = false;
       nowPlaying = null;
       _playlistIndex = null;
       _cueAutoNextTriggered = false;
@@ -899,6 +906,10 @@ class PlaybackService extends PlaybackController {
 
   /// 暂停
   void pause() {
+    if (_metadataSuspended) {
+      _metadataResumePlaying = false;
+      return;
+    }
     try {
       if (playerState == PlayerState.playing) {
         _player.pause();
@@ -922,6 +933,10 @@ class PlaybackService extends PlaybackController {
 
   /// 恢复播放
   void start() {
+    if (_metadataSuspended) {
+      _metadataResumePlaying = true;
+      return;
+    }
     try {
       if (nowPlaying == null) {
         final audios = AudioLibrary.instance.audioCollection;
@@ -982,10 +997,16 @@ class PlaybackService extends PlaybackController {
   /// 涓?[start] 鐨勫樊鍒湪浜庡畠浼氶€氱煡閲嶇粯缁勪欢
   void playAgain() => _nextAudio_singleLoop();
 
-  /// 外部修改了当前播放歌曲的标签/封面后调用，通知 UI 鍒锋柊
-  void refreshNowPlaying() {
-    final audio = nowPlaying;
-    if (audio != null) {
+  int nowPlayingRevision = 0;
+
+  /// 外部修改了当前播放歌曲的标签/封面后调用，通知 UI 刷新
+  void refreshNowPlaying({bool forceNewInstance = true}) {
+    final original = nowPlaying;
+    if (original != null) {
+      final Audio audio =
+          forceNewInstance ? Audio.fromMap(original.toMap()) : original;
+      nowPlaying = audio;
+      nowPlayingRevision++;
       _smtc.updateDisplay(
         title: audio.displayTitle,
         artist: audio.displayArtist,
@@ -1001,6 +1022,50 @@ class PlaybackService extends PlaybackController {
       });
     }
     notifyListeners();
+  }
+
+  int _metadataPlaybackEpoch = 0;
+  bool _metadataSuspended = false;
+  bool _metadataResumePlaying = false;
+
+  /// Release only the matching physical file during the short replacement step.
+  /// Restoration bypasses _loadAndPlay so editing never counts as a new play.
+  Future<T> withMetadataFileReleased<T>(
+    Audio target,
+    Future<T> Function() commit, {
+    required void Function(Object error) onRestoreError,
+  }) async {
+    final current = nowPlaying;
+    if (current == null ||
+        current.mediaPath.toLowerCase() != target.mediaPath.toLowerCase()) {
+      return commit();
+    }
+    final epoch = ++_metadataPlaybackEpoch;
+    final rawPosition = _player.position;
+    _metadataResumePlaying = playerState == PlayerState.playing;
+    _metadataSuspended = true;
+    try {
+      _player.freeFStream();
+      return await commit();
+    } finally {
+      if (epoch == _metadataPlaybackEpoch && nowPlaying?.path == current.path) {
+        _metadataSuspended = false;
+        try {
+          _player.setSource(current.mediaPath);
+          _player.seek(rawPosition);
+          _applyOutputVolume(current);
+          if (_metadataResumePlaying) _player.start();
+          _smtc.updateState(
+              state: _metadataResumePlaying
+                  ? SMTCState.playing
+                  : SMTCState.paused);
+          _rememberPlaybackSession(save: true);
+          notifyListeners();
+        } catch (error) {
+          onRestoreError(error);
+        }
+      }
+    }
   }
 
   void reconcileLibraryReferences() {
@@ -1024,6 +1089,7 @@ class PlaybackService extends PlaybackController {
   }
 
   void seek(double position) {
+    if (_metadataSuspended) return;
     final audio = nowPlaying;
     if (audio != null && audio.isCueTrack) {
       final cueStartSec = (audio.cueStartMs ?? 0) / 1000.0;
@@ -1040,7 +1106,8 @@ class PlaybackService extends PlaybackController {
     );
   }
 
-  void rememberPlaybackSession({bool save = false, bool updatePlaylist = true}) {
+  void rememberPlaybackSession(
+      {bool save = false, bool updatePlaylist = true}) {
     _rememberPlaybackSession(save: save, updatePlaylist: updatePlaylist);
   }
 
@@ -1049,8 +1116,7 @@ class PlaybackService extends PlaybackController {
     bool updatePlaylist = true,
   }) {
     final audio = nowPlaying;
-    final curPos =
-        audio == null ? 0.0 : position.clamp(0.0, length).toDouble();
+    final curPos = audio == null ? 0.0 : position.clamp(0.0, length).toDouble();
     final curIndex = _playlistIndex ?? 0;
 
     _pref
@@ -1166,6 +1232,8 @@ class PlaybackService extends PlaybackController {
     } catch (err, trace) {
       LOGGER.e("[restore playback session] $err", stackTrace: trace);
       _playlistIndex = null;
+      _metadataPlaybackEpoch++;
+      _metadataSuspended = false;
       nowPlaying = null;
       _cueAutoNextTriggered = false;
       notifyListeners();

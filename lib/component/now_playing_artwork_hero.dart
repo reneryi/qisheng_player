@@ -162,6 +162,11 @@ class NowPlayingArtworkCard extends StatelessWidget {
     _syncCoverCache[audio.path] = provider;
   }
 
+  static void evictCover(String? path) {
+    if (path == null) return;
+    _syncCoverCache.remove(path);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;

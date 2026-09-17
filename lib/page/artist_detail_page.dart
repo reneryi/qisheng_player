@@ -1,3 +1,5 @@
+import 'package:qisheng_player/component/entity_artwork_actions.dart';
+import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/artist_artwork_hero.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
@@ -23,27 +25,67 @@ class ArtistDetailPage extends StatefulWidget {
 
 class _ArtistDetailPageState extends State<ArtistDetailPage> {
   final multiSelectController = MultiSelectController<Audio>();
+  late final bool _trackedByLibrary;
 
-  Artist get artist => widget.artist;
+  Artist get artist {
+    if (!_trackedByLibrary) return widget.artist;
+    return AudioLibrary.instance.artistCollection.values
+            .where((item) => item.id == widget.artist.id)
+            .firstOrNull ??
+        Artist(name: widget.artist.name);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _trackedByLibrary = AudioLibrary.instance.artistCollection.values
+        .any((item) => item.id == widget.artist.id);
+    AudioLibrary.revision.addListener(_refresh);
+    ArtworkStore.instance.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    AudioLibrary.revision.removeListener(_refresh);
+    ArtworkStore.instance.removeListener(_refresh);
     multiSelectController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final secondaryContent = List<Audio>.from(artist.works);
+    if (artist.works.isEmpty) {
+      return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('该分类已无歌曲'),
+        TextButton(onPressed: () => context.pop(), child: const Text('返回'))
+      ]));
+    }
+    final seen = <String>{};
+    final secondaryContent = <Audio>[];
+    for (final audio in artist.works) {
+      if (seen.add(audio.path)) {
+        secondaryContent.add(audio);
+      }
+    }
 
     return UniDetailPage<Artist, Audio, Album>(
       pref: AppPreference.instance.artistDetailPagePref,
       primaryContent: artist,
+      artworkActions: [
+        EntityArtworkActions(
+            id: artist.id,
+            name: artist.name,
+            kind: 'artist',
+            works: artist.works)
+      ],
       primaryPic: artist.picture,
       primaryPicHeroTag: artistArtworkHeroTag(artist),
-      backgroundPic: artist.works.isEmpty
-          ? Future<ImageProvider?>.value()
-          : artist.works.first.cover,
+      backgroundPic: artist.picture,
       picShape: PicShape.oval,
       title: artist.name,
       subtitle: formatWorkCount(artist.works.length),

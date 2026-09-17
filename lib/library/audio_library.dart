@@ -1,3 +1,6 @@
+import 'package:path/path.dart' as paths;
+import 'package:qisheng_player/library/artwork_store.dart';
+import 'package:qisheng_player/library/metadata_provider.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:qisheng_player/app_settings.dart';
@@ -243,6 +246,11 @@ class AudioLibrary {
         return AudioLibraryLoadStatus.empty;
       }
 
+      try {
+        await ArtworkStore.instance.read();
+      } catch (e) {
+        LOGGER.w("图片资料载入失败: $e");
+      }
       _instance = AudioLibrary._(result.folders, roots: result.roots);
 
       await AudioMetadataOverrideStore.instance.read();
@@ -282,40 +290,41 @@ class AudioLibrary {
   }
 
   void _buildCollections() {
+    final seenAudioPaths = <String>{};
     for (var f in folders) {
-      audioCollection.addAll(f.audios);
+      for (final audio in f.audios) {
+        if (seenAudioPaths.add(audio.path)) {
+          audioCollection.add(audio);
+        }
+      }
     }
 
     for (Audio audio in audioCollection) {
       for (String artistName in audio.splitedArtists) {
-        /// 如果artistCollection中有artistName指向的artist，putIfAbsent会返回该artist。
-        /// 随后往这个artist里添加该audio。
-        ///
-        /// 如果没有，创建一个名字为artistName的空艺术家，并将artistName与之相连。
-        /// 随后往这个artist里添加该audio。
-        artistCollection
-            .putIfAbsent(artistName, () => Artist(name: artistName))
-            .works
-            .add(audio);
+        final artist = artistCollection.putIfAbsent(
+            artistName, () => Artist(name: artistName));
+        if (!artist.works.any((w) => w.path == audio.path)) {
+          artist.works.add(audio);
+        }
       }
 
-      /// 如果albumCollection中有audio.album指向的album，putIfAbsent会返回该album。
-      /// 随后往这个album里添加该audio。
-      ///
-      /// 如果没有，创建一个名字为audio.album的空艺术家，并将audio.album与之相连。
-      /// 随后往这个album里添加该audio。
-      albumCollection
-          .putIfAbsent(audio.album, () => Album(name: audio.album))
-          .works
-          .add(audio);
+      final album = albumCollection.putIfAbsent(
+          audio.albumKey,
+          () => Album(
+              name: audio.album,
+              id: audio.albumKey,
+              albumArtist: audio.albumArtist));
+      if (!album.works.any((w) => w.path == audio.path)) {
+        album.works.add(audio);
+      }
     }
 
     /// 将艺术家和专辑链接起来
     for (Artist artist in artistCollection.values) {
       for (Audio audio in artist.works) {
         artist.albumsMap.putIfAbsent(
-          audio.album,
-          () => albumCollection[audio.album]!,
+          audio.albumKey,
+          () => albumCollection[audio.albumKey]!,
         );
       }
     }
@@ -391,6 +400,7 @@ class Audio {
   List<String> splitedArtists;
 
   String album;
+  String albumArtist = "";
 
   String? composer;
 
@@ -495,12 +505,13 @@ class Audio {
         map["created"],
         map["by"],
         artistSplitPattern: artistSplitPattern,
-      );
+      )..albumArtist = map["album_artist"]?.toString() ?? "";
 
   Map toMap() => {
         "title": title,
         "artist": artist,
         "album": album,
+        "album_artist": albumArtist,
         "composer": composer,
         "arranger": arranger,
         "disc": disc,
@@ -517,6 +528,11 @@ class Audio {
         "created": created,
         "by": by
       };
+
+  String get albumKey =>
+      ArtworkStore.instance.boundAlbum(this) ??
+      entityId('album',
+          '${normalizeEntityName(album)}|${albumArtist.trim().isNotEmpty ? normalizeEntityName(albumArtist) : paths.windows.dirname(mediaPath).toLowerCase()}');
 
   bool get isCueTrack =>
       sourcePath != null && cueStartMs != null && cueEndMs != null;
@@ -604,7 +620,8 @@ class Audio {
     if (sizes == null) {
       final file = await OnlineCoverStore.instance.getCoverFile(this);
       if (file == null) {
-        return const AudioCoverProviders(null, null, null);
+        final albumImage = ArtworkStore.instance.cached(albumKey);
+        return AudioCoverProviders(albumImage, albumImage, albumImage);
       }
       final fileImage = FileImage(file);
       return AudioCoverProviders(
@@ -640,6 +657,12 @@ class Audio {
         return pic;
       });
     });
+  }
+
+  /// Embedded-only lookup prevents album/track fallback recursion.
+  Future<ImageProvider?> get embeddedCover async {
+    final bytes = await getOriginalPictureFromPath(path: mediaPath);
+    return bytes == null || bytes.isEmpty ? null : MemoryImage(bytes);
   }
 
   void clearCoverCache() {
@@ -813,13 +836,26 @@ class Artist {
 
   /// 只能用在artist detail page
   /// 200*200
-  Future<ImageProvider?> get picture => works.first.mediumCover;
+  String get id => entityId("artist", normalizeEntityName(name));
+  ArtistProfile get profile => ArtistProfile(id, name);
+  Future<ImageProvider?> get picture => ArtworkStore.instance.artistImage(this);
 
   Artist({required this.name});
 }
 
 class Album {
   String name;
+  final String id;
+  final String albumArtist;
+  AlbumProfile get profile => AlbumProfile(id, name, albumArtist);
+  String get effectiveArtist {
+    if (albumArtist.trim().isNotEmpty) return albumArtist;
+    final names = works
+        .map((audio) => audio.artist.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    return names.length == 1 ? names.single : '';
+  }
 
   /// 参与的艺术家
   Map<String, Artist> artistsMap = {};
@@ -829,7 +865,8 @@ class Album {
 
   /// 只能用在album detail page
   /// 200*200
-  Future<ImageProvider?> get cover => works.first.mediumCover;
+  Future<ImageProvider?> get cover => ArtworkStore.instance.albumImage(this);
 
-  Album({required this.name});
+  Album({required this.name, String? id, this.albumArtist = ""})
+      : id = id ?? entityId("album", name);
 }

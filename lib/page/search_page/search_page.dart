@@ -37,7 +37,7 @@ class UnionSearchResult {
     }
 
     void addAlbum(Album album) {
-      if (albumKeys.add(album.name)) {
+      if (albumKeys.add(album.id)) {
         result.album.add(album);
       }
     }
@@ -85,7 +85,7 @@ class UnionSearchResult {
           addArtist(artist);
         }
       }
-      final album = library.albumCollection[audio.album];
+      final album = library.albumCollection[audio.albumKey];
       if (album != null) {
         addAlbum(album);
       }

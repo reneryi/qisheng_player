@@ -104,7 +104,7 @@ class NowPlayingMoreMenuAction extends StatelessWidget {
         MenuItemButton(
           onPressed: () {
             final album =
-                AudioLibrary.instance.albumCollection[nowPlaying.album]!;
+                AudioLibrary.instance.albumCollection[nowPlaying.albumKey]!;
             context.pushReplacement(app_paths.ALBUM_DETAIL_PAGE, extra: album);
           },
           leadingIcon: const Icon(Symbols.album),

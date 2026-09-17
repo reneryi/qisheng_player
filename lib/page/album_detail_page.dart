@@ -1,3 +1,5 @@
+import 'package:qisheng_player/component/entity_artwork_actions.dart';
+import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/album_artwork_hero.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
@@ -23,18 +25,53 @@ class AlbumDetailPage extends StatefulWidget {
 
 class _AlbumDetailPageState extends State<AlbumDetailPage> {
   final multiSelectController = MultiSelectController<Audio>();
+  late final bool _trackedByLibrary;
 
-  Album get album => widget.album;
+  Album get album {
+    if (!_trackedByLibrary) return widget.album;
+    return AudioLibrary.instance.albumCollection.values
+            .where((item) => item.id == widget.album.id)
+            .firstOrNull ??
+        Album(name: widget.album.name, id: widget.album.id);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _trackedByLibrary = AudioLibrary.instance.albumCollection.values
+        .any((item) => item.id == widget.album.id);
+    AudioLibrary.revision.addListener(_refresh);
+    ArtworkStore.instance.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    AudioLibrary.revision.removeListener(_refresh);
+    ArtworkStore.instance.removeListener(_refresh);
     multiSelectController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final secondaryContent = List<Audio>.from(album.works);
+    if (album.works.isEmpty) {
+      return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('该分类已无歌曲'),
+        TextButton(onPressed: () => context.pop(), child: const Text('返回'))
+      ]));
+    }
+    final seen = <String>{};
+    final secondaryContent = <Audio>[];
+    for (final audio in album.works) {
+      if (seen.add(audio.path)) {
+        secondaryContent.add(audio);
+      }
+    }
     int compareByDiscTrack(Audio a, Audio b) {
       final discCompare = a.disc.compareTo(b.disc);
       if (discCompare != 0) return discCompare;
@@ -46,11 +83,18 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     return UniDetailPage<Album, Audio, Artist>(
       pref: AppPreference.instance.albumDetailPagePref,
       primaryContent: album,
+      artworkActions: [
+        EntityArtworkActions(
+            id: album.id,
+            name: album.name,
+            kind: 'album',
+            works: album.works,
+            albumArtist: album.effectiveArtist,
+            album: album)
+      ],
       primaryPic: album.cover,
       primaryPicHeroTag: albumArtworkHeroTag(album),
-      backgroundPic: album.works.isEmpty
-          ? Future<ImageProvider?>.value()
-          : album.works.first.cover,
+      backgroundPic: album.cover,
       picShape: PicShape.rrect,
       title: album.name,
       subtitle: formatWorkCount(album.works.length),

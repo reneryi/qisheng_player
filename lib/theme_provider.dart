@@ -218,6 +218,10 @@ List<Color> buildAuroraGlowGradient(
 }
 
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
+  void invalidateAudioPalette(String path) {
+    _dynamicThemeRequestId++;
+    _paletteCache.removeWhere((key, _) => key.contains('\u0001$path\u0001'));
+  }
   ThemeProvider._() {
     try {
       WidgetsBinding.instance.addObserver(this);

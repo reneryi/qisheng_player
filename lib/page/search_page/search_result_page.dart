@@ -1,4 +1,4 @@
-﻿import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
@@ -18,7 +18,7 @@ class SearchResultPage extends StatelessWidget {
   final UnionSearchResult? initialResult;
 
   UnionSearchResult get resolvedResult =>
-      initialResult ?? UnionSearchResult.search(initialQuery);
+      UnionSearchResult.search(initialQuery);
 
   List<_SearchResultPageBody> _buildContent(UnionSearchResult result) {
     return [

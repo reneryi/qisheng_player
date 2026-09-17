@@ -43,14 +43,12 @@ bool isPngBytes(Uint8List bytes) =>
     bytes[2] == 0x4E &&
     bytes[3] == 0x47;
 
-@visibleForTesting
 String? detectCoverExtension(Uint8List bytes) {
   if (isJpegBytes(bytes)) return '.jpg';
   if (isPngBytes(bytes)) return '.png';
   return null;
 }
 
-@visibleForTesting
 Future<Uint8List> readBoundedCoverBytes(
   Stream<List<int>> response, {
   int maxBytes = onlineCoverMaxBytes,

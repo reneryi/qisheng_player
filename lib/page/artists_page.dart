@@ -1,5 +1,6 @@
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
+import 'package:qisheng_player/component/batch_artwork_match_dialog.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/page/uni_page.dart';
@@ -21,6 +22,15 @@ class ArtistsPage extends StatelessWidget {
       contentBuilder: (_, item, __, multiSelectController) =>
           ArtistTile(artist: item, enableHero: true),
       tableMaxCrossAxisExtent: 250,
+      primaryAction: FilledButton.tonalIcon(
+        icon: const Icon(Symbols.auto_awesome, size: 18),
+        label: const Text('一键匹配头像'),
+        onPressed: () => showBatchArtworkMatchDialog(
+          context,
+          kind: 'artist',
+          artists: contentList,
+        ),
+      ),
       enableShufflePlay: false,
       enableSortMethod: true,
       enableSortOrder: true,

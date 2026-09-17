@@ -10,6 +10,12 @@ import 'package:music_api/music_api.dart';
 
 enum ResultSource { qq, kugou, netease }
 
+class OnlineArtistRef {
+  const OnlineArtistRef(this.name, this.id);
+  final String name;
+  final String id;
+}
+
 const double minimumOnlineLyricMatchScore = 0.6;
 
 double computeMusicMatchScore(
@@ -48,6 +54,10 @@ class SongSearchResult {
   String? kugouSongHash;
 
   String? coverUrl;
+  String? albumId;
+  String? albumArtist;
+  int? durationMs;
+  List<OnlineArtistRef> artistRefs;
 
   SongSearchResult(
     this.source,
@@ -59,6 +69,10 @@ class SongSearchResult {
     this.neteaseSongId,
     this.kugouSongHash,
     this.coverUrl,
+    this.albumId,
+    this.albumArtist,
+    this.durationMs,
+    this.artistRefs = const [],
   });
 
   @override
@@ -73,15 +87,19 @@ class SongSearchResult {
   }
 
   static SongSearchResult fromQQSearchResult(Map itemSong, Audio audio) {
-    final List singer = itemSong["singer"];
-    final buffer = StringBuffer(singer.first["name"]);
+    final List singer = itemSong["singer"] ?? const [];
+    final buffer = StringBuffer(singer.isEmpty ? '' : singer.first["name"]);
     for (int i = 1; i < singer.length; ++i) {
       buffer.write(" / ${singer[i]["name"]}");
     }
 
     final title = itemSong["name"] ?? "";
-    final album = itemSong["album"]["title"] ?? "";
+    final album =
+        itemSong["album"]?["title"] ?? itemSong["album"]?["name"] ?? "";
     final artists = buffer.toString();
+
+    final albumMid = itemSong["album"]?["mid"]?.toString().trim();
+    final hasValidAlbumMid = albumMid != null && albumMid.isNotEmpty;
 
     return SongSearchResult(
       ResultSource.qq,
@@ -90,23 +108,47 @@ class SongSearchResult {
       album,
       computeMusicMatchScore(audio, title, artists, album),
       qqSongId: itemSong["id"],
-      coverUrl: itemSong["album"]?["mid"] == null
+      albumId: hasValidAlbumMid ? albumMid : null,
+      albumArtist: artists,
+      artistRefs: [
+        for (final a in singer)
+          if (a['mid'] != null && a['mid'].toString().trim().isNotEmpty)
+            OnlineArtistRef(a['name']?.toString() ?? '', a['mid'].toString())
+      ],
+      durationMs: (itemSong['interval'] as num?)?.toInt() == null
           ? null
-          : "https://y.qq.com/music/photo_new/T002R800x800M000${itemSong["album"]["mid"]}.jpg",
+          : (itemSong['interval'] as num).toInt() * 1000,
+      coverUrl: hasValidAlbumMid
+          ? "https://y.qq.com/music/photo_new/T002R800x800M000$albumMid.jpg"
+          : null,
     );
   }
 
   static SongSearchResult fromNeteaseSearchResult(Map song, Audio audio) {
     final title = song["name"] ?? "";
 
-    final List artistList = song["artists"];
-    final buffer = StringBuffer(artistList.first["name"]);
+    final List artistList =
+        (song["ar"] ?? song["artists"]) as List? ?? const [];
+    final buffer = StringBuffer(
+      artistList.isEmpty ? '' : (artistList.first["name"] ?? ''),
+    );
     for (int i = 1; i < artistList.length; ++i) {
-      buffer.write(" / ${artistList[i]["name"]}");
+      buffer.write(" / ${artistList[i]["name"] ?? ''}");
     }
     final artists = buffer.toString();
 
-    final album = song["album"]["name"] ?? "";
+    final albumMap = (song["al"] ?? song["album"]) as Map?;
+    final album = albumMap?["name"]?.toString() ?? "";
+
+    final rawPicUrl =
+        (albumMap?["picUrl"] ?? song["picUrl"])?.toString().trim();
+    final coverUrl =
+        (rawPicUrl != null && rawPicUrl.isNotEmpty) ? rawPicUrl : null;
+
+    final durationMs =
+        (song['dt'] as num?)?.toInt() ?? (song['duration'] as num?)?.toInt();
+
+    final albumId = albumMap?['id']?.toString();
 
     return SongSearchResult(
       ResultSource.netease,
@@ -114,15 +156,41 @@ class SongSearchResult {
       artists,
       album,
       computeMusicMatchScore(audio, title, artists, album),
-      neteaseSongId: song["id"].toString(),
-      coverUrl: song["album"]?["picUrl"]?.toString(),
+      neteaseSongId: song["id"]?.toString(),
+      albumId: (albumId != null && albumId.isNotEmpty && albumId != '0')
+          ? albumId
+          : null,
+      albumArtist: artists,
+      artistRefs: [
+        for (final a in artistList)
+          if (a is Map && a['id'] != null)
+            OnlineArtistRef(
+              a['name']?.toString() ?? '',
+              a['id'].toString(),
+            )
+      ],
+      durationMs: durationMs,
+      coverUrl: coverUrl,
     );
   }
 
   static SongSearchResult fromKugouSearchResult(Map info, Audio audio) {
-    final title = info["songname"];
-    final album = info["album_name"];
-    final artists = info["singername"];
+    final title = (info["songname"] ?? "").toString();
+    final album = (info["album_name"] ?? "").toString();
+    final artists = (info["singername"] ?? "").toString();
+
+    final rawUrl = info["trans_param"]?["union_cover"] ?? info["imgurl"];
+    final coverUrl =
+        rawUrl?.toString().replaceAll("{size}", "800").trim();
+    final validCoverUrl =
+        (coverUrl != null && coverUrl.isNotEmpty) ? coverUrl : null;
+
+    final rawAlbumId = info["album_id"]?.toString().trim();
+    final hasValidAlbumId =
+        rawAlbumId != null && rawAlbumId.isNotEmpty && rawAlbumId != '0';
+
+    final durationSec = (info["duration"] as num?)?.toInt();
+    final durationMs = durationSec != null ? durationSec * 1000 : null;
 
     return SongSearchResult(
       ResultSource.kugou,
@@ -130,8 +198,11 @@ class SongSearchResult {
       artists,
       album,
       computeMusicMatchScore(audio, title, artists, album),
-      kugouSongHash: info["hash"],
-      coverUrl: info["imgurl"]?.toString().replaceAll("{size}", "480"),
+      kugouSongHash: info["hash"]?.toString(),
+      coverUrl: validCoverUrl,
+      albumId: hasValidAlbumId ? rawAlbumId : null,
+      albumArtist: artists,
+      durationMs: durationMs,
     );
   }
 }
@@ -158,7 +229,7 @@ Future<List<SongSearchResult>> _searchNetease(
   String query,
   Audio audio,
 ) async {
-  final Map answer = (await Netease.search(keyWord: query)).data;
+  final Map answer = (await Netease.searchPc(keyWord: query)).data;
   final List? items = answer['result']?['songs'];
   if (items == null) return const [];
   return items

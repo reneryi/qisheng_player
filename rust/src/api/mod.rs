@@ -5,6 +5,7 @@
 pub mod album_palette;
 pub mod installed_font;
 pub mod logger;
+pub mod metadata_editor;
 pub mod smtc_flutter;
 pub mod system_theme;
 pub mod tag_reader;

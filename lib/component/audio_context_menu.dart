@@ -251,7 +251,7 @@ List<Widget> buildAudioContextMenuChildren(
       ),
     MenuItemButton(
       onPressed: () {
-        final album = AudioLibrary.instance.albumCollection[audio.album];
+        final album = AudioLibrary.instance.albumCollection[audio.albumKey];
         if (album == null) return;
         context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album);
       },

@@ -31,7 +31,7 @@ void main() {
           theme: buildTestTheme(),
           home: Scaffold(
             body: Center(
-              child: AudioEditDialog(audio: audio),
+              child: AudioEditDialog(audio: audio, searcher: (_) async => []),
             ),
           ),
         ),
@@ -44,7 +44,7 @@ void main() {
       // 验证头部：标题、副标题与关闭按钮
       expect(find.text('音乐编辑'), findsOneWidget);
       expect(
-        find.text('修改本地音频元数据标签，或检索匹配在线歌词与高清封面'),
+        find.text('修改本地音频元数据标签；点击保存后写入文件并立即同步播放器'),
         findsOneWidget,
       );
       expect(find.byTooltip('关闭'), findsOneWidget);
@@ -54,13 +54,11 @@ void main() {
       expect(find.text('Original Artist'), findsOneWidget);
       expect(find.text('Original Album'), findsOneWidget);
 
-      // 验证表单前缀图标
-      expect(find.byIcon(Symbols.music_note_rounded), findsWidgets);
-      expect(find.byIcon(Symbols.person_rounded), findsOneWidget);
-      expect(find.byIcon(Symbols.album_rounded), findsOneWidget);
+      // 现代双栏设计：彻底消除怪异的前置复选框，采用纯净表单与自动脏数据追踪
+      expect(find.byType(Checkbox), findsNothing);
 
       // 验证底部操作按钮与提示
-      expect(find.text('保存元信息覆盖'), findsOneWidget);
+      expect(find.text('保存所选修改'), findsOneWidget);
       expect(find.text('在线匹配结果'), findsOneWidget);
       expect(find.text('重新检索'), findsOneWidget);
       expect(find.text('关闭'), findsOneWidget);
@@ -83,16 +81,16 @@ void main() {
           theme: buildTestTheme(),
           home: Scaffold(
             body: Center(
-              child: AudioEditDialog(audio: audio),
+              child: AudioEditDialog(audio: audio, searcher: (_) async => []),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      // 点击清空按钮（有3个清空按钮）
+      // 首版六个标签字段均可单独清空。
       final clearButtons = find.byTooltip('清空');
-      expect(clearButtons, findsNWidgets(3));
+      expect(clearButtons, findsNWidgets(6));
 
       await tester.tap(clearButtons.first);
       await tester.pumpAndSettle();
@@ -105,6 +103,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('New Custom Song'), findsOneWidget);
+    });
+
+    testWidgets('重新检索使用同步 setState 回调且不会抛出 Future 返回值异常', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      var searchCount = 0;
+      final audio = TestAudio(
+        title: 'Original Title',
+        artist: 'Original Artist',
+        album: 'Original Album',
+        path: r'E:\Music\search_track.flac',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTestTheme(),
+          home: Scaffold(
+            body: Center(
+              child: AudioEditDialog(
+                audio: audio,
+                searcher: (_) async {
+                  searchCount++;
+                  return [];
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(searchCount, 1);
+
+      await tester.tap(find.text('重新检索'));
+      await tester.pumpAndSettle();
+
+      expect(searchCount, 2);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('SearchResultCard 正确渲染放大的操作按钮、平台徽标与封面占位', (tester) async {
@@ -157,9 +194,9 @@ void main() {
       expect(find.text('98% 匹配'), findsOneWidget);
 
       // 验证三大核心操作按钮存在
-      final lyricBtn = find.text('设歌词');
-      final coverBtn = find.text('设封面');
-      final fillBtn = find.text('填入表单');
+      final lyricBtn = find.text('选择歌词');
+      final coverBtn = find.text('选择封面');
+      final fillBtn = find.text('采用此结果');
       expect(lyricBtn, findsOneWidget);
       expect(coverBtn, findsOneWidget);
       expect(fillBtn, findsOneWidget);
@@ -173,10 +210,16 @@ void main() {
       expect(fillText.style?.fontSize, equals(13.5));
 
       // 验证按钮点击手感与高度规范 (38px 最小高度)
-      final lyricButtonWidget = tester.widget<OutlinedButton>(find.ancestor(of: lyricBtn, matching: find.byType(OutlinedButton)).first);
-      expect(lyricButtonWidget.style?.minimumSize?.resolve({}), equals(const Size(0, 38)));
-      final fillButtonWidget = tester.widget<FilledButton>(find.ancestor(of: fillBtn, matching: find.byType(FilledButton)).first);
-      expect(fillButtonWidget.style?.minimumSize?.resolve({}), equals(const Size(0, 38)));
+      final lyricButtonWidget = tester.widget<OutlinedButton>(find
+          .ancestor(of: lyricBtn, matching: find.byType(OutlinedButton))
+          .first);
+      expect(lyricButtonWidget.style?.minimumSize?.resolve({}),
+          equals(const Size(0, 38)));
+      final fillButtonWidget = tester.widget<FilledButton>(find
+          .ancestor(of: fillBtn, matching: find.byType(FilledButton))
+          .first);
+      expect(fillButtonWidget.style?.minimumSize?.resolve({}),
+          equals(const Size(0, 38)));
 
       // 验证按钮点击回调响应正常
       await tester.tap(lyricBtn);
@@ -189,7 +232,8 @@ void main() {
       expect(fillCalled, isTrue);
     });
 
-    testWidgets('SearchResultCard 支持网易云与酷狗平台以及 coverUrl 封面加载分支', (tester) async {
+    testWidgets('SearchResultCard 支持网易云与酷狗平台以及 coverUrl 封面加载分支',
+        (tester) async {
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -305,23 +349,25 @@ void main() {
           theme: buildTestTheme(),
           home: Scaffold(
             body: Center(
-              child: AudioEditDialog(audio: audio),
+              child: AudioEditDialog(audio: audio, searcher: (_) async => []),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('设歌词动作：'), findsOneWidget);
-      expect(find.text('写入音频内嵌标签'), findsOneWidget);
-      expect(find.text('保存同级 .lrc 文件'), findsOneWidget);
+      await tester.tap(find.text('编辑或粘贴歌词'));
+      await tester.pump();
+      expect(find.text('写入内嵌歌词'), findsOneWidget);
+      expect(find.text('导出同级 .lrc'), findsOneWidget);
       expect(find.text('应用到播放器'), findsOneWidget);
 
-      // 点击切换“保存同级 .lrc 文件”
-      await tester.tap(find.text('保存同级 .lrc 文件'));
+      // 本次草稿选项独立于全局默认值。
+      await tester.ensureVisible(find.text('导出同级 .lrc'));
+      await tester.pump();
+      await tester.tap(find.text('导出同级 .lrc'));
       await tester.pumpAndSettle();
-
-      expect(AppSettings.instance.lyricSaveExportLrc, isFalse);
+      expect(AppSettings.instance.lyricSaveExportLrc, isTrue);
     });
 
     testWidgets('当编辑 CUE 分轨时自动禁用内嵌标签选项并提示 CUE 保护', (tester) async {
@@ -355,18 +401,18 @@ void main() {
           theme: buildTestTheme(),
           home: Scaffold(
             body: Center(
-              child: AudioEditDialog(audio: cueAudio),
+              child:
+                  AudioEditDialog(audio: cueAudio, searcher: (_) async => []),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('设歌词动作：'), findsOneWidget);
-      // 内嵌标签选项应带有 (CUE保护) 禁用标识
-      expect(find.text('写入音频内嵌标签(CUE保护)'), findsOneWidget);
-      // 其余两个选项依然正常可用
-      expect(find.text('保存同级 .lrc 文件'), findsOneWidget);
+      await tester.tap(find.text('编辑或粘贴歌词'));
+      await tester.pump();
+      expect(find.text('CUE 不写母带'), findsOneWidget);
+      expect(find.text('导出同级 .lrc'), findsOneWidget);
       expect(find.text('应用到播放器'), findsOneWidget);
     });
 
@@ -391,7 +437,7 @@ void main() {
           theme: buildTestTheme(),
           home: Scaffold(
             body: Center(
-              child: AudioEditDialog(audio: audio),
+              child: AudioEditDialog(audio: audio, searcher: (_) async => []),
             ),
           ),
         ),
@@ -441,6 +487,3 @@ void main() {
     });
   });
 }
-
-
-

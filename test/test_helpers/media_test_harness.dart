@@ -132,6 +132,9 @@ class TestAudio extends Audio {
   Future<ImageProvider?> get cover async => _image;
 
   @override
+  Future<ImageProvider?> get embeddedCover async => _image;
+
+  @override
   Future<ImageProvider?> get mediumCover async => _image;
 
   @override

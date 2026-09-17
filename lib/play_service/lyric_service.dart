@@ -237,7 +237,9 @@ class LyricService extends LyricController {
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
     if (lyricSource != null) {
       if (lyricSource.source == LyricSourceType.local) {
-        currLyricFuture = _getLocalLyric(nowPlaying);
+        currLyricFuture = lyricSource.cachedText == null
+            ? _getLocalLyric(nowPlaying)
+            : Future.value(Lrc.fromLrcText(lyricSource.cachedText!, LrcSource.local));
       } else {
         currLyricFuture = getOnlineLyric(
           qqSongId: lyricSource.qqSongId,

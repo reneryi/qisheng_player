@@ -121,4 +121,174 @@ void main() {
     expect(selectMatchedResult([low]), isNull);
     expect(selectMatchedResult([accepted]), same(accepted));
   });
+
+  group('fromNeteaseSearchResult', () {
+    test('parses cloudsearch format with al.picUrl, ar artists, dt duration', () {
+      final source = audio(title: '海阔天空', artist: 'Beyond', album: '乐与怒');
+      final raw = {
+        'id': 347230,
+        'name': '海阔天空',
+        'ar': [
+          {'id': 11127, 'name': 'Beyond'}
+        ],
+        'al': {
+          'id': 34209,
+          'name': '乐与怒',
+          'picUrl': 'http://p1.music.126.net/q6cm6Pk70YArijk1_QDoEg==/109951163984013003.jpg'
+        },
+        'dt': 324000
+      };
+
+      final result = SongSearchResult.fromNeteaseSearchResult(raw, source);
+
+      expect(result.source, ResultSource.netease);
+      expect(result.title, '海阔天空');
+      expect(result.artists, 'Beyond');
+      expect(result.album, '乐与怒');
+      expect(result.coverUrl,
+          'http://p1.music.126.net/q6cm6Pk70YArijk1_QDoEg==/109951163984013003.jpg');
+      expect(result.albumId, '34209');
+      expect(result.neteaseSongId, '347230');
+      expect(result.durationMs, 324000);
+      expect(result.artistRefs.single.id, '11127');
+      expect(result.score, 1.0);
+    });
+
+    test('supports legacy format with album.picUrl and artists', () {
+      final source = audio();
+      final raw = {
+        'id': 123,
+        'name': 'Hello',
+        'artists': [
+          {'id': 456, 'name': 'Test Artist'}
+        ],
+        'album': {
+          'id': 789,
+          'name': 'Test Album',
+          'picUrl': 'https://example.com/cover.jpg'
+        },
+        'duration': 180000
+      };
+
+      final result = SongSearchResult.fromNeteaseSearchResult(raw, source);
+
+      expect(result.coverUrl, 'https://example.com/cover.jpg');
+      expect(result.durationMs, 180000);
+      expect(result.albumId, '789');
+    });
+  });
+
+  group('fromKugouSearchResult', () {
+    test('extracts union_cover and replaces {size} with 800', () {
+      final source = audio(title: 'LOVE 2000', artist: '遠野ひかる', album: 'LOVE 2000');
+      final raw = {
+        'hash': '31f776a095c8a596301166f4642e1769',
+        'songname': 'LOVE 2000',
+        'singername': '遠野ひかる',
+        'album_name': 'LOVE 2000',
+        'album_id': '98852971',
+        'duration': 263,
+        'trans_param': {
+          'union_cover': 'http://imge.kugou.com/stdmusic/{size}/20220510/20220510154611248287.jpg'
+        }
+      };
+
+      final result = SongSearchResult.fromKugouSearchResult(raw, source);
+
+      expect(result.source, ResultSource.kugou);
+      expect(result.title, 'LOVE 2000');
+      expect(result.artists, '遠野ひかる');
+      expect(result.album, 'LOVE 2000');
+      expect(result.coverUrl,
+          'http://imge.kugou.com/stdmusic/800/20220510/20220510154611248287.jpg');
+      expect(result.kugouSongHash, '31f776a095c8a596301166f4642e1769');
+      expect(result.albumId, '98852971');
+      expect(result.durationMs, 263000);
+      expect(result.score, 1.0);
+    });
+
+    test('falls back to imgurl and replaces {size} with 800', () {
+      final source = audio();
+      final raw = {
+        'hash': 'abc',
+        'songname': 'Hello',
+        'singername': 'Test Artist',
+        'album_name': 'Test Album',
+        'imgurl': 'http://imge.kugou.com/stdmusic/{size}/test.jpg',
+        'duration': 120
+      };
+
+      final result = SongSearchResult.fromKugouSearchResult(raw, source);
+      expect(result.coverUrl, 'http://imge.kugou.com/stdmusic/800/test.jpg');
+      expect(result.durationMs, 120000);
+    });
+  });
+
+  group('fromQQSearchResult', () {
+    test('handles valid mid and generates 800x800 cover url', () {
+      final source = audio(title: '晴天', artist: '周杰伦', album: '叶惠美');
+      final raw = {
+        'id': 107192078,
+        'name': '晴天',
+        'singer': [
+          {'name': '周杰伦', 'mid': '0025NhlN2yWrP4'}
+        ],
+        'album': {
+          'title': '叶惠美',
+          'mid': '000MkMni19ClKG'
+        },
+        'interval': 269
+      };
+
+      final result = SongSearchResult.fromQQSearchResult(raw, source);
+
+      expect(result.source, ResultSource.qq);
+      expect(result.title, '晴天');
+      expect(result.artists, '周杰伦');
+      expect(result.album, '叶惠美');
+      expect(result.coverUrl,
+          'https://y.qq.com/music/photo_new/T002R800x800M000000MkMni19ClKG.jpg');
+      expect(result.albumId, '000MkMni19ClKG');
+      expect(result.durationMs, 269000);
+      expect(result.score, 1.0);
+    });
+
+    test('guards against empty or whitespace mid preventing 404 fake url', () {
+      final source = audio(title: 'Live Song', artist: 'Live Artist', album: '');
+      final rawEmptyMid = {
+        'id': 9999,
+        'name': 'Live Song',
+        'singer': [
+          {'name': 'Live Artist', 'mid': '00112233'}
+        ],
+        'album': {
+          'title': '',
+          'mid': ''
+        },
+        'interval': 200
+      };
+
+      final result = SongSearchResult.fromQQSearchResult(rawEmptyMid, source);
+
+      expect(result.coverUrl, isNull);
+      expect(result.albumId, isNull);
+
+      final rawWhitespaceMid = {
+        'id': 9998,
+        'name': 'Live Song',
+        'singer': [
+          {'name': 'Live Artist', 'mid': '00112233'}
+        ],
+        'album': {
+          'title': '',
+          'mid': '   '
+        },
+        'interval': 200
+      };
+
+      final resultWs = SongSearchResult.fromQQSearchResult(rawWhitespaceMid, source);
+      expect(resultWs.coverUrl, isNull);
+      expect(resultWs.albumId, isNull);
+    });
+  });
 }

@@ -56,14 +56,14 @@ static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
 
 static INDEX_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-fn lock_index_writes() -> MutexGuard<'static, ()> {
+pub(crate) fn lock_index_writes() -> MutexGuard<'static, ()> {
     INDEX_WRITE_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub(crate) fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -82,17 +82,32 @@ fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 #[cfg(windows)]
-fn replace_file(source: &Path, target: &Path) -> io::Result<()> {
+pub(crate) fn replace_file(source: &Path, target: &Path) -> io::Result<()> {
     let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
     let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
-    unsafe {
-        MoveFileExW(
-            PCWSTR(source_wide.as_ptr()),
-            PCWSTR(target_wide.as_ptr()),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-        .map_err(|_| io::Error::last_os_error())
+    let mut last_err = None;
+    for attempt in 0..15 {
+        let res = unsafe {
+            MoveFileExW(
+                PCWSTR(source_wide.as_ptr()),
+                PCWSTR(target_wide.as_ptr()),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
+        if res.is_ok() {
+            return Ok(());
+        }
+        let err = io::Error::last_os_error();
+        let raw = err.raw_os_error().unwrap_or(0);
+        // 32 = ERROR_SHARING_VIOLATION, 5 = ERROR_ACCESS_DENIED
+        if (raw == 32 || raw == 5) && attempt < 14 {
+            last_err = Some(err);
+            std::thread::sleep(Duration::from_millis(20 + attempt * 15));
+            continue;
+        }
+        return Err(err);
     }
+    Err(last_err.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "replace_file failed")))
 }
 
 #[cfg(not(windows))]
