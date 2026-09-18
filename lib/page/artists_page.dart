@@ -19,8 +19,12 @@ class ArtistsPage extends StatelessWidget {
       subtitle: "${contentList.length} 位艺术家",
       contentList: contentList,
       contentRevision: AudioLibrary.revision.value,
-      contentBuilder: (_, item, __, multiSelectController) =>
-          ArtistTile(artist: item, enableHero: true),
+      contentBuilder: (_, item, __, multiSelectController) => ArtistTile(
+        artist: item,
+        enableHero: true,
+        selected: multiSelectController?.selected.contains(item) ?? false,
+        multiSelectController: multiSelectController,
+      ),
       tableMaxCrossAxisExtent: 250,
       primaryAction: FilledButton.tonalIcon(
         icon: const Icon(Symbols.auto_awesome, size: 18),

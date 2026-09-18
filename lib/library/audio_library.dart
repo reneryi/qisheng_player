@@ -36,6 +36,7 @@ class AudioCoverCache {
   static const int maxBytesEntries = 20;
 
   static final Map<String, Future<AudioCoverProviders>> _providersCache = {};
+  static final Map<String, AudioCoverProviders> _resolvedProviders = {};
   static final Map<String, Future<Uint8List?>> _bytesCache = {};
 
   static double _lastDpiRatio = 1.0;
@@ -46,9 +47,12 @@ class AudioCoverCache {
   @visibleForTesting
   static double get lastDpiRatio => _lastDpiRatio;
 
+  static AudioCoverProviders? getResolved(String key) => _resolvedProviders[key];
+
   static void checkDpiAdaptation(double currentRatio) {
     if ((_lastDpiRatio - currentRatio).abs() > 0.05) {
       _providersCache.clear();
+      _resolvedProviders.clear();
       _lastDpiRatio = currentRatio;
     }
   }
@@ -61,6 +65,10 @@ class AudioCoverCache {
     if (view != null) {
       checkDpiAdaptation(view.devicePixelRatio);
     }
+    final resolved = _resolvedProviders[key];
+    if (resolved != null) {
+      return Future.value(resolved);
+    }
     final existing = _providersCache.remove(key);
     if (existing != null) {
       _providersCache[key] = existing;
@@ -70,12 +78,19 @@ class AudioCoverCache {
       final oldestKey = _providersCache.keys.first;
       _providersCache.remove(oldestKey);
     }
-    final future = loader();
-    _providersCache[key] = future;
-    future.catchError((_) {
+    final future = loader().then((result) {
+      if (_resolvedProviders.length >= maxProvidersEntries) {
+        final oldestKey = _resolvedProviders.keys.first;
+        _resolvedProviders.remove(oldestKey);
+      }
+      _resolvedProviders[key] = result;
+      return result;
+    }).catchError((_) {
       _providersCache.remove(key);
+      _resolvedProviders.remove(key);
       return const AudioCoverProviders(null, null, null);
     });
+    _providersCache[key] = future;
     return future;
   }
 
@@ -103,12 +118,14 @@ class AudioCoverCache {
 
   static void invalidate(String key) {
     _providersCache.remove(key);
+    _resolvedProviders.remove(key);
     _bytesCache.remove(key);
   }
 
   @visibleForTesting
   static void clearAll() {
     _providersCache.clear();
+    _resolvedProviders.clear();
     _bytesCache.clear();
   }
 }
@@ -256,11 +273,37 @@ class AudioLibrary {
       await AudioMetadataOverrideStore.instance.read();
       AudioMetadataOverrideStore.instance.applyToLibrary(instance);
       instance._rebuildCollections();
+      instance.prewarmCovers();
       notifyChanged();
       return AudioLibraryLoadStatus.loaded;
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
       return AudioLibraryLoadStatus.invalid;
+    }
+  }
+
+  /// 导入或启动后在后台平滑预热封面，使后续切换到音乐、专辑、艺术家页面时立即可见且不再重新刷新
+  void prewarmCovers({int maxCount = 120}) {
+    final audiosToWarm = audioCollection.take(maxCount);
+    for (final audio in audiosToWarm) {
+      if (audio.cachedCover == null) {
+        audio.cover.ignore();
+      }
+      if (audio.cachedMediumCover == null) {
+        audio.mediumCover.ignore();
+      }
+    }
+    final albumsToWarm = albumCollection.values.take(maxCount);
+    for (final album in albumsToWarm) {
+      if (album.cachedCover == null) {
+        album.cover.ignore();
+      }
+    }
+    final artistsToWarm = artistCollection.values.take(maxCount);
+    for (final artist in artistsToWarm) {
+      if (artist.cachedPicture == null) {
+        artist.picture.ignore();
+      }
     }
   }
 
@@ -281,11 +324,13 @@ class AudioLibrary {
       folder.audios.removeWhere((audio) => paths.contains(audio.path));
     }
     _rebuildCollections();
+    prewarmCovers();
     notifyChanged();
   }
 
   void rebuildCollectionsFromCurrentFolders() {
     _rebuildCollections();
+    prewarmCovers();
     notifyChanged();
   }
 
@@ -617,35 +662,47 @@ class Audio {
       largeWidth: largeW,
       largeHeight: largeW,
     );
+    AudioCoverProviders providers;
     if (sizes == null) {
       final file = await OnlineCoverStore.instance.getCoverFile(this);
       if (file == null) {
         final albumImage = ArtworkStore.instance.cached(albumKey);
-        return AudioCoverProviders(albumImage, albumImage, albumImage);
+        providers = AudioCoverProviders(albumImage, albumImage, albumImage);
+      } else {
+        final fileImage = FileImage(file);
+        providers = AudioCoverProviders(
+          ResizeImage.resizeIfNeeded(smallW, smallW, fileImage),
+          ResizeImage.resizeIfNeeded(mediumW, mediumW, fileImage),
+          ResizeImage.resizeIfNeeded(largeW, largeW, fileImage),
+        );
       }
-      final fileImage = FileImage(file);
-      return AudioCoverProviders(
-        ResizeImage.resizeIfNeeded(smallW, smallW, fileImage),
-        ResizeImage.resizeIfNeeded(mediumW, mediumW, fileImage),
-        ResizeImage.resizeIfNeeded(largeW, largeW, fileImage),
+    } else {
+      providers = AudioCoverProviders(
+        sizes.small == null ? null : MemoryImage(sizes.small!),
+        sizes.medium == null ? null : MemoryImage(sizes.medium!),
+        sizes.large == null ? null : MemoryImage(sizes.large!),
       );
     }
-    return AudioCoverProviders(
-      sizes.small == null ? null : MemoryImage(sizes.small!),
-      sizes.medium == null ? null : MemoryImage(sizes.medium!),
-      sizes.large == null ? null : MemoryImage(sizes.large!),
-    );
+    return providers;
   }
 
   Future<AudioCoverProviders> get _coverProviders {
     return AudioCoverCache.getProviders(mediaPath, _loadCoverProviders);
   }
 
+  ImageProvider? get cachedCover =>
+      AudioCoverCache.getResolved(mediaPath)?.small;
+
+  ImageProvider? get cachedMediumCover =>
+      AudioCoverCache.getResolved(mediaPath)?.medium;
+
   /// 缓存ImageProvider而不是Uint8List（bytes）
   /// 缓存bytes时，每次加载图片都要重新解码，内存占用很大。快速滚动时能到700mb
   /// 缓存ImageProvider不用重新解码。快速滚动时最多250mb
   /// 48*48
   Future<ImageProvider?> get cover {
+    final cached = cachedCover;
+    if (cached != null) return Future.value(cached);
     return _coverProviders.then((covers) => covers.small);
   }
 
@@ -677,6 +734,8 @@ class Audio {
   /// audio detail page 不需要频繁调用，所以不缓存图片
   /// 200 * 200
   Future<ImageProvider?> get mediumCover {
+    final cached = cachedMediumCover;
+    if (cached != null) return Future.value(cached);
     return _coverProviders.then((covers) => covers.medium);
   }
 
@@ -838,6 +897,7 @@ class Artist {
   /// 200*200
   String get id => entityId("artist", normalizeEntityName(name));
   ArtistProfile get profile => ArtistProfile(id, name);
+  ImageProvider? get cachedPicture => ArtworkStore.instance.cached(id);
   Future<ImageProvider?> get picture => ArtworkStore.instance.artistImage(this);
 
   Artist({required this.name});
@@ -863,9 +923,49 @@ class Album {
   /// 作品
   List<Audio> works = [];
 
-  /// 只能用在album detail page
+  ImageProvider? _fallbackSongCover;
+
+  void invalidateCover() {
+    _fallbackSongCover = null;
+  }
+
+  /// 同步读取封面缓存：优先读取资料库网络/自定义封面，缺省时直接读取歌曲封面，
+  /// 歌曲封面已解码过即可零延迟呈现，避免页面切换时重复刷新
+  ImageProvider? get cachedCover {
+    final storeCover = ArtworkStore.instance.cached(id);
+    if (storeCover != null) {
+      return storeCover;
+    }
+    if (_fallbackSongCover != null) return _fallbackSongCover;
+    for (final audio in works) {
+      final c = audio.cachedMediumCover ?? audio.cachedCover;
+      if (c != null) {
+        _fallbackSongCover = c;
+        return c;
+      }
+    }
+    return null;
+  }
+
+  /// 只能用在album detail page 或冷启动异步载入
   /// 200*200
-  Future<ImageProvider?> get cover => ArtworkStore.instance.albumImage(this);
+  Future<ImageProvider?> get cover async {
+    final storeCover = ArtworkStore.instance.cached(id);
+    if (storeCover != null) return storeCover;
+    final image = await ArtworkStore.instance.albumImage(this);
+    if (image != null) {
+      return image;
+    }
+    if (_fallbackSongCover != null) return _fallbackSongCover;
+    for (final audio in works) {
+      final c = await audio.mediumCover ?? await audio.cover;
+      if (c != null) {
+        _fallbackSongCover = c;
+        return c;
+      }
+    }
+    return null;
+  }
 
   Album({required this.name, String? id, this.albumArtist = ""})
       : id = id ?? entityId("album", name);

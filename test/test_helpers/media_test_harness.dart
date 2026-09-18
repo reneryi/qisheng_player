@@ -129,6 +129,12 @@ class TestAudio extends Audio {
   );
 
   @override
+  ImageProvider? get cachedCover => _image;
+
+  @override
+  ImageProvider? get cachedMediumCover => _image;
+
+  @override
   Future<ImageProvider?> get cover async => _image;
 
   @override

@@ -56,7 +56,14 @@ class _CoverFadeImageState extends State<CoverFadeImage>
       vsync: this,
       duration: const Duration(milliseconds: 220),
     );
-    _scheduleLoad();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_imageStream == null) {
+      _resolveOrScheduleLoad();
+    }
   }
 
   @override
@@ -64,42 +71,38 @@ class _CoverFadeImageState extends State<CoverFadeImage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.provider == widget.provider) return;
     _disposeStream();
-    setState(() {
-      _ready = false;
-      _failed = false;
-    });
-    _controller.value = 0;
-    _scheduleLoad();
+    _resolveOrScheduleLoad();
   }
 
-  void _scheduleLoad() {
+  void _resolveOrScheduleLoad() {
     _staggerTimer?.cancel();
-    final delay = Duration(milliseconds: math.min(widget.index * 25, 200));
-    _staggerTimer = Timer(delay, _loadImage);
-  }
-
-  void _loadImage() {
-    if (!mounted) return;
     final provider = widget.provider;
     if (provider == null) {
-      setState(() {
-        _ready = true;
-      });
+      _ready = false;
+      _failed = false;
+      _controller.value = 0;
+      _schedulePlaceholderDelay();
       return;
     }
+
     final configuration = createLocalImageConfiguration(context);
-    _imageStream = provider.resolve(configuration);
+    final stream = provider.resolve(configuration);
+    _imageStream = stream;
+
+    bool synchronous = true;
     _listener = ImageStreamListener(
       (image, synchronousCall) {
         if (!mounted) return;
-        setState(() {
+        final isSync = synchronousCall || synchronous;
+        if (isSync) {
           _ready = true;
           _failed = false;
-        });
-        if (synchronousCall) {
-          // 缓存命中：直接显示，避免滚动回滚闪烁
           _controller.value = 1;
         } else {
+          setState(() {
+            _ready = true;
+            _failed = false;
+          });
           _controller.forward(from: 0);
         }
       },
@@ -112,7 +115,24 @@ class _CoverFadeImageState extends State<CoverFadeImage>
         _controller.value = 1;
       },
     );
-    _imageStream!.addListener(_listener!);
+
+    stream.addListener(_listener!);
+    synchronous = false;
+
+    if (!_ready) {
+      _controller.value = 0;
+    }
+  }
+
+  void _schedulePlaceholderDelay() {
+    _staggerTimer?.cancel();
+    final delay = Duration(milliseconds: math.min(widget.index * 25, 200));
+    _staggerTimer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() {
+        _ready = true;
+      });
+    });
   }
 
   void _disposeStream() {

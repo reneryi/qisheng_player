@@ -49,10 +49,12 @@ void main() {
       expect(playback.playMode.value, equals(PlayMode.loop));
       expect(playback.shuffle.value, isFalse);
 
-      final sequenceFinder = find.byTooltip('列表循环');
+      final sequenceFinder =
+          find.byKey(const ValueKey('bottom-player-bar-sequence-button'));
       expect(sequenceFinder, findsOneWidget);
 
-      final shuffleFinder = find.byTooltip('随机播放');
+      final shuffleFinder =
+          find.byKey(const ValueKey('bottom-player-bar-shuffle-button'));
       expect(shuffleFinder, findsOneWidget);
 
       // Click shuffle to enable random play
@@ -64,9 +66,8 @@ void main() {
       expect(playback.shuffle.value, isTrue);
       expect(playback.playMode.value, equals(PlayMode.forward));
 
-      // Tooltips updated
-      expect(find.byTooltip('关闭随机播放'), findsOneWidget);
-      expect(find.byTooltip('顺序播放'), findsOneWidget);
+      expect(find.byIcon(Symbols.shuffle), findsOneWidget);
+      expect(find.byIcon(Symbols.repeat), findsOneWidget);
     });
 
     testWidgets(
@@ -105,12 +106,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(playback.shuffle.value, isTrue);
-      expect(find.byTooltip('关闭随机播放'), findsOneWidget);
-      expect(find.byTooltip('顺序播放'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-shuffle-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-sequence-button')),
+        findsOneWidget,
+      );
 
       // CLICK 1: 点击顺序播放按钮
       // 应该先响应顺序播放（列表循环），同时随机播放正常灭掉
-      final sequenceButtonFinder = find.byTooltip('顺序播放');
+      final sequenceButtonFinder =
+          find.byKey(const ValueKey('bottom-player-bar-sequence-button'));
       await tester.tap(sequenceButtonFinder);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -119,13 +127,11 @@ void main() {
           reason: 'Click 1 must turn off shuffle');
       expect(playback.playMode.value, equals(PlayMode.loop),
           reason: 'Click 1 must respond to sequence mode (loop)');
-      expect(find.byTooltip('列表循环'), findsOneWidget);
-      expect(find.byTooltip('随机播放'), findsOneWidget);
+      expect(find.byIcon(Symbols.repeat), findsOneWidget);
 
       // CLICK 2: 再次点击顺序播放按钮
       // 应该变成单曲循环，且随机播放保持灭掉
-      final loopButtonFinder = find.byTooltip('列表循环');
-      await tester.tap(loopButtonFinder);
+      await tester.tap(sequenceButtonFinder);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -133,8 +139,7 @@ void main() {
           reason: 'Click 2 must enter singleLoop');
       expect(playback.shuffle.value, isFalse,
           reason: 'Shuffle must remain off');
-      expect(find.byTooltip('单曲循环'), findsOneWidget);
-      expect(find.byTooltip('随机播放'), findsOneWidget);
+      expect(find.byIcon(Symbols.repeat_one_on), findsOneWidget);
     });
 
     testWidgets(
@@ -171,8 +176,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.byTooltip('单曲循环'), findsOneWidget);
-      final shuffleFinder = find.byTooltip('随机播放');
+      expect(find.byIcon(Symbols.repeat_one_on), findsOneWidget);
+      final shuffleFinder =
+          find.byKey(const ValueKey('bottom-player-bar-shuffle-button'));
 
       await tester.tap(shuffleFinder);
       await tester.pump();
@@ -180,8 +186,16 @@ void main() {
 
       expect(playback.shuffle.value, isTrue);
       expect(playback.playMode.value, equals(PlayMode.forward));
-      expect(find.byTooltip('关闭随机播放'), findsOneWidget);
-      expect(find.byTooltip('顺序播放'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-shuffle-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-sequence-button')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Symbols.shuffle), findsOneWidget);
+      expect(find.byIcon(Symbols.repeat), findsOneWidget);
     });
 
     test('4. PlaybackPreference.fromMap normalizes playMode to forward when shuffle is true', () {
@@ -236,10 +250,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // In shuffle mode, sequence button MUST display '顺序播放' and Symbols.repeat, selected: false
+      // In shuffle mode, sequence button MUST display Symbols.repeat, selected: false
       expect(playback.shuffle.value, isTrue);
-      expect(find.byTooltip('顺序播放'), findsOneWidget);
-      expect(find.byTooltip('关闭随机播放'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-sequence-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bottom-player-bar-shuffle-button')),
+        findsOneWidget,
+      );
 
       // Verify sequence button icon is repeat, not repeat_one_on
       expect(find.byIcon(Symbols.repeat), findsOneWidget);

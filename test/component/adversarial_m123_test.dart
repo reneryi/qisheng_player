@@ -261,7 +261,8 @@ void main() {
 
         // 循环打开与关闭抽屉 8 次
         for (var cycle = 0; cycle < 8; cycle++) {
-          final queueButton = find.byTooltip('打开播放队列');
+          final queueButton =
+              find.byKey(const ValueKey('bottom-player-bar-queue-button'));
           await tester.tap(queueButton);
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 350));
@@ -316,7 +317,8 @@ void main() {
         );
         await tester.pump();
 
-        final queueButton = find.byTooltip('打开播放队列');
+        final queueButton =
+            find.byKey(const ValueKey('bottom-player-bar-queue-button'));
         await tester.tap(queueButton);
         await tester.pump();
         // 进场 80ms
@@ -362,7 +364,8 @@ void main() {
         );
         await tester.pump();
 
-        final queueBtn = find.byTooltip('打开播放队列');
+        final queueBtn =
+            find.byKey(const ValueKey('bottom-player-bar-queue-button'));
         expect(queueBtn, findsOneWidget);
         await tester.tap(queueBtn);
         await tester.pump();

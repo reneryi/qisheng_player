@@ -220,7 +220,7 @@ class NowPlayingArtworkCard extends StatelessWidget {
     } else {
       final currentAudio = audio!;
       imageWidget = FutureBuilder<ImageProvider?>(
-        future: currentAudio.cover,
+        future: currentAudio.largeCover,
         builder: (context, snapshot) {
           final provider = snapshot.data;
           if (provider != null) {

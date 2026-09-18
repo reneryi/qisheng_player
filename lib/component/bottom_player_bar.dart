@@ -637,11 +637,6 @@ class _PlaybackControls extends StatelessWidget {
               PlayerState.playing => Symbols.pause,
               _ => Symbols.play_arrow,
             };
-            final tooltip = switch (playerState) {
-              PlayerState.completed => '重新播放',
-              PlayerState.playing => '暂停',
-              _ => '播放',
-            };
             final onPressed = switch (playerState) {
               PlayerState.completed => playback.playAgain,
               PlayerState.playing => playback.pause,
@@ -656,22 +651,22 @@ class _PlaybackControls extends StatelessWidget {
                   _ShuffleModeControl(dense: dense),
                   SizedBox(width: outerGap),
                   _TransportIconButton(
-                    tooltip: '上一首',
+                    key: const ValueKey('bottom-player-bar-prev-button'),
                     onPressed: playback.lastAudio,
                     icon: Symbols.skip_previous,
                     dense: dense,
                   ),
                   SizedBox(width: innerGap),
                   _PrimaryTransportButton(
+                    key: const ValueKey('bottom-player-bar-play-button'),
                     icon: icon,
-                    tooltip: tooltip,
                     onPressed: onPressed,
                     isPlaying: isPlaying,
                     size: primaryButtonSize,
                   ),
                   SizedBox(width: innerGap),
                   _TransportIconButton(
-                    tooltip: '下一首',
+                    key: const ValueKey('bottom-player-bar-next-button'),
                     onPressed: playback.nextAudio,
                     icon: Symbols.skip_next,
                     dense: dense,
@@ -713,7 +708,7 @@ class _ShuffleModeControl extends StatelessWidget {
       valueListenable: playback.shuffle,
       builder: (context, shuffle, _) {
         return _TransportIconButton(
-          tooltip: shuffle ? '关闭随机播放' : '随机播放',
+          key: const ValueKey('bottom-player-bar-shuffle-button'),
           onPressed: () {
             if (!shuffle) {
               playback.setPlayMode(PlayMode.forward);
@@ -750,15 +745,15 @@ class _SequenceModeControl extends StatelessWidget {
               PlayMode.loop => PlayMode.singleLoop,
               PlayMode.singleLoop => PlayMode.forward,
             };
-            final (tooltip, icon, selected) = shuffle
-                ? ('顺序播放', Symbols.repeat, false)
+            final (icon, selected) = shuffle
+                ? (Symbols.repeat, false)
                 : switch (playMode) {
-                    PlayMode.forward => ('顺序播放', Symbols.repeat, false),
-                    PlayMode.loop => ('列表循环', Symbols.repeat, true),
-                    PlayMode.singleLoop => ('单曲循环', Symbols.repeat_one_on, true),
+                    PlayMode.forward => (Symbols.repeat, false),
+                    PlayMode.loop => (Symbols.repeat, true),
+                    PlayMode.singleLoop => (Symbols.repeat_one_on, true),
                   };
             return _TransportIconButton(
-              tooltip: tooltip,
+              key: const ValueKey('bottom-player-bar-sequence-button'),
               onPressed: () {
                 if (shuffle) {
                   // 在随机播放下点击顺序/循环按钮：
@@ -782,14 +777,13 @@ class _SequenceModeControl extends StatelessWidget {
 
 class _TransportIconButton extends StatefulWidget {
   const _TransportIconButton({
-    required this.tooltip,
+    super.key,
     required this.onPressed,
     required this.icon,
     required this.dense,
     this.selected = false,
   });
 
-  final String tooltip;
   final VoidCallback? onPressed;
   final IconData icon;
   final bool dense;
@@ -883,21 +877,20 @@ class _TransportIconButtonState extends State<_TransportIconButton> {
       ),
     );
 
-    return Tooltip(message: widget.tooltip, child: button);
+    return button;
   }
 }
 
 class _PrimaryTransportButton extends StatefulWidget {
   const _PrimaryTransportButton({
+    super.key,
     required this.icon,
-    required this.tooltip,
     required this.onPressed,
     required this.isPlaying,
     required this.size,
   });
 
   final IconData icon;
-  final String tooltip;
   final VoidCallback onPressed;
   final bool isPlaying;
   final double size;
@@ -916,79 +909,76 @@ class _PrimaryTransportButtonState extends State<_PrimaryTransportButton> {
     final accents = context.accents;
     final motion = context.motion;
     final glowAlpha = widget.isPlaying ? 0.38 : 0.26;
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() {
-          _hovered = false;
-          _pressed = false;
-        }),
-        child: GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
-          child: AnimatedScale(
-            scale: _pressed ? 0.95 : (_hovered ? 1.035 : 1),
-            duration: motion.microInteractionDuration,
-            curve: motion.fast,
-            child: AnimatedContainer(
-              duration: motion.controlTransitionDuration,
-              curve: motion.normal,
-              width: widget.size,
-              height: widget.size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color.lerp(accents.accent, Colors.white, 0.18)!,
-                    accents.accent,
-                    Color.lerp(accents.accent, Colors.black, 0.08)!,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: accents.accentGlow.withValues(
-                      alpha: _hovered ? glowAlpha + 0.06 : glowAlpha - 0.04,
-                    ),
-                    blurRadius: widget.isPlaying ? 28 : 22,
-                    spreadRadius: widget.isPlaying ? 3 : 1,
-                  ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.95 : (_hovered ? 1.035 : 1),
+          duration: motion.microInteractionDuration,
+          curve: motion.fast,
+          child: AnimatedContainer(
+            duration: motion.controlTransitionDuration,
+            curve: motion.normal,
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.lerp(accents.accent, Colors.white, 0.18)!,
+                  accents.accent,
+                  Color.lerp(accents.accent, Colors.black, 0.08)!,
                 ],
               ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  enableFeedback: false,
-                  customBorder: const CircleBorder(),
-                  onTap: widget.onPressed,
-                  child: AnimatedSwitcher(
-                    duration: motion.microInteractionDuration,
-                    switchInCurve: motion.emphasized,
-                    switchOutCurve: motion.fast,
-                    transitionBuilder: (child, animation) {
-                      final curved = CurvedAnimation(
-                        parent: animation,
-                        curve: motion.emphasized,
-                      );
-                      return FadeTransition(
-                        opacity: curved,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.78, end: 1)
-                              .animate(curved),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: Icon(
-                      widget.icon,
-                      key: ValueKey(widget.icon),
-                      color: accents.onAccent,
-                      size: widget.size < 60 ? 24 : 28,
-                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: accents.accentGlow.withValues(
+                    alpha: _hovered ? glowAlpha + 0.06 : glowAlpha - 0.04,
+                  ),
+                  blurRadius: widget.isPlaying ? 28 : 22,
+                  spreadRadius: widget.isPlaying ? 3 : 1,
+                ),
+              ],
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                enableFeedback: false,
+                customBorder: const CircleBorder(),
+                onTap: widget.onPressed,
+                child: AnimatedSwitcher(
+                  duration: motion.microInteractionDuration,
+                  switchInCurve: motion.emphasized,
+                  switchOutCurve: motion.fast,
+                  transitionBuilder: (child, animation) {
+                    final curved = CurvedAnimation(
+                      parent: animation,
+                      curve: motion.emphasized,
+                    );
+                    return FadeTransition(
+                      opacity: curved,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.78, end: 1)
+                            .animate(curved),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Icon(
+                    widget.icon,
+                    key: ValueKey(widget.icon),
+                    color: accents.onAccent,
+                    size: widget.size < 60 ? 24 : 28,
                   ),
                 ),
               ),
@@ -1187,8 +1177,8 @@ class _VolumeControlState extends State<_VolumeControl> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CpIconButton(
+                      key: const ValueKey('bottom-player-bar-volume-button'),
                       variant: CpButtonVariant.immersive,
-                      tooltip: '音量（支持鼠标滚轮无级调节）: ${(current * 100).round()}%',
                       onPressed: () {
                         if (current > 0.0001) {
                           _lastNonZeroVolume = current;
@@ -1253,11 +1243,17 @@ class _VolumeControlState extends State<_VolumeControl> {
                                             radius: animatedThumbRadius,
                                             color: accents.accent,
                                           ),
+                                          showValueIndicator:
+                                              ShowValueIndicator.onDrag,
+                                          valueIndicatorShape:
+                                              const RectangularSliderValueIndicatorShape(),
+                                          valueIndicatorColor: accents.accent,
                                         ),
                                         child: Slider(
                                           min: 0,
                                           max: 1,
                                           value: current,
+                                          label: '${(current * 100).round()}%',
                                           onChangeStart: (next) {
                                             setState(() {
                                               _dragging = true;
@@ -1496,8 +1492,8 @@ class _QueueEntryButton extends StatelessWidget {
         final canOpenQueue = playlist.isNotEmpty || playback.nowPlaying != null;
 
         return CpIconButton(
+          key: const ValueKey('bottom-player-bar-queue-button'),
           variant: CpButtonVariant.immersive,
-          tooltip: canOpenQueue ? '打开播放队列' : '暂无播放队列',
           onPressed: canOpenQueue ? () => _openQueueDrawer(context) : null,
           icon: Badge(
             label: Text('${playlist.length}'),

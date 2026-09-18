@@ -21,7 +21,12 @@ class AlbumsPage extends StatelessWidget {
       contentList: contentList,
       contentRevision: AudioLibrary.revision.value,
       contentBuilder: (context, item, i, multiSelectController) =>
-          AlbumTile(album: item, enableHero: true),
+          AlbumTile(
+            album: item,
+            enableHero: true,
+            selected: multiSelectController?.selected.contains(item) ?? false,
+            multiSelectController: multiSelectController,
+          ),
       gridBuilder: (context, item, i, multiSelectController) => AlbumGridTile(
         album: item,
         enableHero: true,

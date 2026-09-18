@@ -80,7 +80,7 @@ class _ScrollAwareFutureBuilderState<T>
   @override
   Widget build(BuildContext context) {
     if (_future == null) {
-      return const Center(child: CircularProgressIndicator());
+      return widget.builder(context, const AsyncSnapshot.nothing());
     }
 
     return FutureBuilder<T>(

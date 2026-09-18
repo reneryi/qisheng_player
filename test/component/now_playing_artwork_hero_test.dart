@@ -256,6 +256,33 @@ void main() {
       expect(find.byIcon(Symbols.music_note), findsNothing);
       expect(find.byType(Image), findsOneWidget);
     });
+
+    testWidgets('resolves and caches largeCover when coverProvider is not supplied', (tester) async {
+      final testAudio = TestAudio(
+        title: 'Song',
+        artist: 'Artist',
+        album: 'Album',
+        path: '/path/to/uncached_song.mp3',
+      );
+      NowPlayingArtworkCard.evictCover(testAudio.path);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          SizedBox(
+            width: 100,
+            height: 100,
+            child: NowPlayingArtworkCard(
+              audio: testAudio,
+              radius: 16.0,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsOneWidget);
+      expect(NowPlayingArtworkCard.getSyncCover(testAudio), equals(await testAudio.largeCover));
+    });
   });
 
   group('nowPlayingArtworkFlightShuttleBuilder', () {

@@ -8,6 +8,7 @@ import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/album_context_menu.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 
 class AlbumGridTile extends StatefulWidget {
@@ -28,7 +29,29 @@ class AlbumGridTile extends StatefulWidget {
 
 class _AlbumGridTileState extends State<AlbumGridTile> {
   final Object _heroSourceKey = Object();
-  bool _hovering = false;
+  late Future<ImageProvider?> _coverFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initCoverFuture();
+  }
+
+  void _initCoverFuture() {
+    if (widget.album.cachedCover != null) {
+      _coverFuture = Future.value(widget.album.cachedCover);
+    } else {
+      _coverFuture = widget.album.cover;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AlbumGridTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.album.id != widget.album.id) {
+      _initCoverFuture();
+    }
+  }
 
   Future<void> _handleTap() async {
     final tag = widget.enableHero ? albumArtworkHeroTag(widget.album) : null;
@@ -53,112 +76,187 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: ArtworkStore.instance, builder:(context,_)=>_buildArtwork(context));
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: ListenableBuilder(
+          listenable: ArtworkStore.instance,
+          builder: (context, _) => _buildArtwork(context),
+        ),
+      );
 
   Widget _buildArtwork(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
+    final surfaces = context.surfaces;
+
+    final normalDecoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      color: surfaces.tileBackground != Colors.transparent
+          ? surfaces.tileBackground
+          : (isDark
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.black.withValues(alpha: 0.02)),
+      border: Border.all(
+        color: scheme.outlineVariant.withValues(alpha: isDark ? 0.20 : 0.25),
+        width: 0.8,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.06),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+          spreadRadius: -3,
+        ),
+      ],
+    );
+
+    final hoverDecoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.06)
+          : Colors.white,
+      border: Border.all(
+        color: scheme.primary.withValues(alpha: isDark ? 0.50 : 0.40),
+        width: 1.2,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+          blurRadius: 18,
+          offset: const Offset(0, 6),
+          spreadRadius: -2,
+        ),
+        BoxShadow(
+          color: scheme.primary.withValues(alpha: isDark ? 0.20 : 0.09),
+          blurRadius: 14,
+          spreadRadius: -4,
+        ),
+      ],
+    );
 
     return AlbumContextMenu(
       album: widget.album,
-      builder: (context, controller, _) => MouseRegion(
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: CpMotionPressable(
-          onTap: _handleTap,
-          hoverScale: 1.025,
-          pressScale: 0.96,
-          border: false,
-          onSecondaryTapDown: (details) =>
-              controller.open(position: details.localPosition),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                // 悬停时多层弥散软阴影
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: _hovering
-                        ? (isDark ? 0.42 : 0.16)
-                        : (isDark ? 0.18 : 0.06),
-                  ),
-                  blurRadius: _hovering ? 24 : 12,
-                  offset: Offset(0, _hovering ? 8 : 4),
-                  spreadRadius: _hovering ? -2 : -4,
-                ),
-                if (_hovering)
-                  BoxShadow(
-                    color: context.accents.accentGlow.withValues(
-                      alpha: isDark ? 0.15 : 0.08,
-                    ),
-                    blurRadius: 16,
-                    spreadRadius: -4,
-                  ),
-              ],
+      builder: (context, controller, _) => CpMotionPressable(
+        onTap: _handleTap,
+        hoverScale: 1.018,
+        hoverTranslateY: -4.0,
+        pressScale: 0.98,
+        hoverShadow: true,
+        animationDuration: const Duration(milliseconds: 240),
+        animationCurve: Curves.easeOutCubic,
+        decoration: normalDecoration,
+        hoverDecoration: hoverDecoration,
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.all(8.0),
+        onSecondaryTapDown: (details) =>
+            controller.open(position: details.localPosition),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1.0,
+              child: _AlbumCover(
+                album: widget.album,
+                coverFuture: _coverFuture,
+                enableHero: widget.enableHero,
+                heroSourceKey: _heroSourceKey,
+              ),
             ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+              child: Row(
                 children: [
-                  AspectRatio(
-                    aspectRatio: 1.0,
-                    child: _AlbumCover(
-                      album: widget.album,
-                      hovering: _hovering,
-                      enableHero: widget.enableHero,
-                      heroSourceKey: _heroSourceKey,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 10, 6, 2),
-                    child: Text(
-                      widget.album.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-                    child: Text(
-                      widget.album.artistsMap.keys.join(', '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(
-                          alpha: isDark ? 0.80 : 0.88,
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.album.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                          ),
                         ),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0,
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.album.artistsMap.keys.join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(
+                              alpha: isDark ? 0.75 : 0.85,
+                            ),
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: Tooltip(
+                      message: '播放专辑',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          final works = orderedAlbumWorks(widget.album);
+                          if (works.isNotEmpty) {
+                            PlayService.instance.playbackService.play(0, works);
+                          }
+                        },
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(
+                              alpha: isDark ? 0.16 : 0.10,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: scheme.primary.withValues(
+                                alpha: isDark ? 0.35 : 0.25,
+                              ),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Symbols.play_arrow_rounded,
+                              size: 18,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
 
 class _AlbumCover extends StatelessWidget {
   const _AlbumCover({
     required this.album,
-    required this.hovering,
+    required this.coverFuture,
     required this.enableHero,
     required this.heroSourceKey,
   });
 
   final Album album;
-  final bool hovering;
+  final Future<ImageProvider?> coverFuture;
   final bool enableHero;
   final Object heroSourceKey;
 
@@ -168,139 +266,103 @@ class _AlbumCover extends StatelessWidget {
     final accents = context.accents;
     final motion = context.motion;
 
+    // 优先同步命中已有的内存缓存，零等待无闪烁
+    final cached = album.cachedCover;
+    if (cached != null) {
+      return _buildCoverContent(context, cached, scheme, accents, motion);
+    }
+
     return FutureBuilder<ImageProvider?>(
-      future: album.cover,
+      future: coverFuture,
       builder: (context, snapshot) {
         final provider = snapshot.data;
-        final placeholder = Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.08),
-                accents.accent.withValues(alpha: 0.06),
-              ],
-            ),
-          ),
-          child: Center(
-            child: Icon(
-              Symbols.album,
-              size: 64,
-              color: scheme.onSurface.withValues(alpha: 0.3),
-            ),
-          ),
-        );
+        return _buildCoverContent(context, provider, scheme, accents, motion);
+      },
+    );
+  }
 
-        if (provider == null) return placeholder;
+  Widget _buildCoverContent(
+    BuildContext context,
+    ImageProvider? provider,
+    ColorScheme scheme,
+    AppAccentTokens accents,
+    AppMotionTokens motion,
+  ) {
+    final placeholder = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.08),
+            accents.accent.withValues(alpha: 0.06),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Symbols.album,
+          size: 64,
+          color: scheme.onSurface.withValues(alpha: 0.3),
+        ),
+      ),
+    );
 
-        final artworkImage = ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Image(
-            image: provider,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => placeholder,
-          ),
-        );
+    Widget imageWidget;
+    if (provider == null) {
+      imageWidget = placeholder;
+    } else {
+      imageWidget = ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image(
+          image: provider,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => placeholder,
+        ),
+      );
+    }
 
-        final tag = albumArtworkHeroTag(album);
-        final heroArtwork = (!enableHero || tag == null)
-            ? artworkImage
-            : ValueListenableBuilder<ArtworkHeroTransition?>(
-                valueListenable:
-                    AppNavigationState.instance.artworkHeroTransition,
-                child: artworkImage,
-                builder: (context, _, child) {
-                  final navigation = AppNavigationState.instance;
-                  if (!navigation.canBuildArtworkHero(
-                    tag: tag,
-                    sourceKey: heroSourceKey,
-                  )) {
-                    return child!;
-                  }
+    final tag = albumArtworkHeroTag(album);
+    final heroArtwork = (!enableHero || tag == null || provider == null)
+        ? RepaintBoundary(child: imageWidget)
+        : ValueListenableBuilder<ArtworkHeroTransition?>(
+            valueListenable: AppNavigationState.instance.artworkHeroTransition,
+            child: RepaintBoundary(child: imageWidget),
+            builder: (context, _, child) {
+              final navigation = AppNavigationState.instance;
+              if (!navigation.canBuildArtworkHero(
+                tag: tag,
+                sourceKey: heroSourceKey,
+              )) {
+                return child!;
+              }
 
-                  return Hero(
-                    tag: tag,
-                    transitionOnUserGestures: true,
-                    flightShuttleBuilder: (
-                      flightContext,
-                      animation,
-                      flightDirection,
-                      fromHeroContext,
-                      toHeroContext,
-                    ) {
-                      final toHero = toHeroContext.widget as Hero;
-                      return Material(
-                        type: MaterialType.transparency,
-                        child: toHero.child,
-                      );
-                    },
-                    child: child!,
+              return Hero(
+                tag: tag,
+                transitionOnUserGestures: true,
+                flightShuttleBuilder: (
+                  flightContext,
+                  animation,
+                  flightDirection,
+                  fromHeroContext,
+                  toHeroContext,
+                ) {
+                  final toHero = toHeroContext.widget as Hero;
+                  return Material(
+                    type: MaterialType.transparency,
+                    child: toHero.child,
                   );
                 },
+                child: child!,
               );
+            },
+          );
 
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              heroArtwork,
-              // 悬浮时的顶部到暗底渐变遮罩
-              AnimatedOpacity(
-                opacity: hovering ? 1.0 : 0.0,
-                duration: motion.microInteractionDuration,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.42),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // 悬浮时浮现的右下角半透明毛玻璃播放徽章
-              AnimatedPositioned(
-                duration: motion.microInteractionDuration,
-                curve: motion.fast,
-                right: 12,
-                bottom: hovering ? 12 : -40,
-                child: AnimatedOpacity(
-                  opacity: hovering ? 1.0 : 0.0,
-                  duration: motion.microInteractionDuration,
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: accents.accent,
-                      boxShadow: [
-                        BoxShadow(
-                          color: accents.accentGlow.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Symbols.play_arrow,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: heroArtwork,
     );
   }
 }

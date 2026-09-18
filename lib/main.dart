@@ -93,6 +93,8 @@ Future<void> _runStartupIndexUpdateSilently(String supportPath) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache.maximumSize = 3000;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 250 * 1024 * 1024;
 
   await RustLib.init();
 

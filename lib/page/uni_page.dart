@@ -60,8 +60,33 @@ enum ContentView {
   }
 }
 
+class PageContentViewScope extends InheritedWidget {
+  const PageContentViewScope({
+    super.key,
+    required this.contentView,
+    required super.child,
+  });
+
+  final ContentView contentView;
+
+  static ContentView? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<PageContentViewScope>()
+        ?.contentView;
+  }
+
+  static ContentView of(BuildContext context) {
+    final result = maybeOf(context);
+    return result ?? ContentView.list;
+  }
+
+  @override
+  bool updateShouldNotify(covariant PageContentViewScope oldWidget) =>
+      contentView != oldWidget.contentView;
+}
+
 const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-  maxCrossAxisExtent: 360,
+  maxCrossAxisExtent: 250,
   mainAxisExtent: 64,
   mainAxisSpacing: 8.0,
   crossAxisSpacing: 8.0,
@@ -167,7 +192,7 @@ class _SideNavAnimatedTableGrid extends StatelessWidget {
     required this.padding,
     required this.itemCount,
     required this.itemBuilder,
-    this.maxCrossAxisExtent = 360,
+    this.maxCrossAxisExtent = 250,
   });
 
   final ScrollController controller;
@@ -581,7 +606,7 @@ class UniPage<T> extends StatefulWidget {
     this.rightPaneBuilder,
     this.showRightPane = false,
     this.rightPaneWidth = 296,
-    this.tableMaxCrossAxisExtent = 360,
+    this.tableMaxCrossAxisExtent = 250,
   });
 
   final PagePreference pref;
@@ -931,49 +956,53 @@ class _UniPageState<T> extends State<UniPage<T>>
         (hasSideIndex || hasLocateButton) ? sideRailWidth + 18.0 : 10.0;
     const listPadding = EdgeInsets.fromLTRB(6, 0, 16, 48);
 
-    final listBody = KeyedSubtree(
-      key: const ValueKey('uni-page-content-viewport'),
-      child: WindowsAccessibilityTooltipGuard(
-        child: Material(
-          type: MaterialType.transparency,
-          // 键盘导航：Tab/Shift+Tab 与 ↑/↓/←/→ 方向键在列表项之间移动焦点
-          // （ReadingOrderTraversalPolicy 自带方向键几何遍历支持）
-          child: FocusTraversalGroup(
-            policy: ReadingOrderTraversalPolicy(),
-            child: switch (currContentView) {
-              ContentView.list => _canReorder
-                  ? ReorderableListView.builder(
-                      scrollController: scrollController,
-                      buildDefaultDragHandles: false,
-                      padding: listPadding,
-                      itemCount: widget.contentList.length,
-                      itemExtent: 64,
-                      onReorder: _handleReorder,
-                      itemBuilder: (context, i) => KeyedSubtree(
-                        key: ObjectKey(widget.contentList[i]),
-                        child: ReorderableDelayedDragStartListener(
-                          index: i,
-                          child: widget.contentBuilder(
-                            context,
-                            widget.contentList[i],
-                            i,
-                            multiSelectController,
+    final listBody = PageContentViewScope(
+      contentView: currContentView,
+      child: KeyedSubtree(
+        key: const ValueKey('uni-page-content-viewport'),
+        child: WindowsAccessibilityTooltipGuard(
+          child: Material(
+            type: MaterialType.transparency,
+            // 键盘导航：Tab/Shift+Tab 与 ↑/↓/←/→ 方向键在列表项之间移动焦点
+            // （ReadingOrderTraversalPolicy 自带方向键几何遍历支持）
+            child: FocusTraversalGroup(
+              policy: ReadingOrderTraversalPolicy(),
+              child: switch (currContentView) {
+                ContentView.list => _canReorder
+                    ? ReorderableListView.builder(
+                        scrollController: scrollController,
+                        clipBehavior: Clip.hardEdge,
+                        buildDefaultDragHandles: false,
+                        padding: listPadding,
+                        itemCount: widget.contentList.length,
+                        itemExtent: 64,
+                        onReorder: _handleReorder,
+                        itemBuilder: (context, i) => KeyedSubtree(
+                          key: ObjectKey(widget.contentList[i]),
+                          child: ReorderableDelayedDragStartListener(
+                            index: i,
+                            child: widget.contentBuilder(
+                              context,
+                              widget.contentList[i],
+                              i,
+                              multiSelectController,
+                            ),
                           ),
                         ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        clipBehavior: Clip.hardEdge,
+                        padding: listPadding,
+                        itemCount: widget.contentList.length,
+                        itemExtent: 64,
+                        itemBuilder: (context, i) => widget.contentBuilder(
+                          context,
+                          widget.contentList[i],
+                          i,
+                          multiSelectController,
+                        ),
                       ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      padding: listPadding,
-                      itemCount: widget.contentList.length,
-                      itemExtent: 64,
-                      itemBuilder: (context, i) => widget.contentBuilder(
-                        context,
-                        widget.contentList[i],
-                        i,
-                        multiSelectController,
-                      ),
-                    ),
               ContentView.table => _SideNavAnimatedTableGrid(
                   controller: scrollController,
                   padding: listPadding,
@@ -1003,6 +1032,7 @@ class _UniPageState<T> extends State<UniPage<T>>
             },
           ),
         ),
+      ),
       ),
     );
 
@@ -1187,7 +1217,6 @@ class _UniPageState<T> extends State<UniPage<T>>
                   ),
                   child: IconButton(
                     key: const ValueKey('uni-page-locate-button'),
-                    tooltip: '定位当前音乐',
                     onPressed: _jumpToLocateTarget,
                     icon: const Icon(Icons.my_location_rounded),
                   ),
@@ -1231,7 +1260,7 @@ class _UniPageState<T> extends State<UniPage<T>>
           ...effectiveSecondaryActions,
           CpIconButton(
             variant: CpButtonVariant.immersive,
-            tooltip: "更多",
+            tooltip: "多选",
             onPressed: () {
               multiSelectController.useMultiSelectView(true);
               multiSelectController.clear();

@@ -74,6 +74,7 @@ class CpMotionPressable extends StatefulWidget {
     this.enabled = true,
     this.semanticLabel,
     this.hoverScale = 1.02,
+    this.hoverTranslateY = 0.0,
     this.pressScale = 0.965,
     this.hoverShadow = false,
     this.selectedGlow = false,
@@ -85,6 +86,8 @@ class CpMotionPressable extends StatefulWidget {
     this.onFocusChanged,
     this.decoration,
     this.hoverDecoration,
+    this.animationDuration,
+    this.animationCurve,
   });
 
   final Widget child;
@@ -96,6 +99,7 @@ class CpMotionPressable extends StatefulWidget {
   final bool enabled;
   final String? semanticLabel;
   final double hoverScale;
+  final double hoverTranslateY;
   final double pressScale;
   final bool hoverShadow;
   final bool selectedGlow;
@@ -107,6 +111,8 @@ class CpMotionPressable extends StatefulWidget {
   final ValueChanged<bool>? onFocusChanged;
   final BoxDecoration? decoration;
   final BoxDecoration? hoverDecoration;
+  final Duration? animationDuration;
+  final Curve? animationCurve;
 
   @override
   State<CpMotionPressable> createState() => _CpMotionPressableState();
@@ -193,19 +199,31 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
         : _hovered
             ? widget.hoverScale
             : 1.0;
+    final translateY = _pressed
+        ? 0.0
+        : _hovered
+            ? widget.hoverTranslateY
+            : 0.0;
     final background = widget.selected
         ? scheme.primary.withValues(alpha: 0.13)
         : _hovered
             ? scheme.onSurface.withValues(alpha: 0.055)
             : Colors.transparent;
     final shadows = _buildShadows(context);
+    final isDark = scheme.brightness == Brightness.dark;
     final borderColor = showFocusRing
         ? scheme.primary
         : active
             ? widget.selected
                 ? scheme.primary.withValues(alpha: 0.34)
-                : scheme.outlineVariant.withValues(alpha: 0.52)
+                : scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35)
             : Colors.transparent;
+
+    final effectiveDuration = widget.animationDuration ??
+        (widget.hoverTranslateY.abs() > 0.01 || widget.hoverScale != 1.0
+            ? const Duration(milliseconds: 200)
+            : motion.microInteractionDuration);
+    final effectiveCurve = widget.animationCurve ?? Curves.easeOutCubic;
 
     return Focus(
       focusNode: _effectiveFocusNode,
@@ -232,30 +250,44 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
             button: widget.onTap != null,
             selected: widget.selected,
             label: widget.semanticLabel,
-            child: AnimatedScale(
-              scale: scale,
-              duration: motion.microInteractionDuration,
-              curve: motion.fast,
-              child: AnimatedContainer(
-                duration: motion.microInteractionDuration,
-                curve: motion.normal,
-                padding: widget.padding,
-                decoration: widget.decoration != null
-                    ? (_hovered && widget.hoverDecoration != null
-                        ? widget.hoverDecoration!
-                        : widget.decoration!)
-                    : BoxDecoration(
-                        color: background,
-                        borderRadius: radius,
-                        border: widget.border || showFocusRing
-                            ? Border.all(
-                                color: borderColor,
-                                width: showFocusRing ? 2 : 1,
-                              )
-                            : null,
-                        boxShadow: shadows,
-                      ),
-                child: widget.child,
+            child: TweenAnimationBuilder<Offset>(
+              tween: Tween<Offset>(
+                begin: Offset.zero,
+                end: Offset(0, translateY),
+              ),
+              duration: effectiveDuration,
+              curve: effectiveCurve,
+              builder: (context, offset, child) {
+                return Transform.translate(
+                  offset: offset,
+                  child: child,
+                );
+              },
+              child: AnimatedScale(
+                scale: scale,
+                duration: effectiveDuration,
+                curve: effectiveCurve,
+                child: AnimatedContainer(
+                  duration: effectiveDuration,
+                  curve: effectiveCurve,
+                  padding: widget.padding,
+                  decoration: widget.decoration != null
+                      ? (_hovered && widget.hoverDecoration != null
+                          ? widget.hoverDecoration!
+                          : widget.decoration!)
+                      : BoxDecoration(
+                          color: background,
+                          borderRadius: radius,
+                          border: widget.border || showFocusRing
+                              ? Border.all(
+                                  color: borderColor,
+                                  width: showFocusRing ? 2 : 1,
+                                )
+                              : null,
+                          boxShadow: shadows,
+                        ),
+                  child: widget.child,
+                ),
               ),
             ),
           ),
@@ -272,13 +304,22 @@ class _CpMotionPressableState extends State<CpMotionPressable> {
     if (widget.hoverShadow && _hovered && _interactive) {
       final opacity = widget.hoverShadowOpacity ??
           (scheme.brightness == Brightness.dark ? 0.22 : 0.14);
+      final isLifted = widget.hoverTranslateY < 0;
       shadows.add(
         BoxShadow(
           color: surfaces.shadowColor.withValues(
             alpha: opacity * surfaces.shadowDepthScale,
           ),
-          blurRadius: surfaces.shadowBlurSm * 0.78,
-          offset: Offset(0, surfaces.shadowOffsetSm * 0.54),
+          blurRadius: isLifted
+              ? surfaces.shadowBlurSm * 1.25
+              : surfaces.shadowBlurSm * 0.78,
+          offset: Offset(
+            0,
+            isLifted
+                ? surfaces.shadowOffsetSm * 0.95
+                : surfaces.shadowOffsetSm * 0.54,
+          ),
+          spreadRadius: isLifted ? -1.0 : 0.0,
         ),
       );
     }

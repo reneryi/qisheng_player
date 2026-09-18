@@ -65,6 +65,7 @@ class ArtworkStore extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _bindings = {};
   final Map<String, Future<ImageProvider?>> _inflight = {};
   final Map<String, int> _versions = {};
+  final Map<String, ImageProvider> _imageProviderCache = {};
   final List<Completer<void>> _waiters = [];
   int _running = 0;
   bool _loaded = false;
@@ -223,6 +224,9 @@ class ArtworkStore extends ChangeNotifier {
   }
 
   ImageProvider? cached(String id) {
+    final memoryCached = _imageProviderCache[id];
+    if (memoryCached != null) return memoryCached;
+
     final name = _records[id]?['file'];
     if (name is! String ||
         _directory == null ||
@@ -231,7 +235,12 @@ class ArtworkStore extends ChangeNotifier {
       return null;
     }
     final file = File('${_directory!.path}/$name');
-    return file.existsSync() ? FileImage(file) : null;
+    if (file.existsSync()) {
+      final provider = FileImage(file);
+      _imageProviderCache[id] = provider;
+      return provider;
+    }
+    return null;
   }
 
   bool hasArtwork(String id) => cached(id) != null;
@@ -243,7 +252,10 @@ class ArtworkStore extends ChangeNotifier {
         album.id, album.name, 'album', album.works, album.effectiveArtist);
     if (image != null) return image;
     for (final audio in album.works) {
-      final cover = await audio.embeddedCover;
+      final cover = audio.cachedMediumCover ??
+          audio.cachedCover ??
+          await audio.mediumCover ??
+          await audio.cover;
       if (cover != null) return cover;
     }
     return null;
@@ -431,6 +443,10 @@ class ArtworkStore extends ChangeNotifier {
   Future<void> reset(String id) async {
     await read();
     _versions[id] = (_versions[id] ?? 0) + 1;
+    final oldProvider = _imageProviderCache.remove(id);
+    if (oldProvider != null) {
+      PaintingBinding.instance.imageCache.evict(oldProvider);
+    }
     final previous =
         _records[id] == null ? null : Map<String, dynamic>.from(_records[id]!);
     final candidate = _records[id]?['candidate'];
@@ -573,6 +589,12 @@ class ArtworkStore extends ChangeNotifier {
     final file = File('${_directory!.path}/$name');
     if (!await file.exists()) await file.writeAsBytes(bytes, flush: true);
     if ((_versions[id] ?? 0) != expectedVersion) return;
+    final oldProvider = _imageProviderCache[id];
+    final newProvider = FileImage(file);
+    if (oldProvider != null && oldProvider != newProvider) {
+      PaintingBinding.instance.imageCache.evict(oldProvider);
+    }
+    _imageProviderCache[id] = newProvider;
     final previous =
         _records[id] == null ? null : Map<String, dynamic>.from(_records[id]!);
     _records[id] = {

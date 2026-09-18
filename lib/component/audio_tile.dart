@@ -150,30 +150,40 @@ class _AudioTileState extends State<AudioTile> {
                   : surfaces.tileShadow,
             );
 
+            final hoverBorderColor = isHighlight
+                ? highlightBorderColor
+                : scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35);
+
+            final hoverBgColor = isHighlight
+                ? highlightBgColor
+                : (surfaces.tileHoverBackground != Colors.transparent
+                    ? surfaces.tileHoverBackground
+                    : scheme.primary.withValues(alpha: isDark ? 0.08 : 0.05));
+
             final hoverDecoration = BoxDecoration(
-              color: isHighlight ? highlightBgColor : surfaces.tileHoverBackground,
+              color: hoverBgColor,
               borderRadius: rowRadius,
-              border: (isHighlight
-                          ? highlightBorderColor
-                          : surfaces.tileHoverBorderColor) ==
-                      Colors.transparent
-                  ? null
-                  : Border.all(
-                      color: isHighlight
-                          ? highlightBorderColor
-                          : surfaces.tileHoverBorderColor,
-                      width: 0.5,
-                    ),
-              boxShadow: isHighlight
-                  ? [
-                      BoxShadow(
-                        color: scheme.primary
-                            .withValues(alpha: isDark ? 0.20 : 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : surfaces.tileShadow,
+              border: Border.all(
+                color: hoverBorderColor,
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: scheme.primary.withValues(
+                    alpha: isDark ? (isHighlight ? 0.24 : 0.16) : (isHighlight ? 0.12 : 0.07),
+                  ),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+                BoxShadow(
+                  color: surfaces.shadowColor.withValues(
+                    alpha: (isDark ? 0.20 : 0.08) *
+                        surfaces.shadowDepthScale,
+                  ),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             );
 
             // 采用弹性最小高度约束替代原本写死的 height: 64.0，在大字号与高 DPI 下自适应容纳文本防溢出
@@ -189,79 +199,95 @@ class _AudioTileState extends State<AudioTile> {
                   selected: effectiveFocus || selected,
                   border: false, // 禁用自带的硬边框，由 decoration 精准控制
                   hoverScale: 1.0,
+                  hoverTranslateY: -2.0,
                   pressScale: 0.985, // 按压时轻微内敛提供实体触感
-                  hoverShadow: false,
+                  hoverShadow: true,
                   selectedGlow: false,
+                  animationDuration: const Duration(milliseconds: 200),
+                  animationCurve: Curves.easeOutCubic,
                   focusNode: _focusNode,
                   onFocusChanged: _handleFocusChanged,
-                        onTap: () {
-                          if (AudioContextMenuManager.hasActive) {
-                            AudioContextMenuManager.closeActive();
-                            return;
-                          }
-                          if (controller.isOpen) {
-                            controller.close();
-                            return;
-                          }
+                  onTap: () {
+                    if (AudioContextMenuManager.hasActive) {
+                      AudioContextMenuManager.closeActive();
+                      return;
+                    }
+                    if (controller.isOpen) {
+                      controller.close();
+                      return;
+                    }
 
-                          if (widget.multiSelectController == null ||
-                              !widget.multiSelectController!
-                                  .enableMultiSelectView) {
-                            PlayService.instance.playbackService
-                                .play(widget.audioIndex, widget.playlist);
-                          } else {
-                            widget.multiSelectController!
-                                .toggleSelectionWithIndex(
-                              index: widget.audioIndex,
-                              item: audio,
-                              items: widget.playlist,
-                              shiftPressed:
-                                  MultiSelectController.isShiftPressed(),
-                            );
-                          }
-                        },
-                        onSecondaryTapDown: (details) {
-                          if (widget.multiSelectController
-                                  ?.enableMultiSelectView ==
-                              true) {
-                            return;
-                          }
-                          AudioContextMenuManager.closeActive(
-                            except: controller,
-                          );
-                          controller.open(position: details.localPosition);
-                        },
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: LayoutBuilder(
-                          builder: (context, tileConstraints) {
-                            final showDuration =
-                                tileConstraints.maxWidth >= 220;
+                    if (widget.multiSelectController == null ||
+                        !widget.multiSelectController!
+                            .enableMultiSelectView) {
+                      PlayService.instance.playbackService
+                          .play(widget.audioIndex, widget.playlist);
+                    } else {
+                      widget.multiSelectController!
+                          .toggleSelectionWithIndex(
+                        index: widget.audioIndex,
+                        item: audio,
+                        items: widget.playlist,
+                        shiftPressed:
+                            MultiSelectController.isShiftPressed(),
+                      );
+                    }
+                  },
+                  onSecondaryTapDown: (details) {
+                    if (widget.multiSelectController
+                            ?.enableMultiSelectView ==
+                        true) {
+                      return;
+                    }
+                    AudioContextMenuManager.closeActive(
+                      except: controller,
+                    );
+                    controller.open(position: details.localPosition);
+                  },
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: LayoutBuilder(
+                    builder: (context, tileConstraints) {
+                      final showDuration =
+                          tileConstraints.maxWidth >= 220;
 
-                            return Row(
-                              children: [
-                                if (widget.leading != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 16.0),
-                                    child: widget.leading!,
-                                  ),
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    ScrollAwareFutureBuilder(
-                                      futureKey: audio.path,
-                                      future: () => audio.cover,
-                                      builder: (context, snapshot) {
-                                        return CoverFadeImage(
-                                          provider: snapshot.data,
-                                          index: widget.audioIndex,
-                                          width: 48,
-                                          height: 48,
-                                          borderRadius: 10,
-                                          placeholder:
-                                              Center(child: placeholder),
-                                        );
-                                      },
-                                    ),
+                      final cachedCover = audio.cachedCover;
+
+                      return Row(
+                        children: [
+                          if (widget.leading != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 16.0),
+                              child: widget.leading!,
+                            ),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              if (cachedCover != null)
+                                CoverFadeImage(
+                                  provider: cachedCover,
+                                  index: widget.audioIndex,
+                                  width: 48,
+                                  height: 48,
+                                  borderRadius: 10,
+                                  placeholder:
+                                      Center(child: placeholder),
+                                )
+                              else
+                                ScrollAwareFutureBuilder(
+                                  futureKey: audio.path,
+                                  future: () => audio.cover,
+                                  builder: (context, snapshot) {
+                                    return CoverFadeImage(
+                                      provider: snapshot.data,
+                                      index: widget.audioIndex,
+                                      width: 48,
+                                      height: 48,
+                                      borderRadius: 10,
+                                      placeholder:
+                                          Center(child: placeholder),
+                                    );
+                                  },
+                                ),
                                     // 正在播放时展示右下角微型动态跳动均衡器徽章
                                     if (effectiveFocus)
                                       Positioned(

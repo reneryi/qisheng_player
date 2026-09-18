@@ -267,10 +267,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    if (event.kind == ui.PointerDeviceKind.touch ||
-        event.kind == ui.PointerDeviceKind.trackpad ||
-        event.kind == ui.PointerDeviceKind.stylus ||
-        event.kind == ui.PointerDeviceKind.invertedStylus) {
+    if (event.kind != ui.PointerDeviceKind.mouse) {
       _rippleManager.resetPointerState(event.pointer);
     }
   }

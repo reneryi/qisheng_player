@@ -57,7 +57,10 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(FluidGlowProgressSlider), findsOneWidget);
-    expect(find.byTooltip('打开播放队列'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('bottom-player-bar-queue-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('BottomPlayerBar stays stable on dense layout', (tester) async {
@@ -89,7 +92,10 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.byTooltip('打开播放队列'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('bottom-player-bar-queue-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('BottomPlayerBar survives volume slider width collapse',
@@ -162,11 +168,8 @@ void main() {
     );
     await tester.pump();
 
-    final volumeButton = find.byWidgetPredicate(
-      (widget) =>
-          widget is Tooltip &&
-          widget.message?.startsWith('音量（支持鼠标滚轮无级调节）') == true,
-    );
+    final volumeButton =
+        find.byKey(const ValueKey('bottom-player-bar-volume-button'));
     expect(volumeButton, findsOneWidget);
 
     await tester.tap(volumeButton);
@@ -300,7 +303,8 @@ void main() {
     await tester.pump();
 
     // 点击打开播放队列按钮
-    final queueButton = find.byTooltip('打开播放队列');
+    final queueButton =
+        find.byKey(const ValueKey('bottom-player-bar-queue-button'));
     expect(queueButton, findsOneWidget);
     await tester.tap(queueButton);
     await tester.pump();

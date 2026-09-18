@@ -97,7 +97,9 @@ void main() {
     expect(find.byType(TitleBar), findsOneWidget);
     expect(find.byType(BottomPlayerBar), findsOneWidget);
 
-    await tester.tap(find.byTooltip('打开播放队列'));
+    await tester.tap(
+      find.byKey(const ValueKey('bottom-player-bar-queue-button')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 

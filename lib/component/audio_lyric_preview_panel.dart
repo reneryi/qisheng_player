@@ -145,7 +145,7 @@ class _LyricPreviewArtworkState extends State<_LyricPreviewArtwork> {
     }
 
     final currentSeq = ++_loadSequence;
-    audio.mediumCover.then((provider) {
+    audio.largeCover.then((provider) {
       if (!mounted || _loadSequence != currentSeq) return;
       if (provider != null) {
         NowPlayingArtworkCard.cacheSyncCover(audio, provider);

@@ -21,18 +21,15 @@ class ShufflePlay<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: '随机播放当前列表',
-      child: FilledButton.icon(
-        onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
-          contentList as List<Audio>,
-        ),
-        icon: const Icon(Symbols.shuffle),
-        label: const Text("随机播放"),
-        style: const ButtonStyle(
-          enableFeedback: false,
-          fixedSize: WidgetStatePropertyAll(Size.fromHeight(48)),
-        ),
+    return FilledButton.icon(
+      onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
+        contentList as List<Audio>,
+      ),
+      icon: const Icon(Symbols.shuffle),
+      label: const Text("随机播放"),
+      style: const ButtonStyle(
+        enableFeedback: false,
+        fixedSize: WidgetStatePropertyAll(Size.fromHeight(48)),
       ),
     );
   }
@@ -201,7 +198,6 @@ class SortOrderSwitch<T> extends StatelessWidget {
     var isAscending = sortOrder == SortOrder.ascending;
     return CpIconButton(
       variant: CpButtonVariant.immersive,
-      tooltip: "切换排序顺序：当前为${isAscending ? "升序" : "降序"}",
       onPressed: () => setSortOrder(
         isAscending ? SortOrder.descending : SortOrder.ascending,
       ),

@@ -1103,12 +1103,16 @@ void main() {
         await tester.pumpAndAdvance();
 
         // 点击播放按钮
-        await tester.tap(find.byTooltip('播放'));
+        await tester.tap(
+          find.byKey(const ValueKey('bottom-player-bar-play-button')),
+        );
         await tester.pump();
         expect(playback.playerState, equals(PlayerState.playing));
 
         // 点击暂停按钮
-        await tester.tap(find.byTooltip('暂停'));
+        await tester.tap(
+          find.byKey(const ValueKey('bottom-player-bar-play-button')),
+        );
         await tester.pump();
         expect(playback.playerState, equals(PlayerState.paused));
       });
