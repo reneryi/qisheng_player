@@ -272,6 +272,7 @@ class _TrackCover extends StatelessWidget {
         builder: (context, snapshot) {
           final spinning = snapshot.data == PlayerState.playing;
           final artworkCard = NowPlayingArtworkCard(
+            key: ValueKey(audio?.path),
             audio: audio,
             coverProvider: NowPlayingArtworkCard.getSyncCover(audio),
             radius: nowPlayingArtworkHeroRadius,

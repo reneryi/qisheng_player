@@ -21,15 +21,18 @@ class ShufflePlay<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
-        contentList as List<Audio>,
-      ),
-      icon: const Icon(Symbols.shuffle),
-      label: const Text("随机播放"),
-      style: const ButtonStyle(
-        enableFeedback: false,
-        fixedSize: WidgetStatePropertyAll(Size.fromHeight(48)),
+    return Tooltip(
+      message: '随机播放当前列表',
+      child: FilledButton.icon(
+        onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
+          contentList as List<Audio>,
+        ),
+        icon: const Icon(Symbols.shuffle),
+        label: const Text("随机播放"),
+        style: const ButtonStyle(
+          enableFeedback: false,
+          fixedSize: WidgetStatePropertyAll(Size.fromHeight(48)),
+        ),
       ),
     );
   }
@@ -134,45 +137,48 @@ class SortMethodComboBox<T> extends StatelessWidget {
         ),
       ),
       builder: (context, menuController, _) {
-        return SizedBox(
-          height: 48.0,
-          child: AppSurface(
-            variant: AppSurfaceVariant.inset,
-            radius: 24,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                enableFeedback: false,
-                borderRadius: BorderRadius.circular(24),
-                onTap: () {
-                  if (menuController.isOpen) {
-                    menuController.close();
-                  } else {
-                    menuController.open();
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 16.0, right: 12.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Symbols.sort,
-                        size: 24,
-                        color: scheme.onSecondaryContainer,
-                      ),
-                      const SizedBox(width: 6.0),
-                      Text(
-                        currSortMethod.name,
-                        style: TextStyle(color: scheme.onSecondaryContainer),
-                      ),
-                      const SizedBox(width: 4.0),
-                      Icon(
-                        Symbols.arrow_drop_down,
-                        size: 24,
-                        color: scheme.onSecondaryContainer,
-                      ),
-                    ],
+        return Tooltip(
+          message: '排序方式：当前按${currSortMethod.name}排序',
+          child: SizedBox(
+            height: 48.0,
+            child: AppSurface(
+              variant: AppSurfaceVariant.inset,
+              radius: 24,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  enableFeedback: false,
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () {
+                    if (menuController.isOpen) {
+                      menuController.close();
+                    } else {
+                      menuController.open();
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16.0, right: 12.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Symbols.sort,
+                          size: 24,
+                          color: scheme.onSecondaryContainer,
+                        ),
+                        const SizedBox(width: 6.0),
+                        Text(
+                          currSortMethod.name,
+                          style: TextStyle(color: scheme.onSecondaryContainer),
+                        ),
+                        const SizedBox(width: 4.0),
+                        Icon(
+                          Symbols.arrow_drop_down,
+                          size: 24,
+                          color: scheme.onSecondaryContainer,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

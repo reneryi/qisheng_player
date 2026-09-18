@@ -7,6 +7,7 @@ import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/lyric/lyric_line_parser.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -105,15 +106,68 @@ class AudioLyricPreviewPanel extends StatelessWidget {
   }
 }
 
-class _LyricPreviewArtwork extends StatelessWidget {
+class _LyricPreviewArtwork extends StatefulWidget {
   const _LyricPreviewArtwork({required this.audio});
 
   final Audio audio;
 
   @override
+  State<_LyricPreviewArtwork> createState() => _LyricPreviewArtworkState();
+}
+
+class _LyricPreviewArtworkState extends State<_LyricPreviewArtwork> {
+  ImageProvider? _displayedCover;
+  String? _displayedPath;
+  int _loadSequence = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveCover();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LyricPreviewArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.audio.path != widget.audio.path) {
+      _resolveCover();
+    }
+  }
+
+  void _resolveCover() {
+    final audio = widget.audio;
+    final cached = NowPlayingArtworkCard.getSyncCover(audio);
+    if (cached != null) {
+      _loadSequence++;
+      _displayedCover = cached;
+      _displayedPath = audio.path;
+      return;
+    }
+
+    final currentSeq = ++_loadSequence;
+    audio.mediumCover.then((provider) {
+      if (!mounted || _loadSequence != currentSeq) return;
+      if (provider != null) {
+        NowPlayingArtworkCard.cacheSyncCover(audio, provider);
+      }
+      setState(() {
+        _displayedCover = provider;
+        _displayedPath = audio.path;
+      });
+    }).catchError((_) {
+      if (!mounted || _loadSequence != currentSeq) return;
+      setState(() {
+        _displayedCover = null;
+        _displayedPath = audio.path;
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final placeholder = DecoratedBox(
+      key: const ValueKey('lyric-preview-placeholder'),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         color: Colors.white.withValues(alpha: 0.05),
@@ -127,33 +181,26 @@ class _LyricPreviewArtwork extends StatelessWidget {
       ),
     );
 
-    return FutureBuilder<ImageProvider?>(
-      future: audio.mediumCover,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: placeholder,
-          );
-        }
+    final Widget activeChild;
+    if (_displayedCover != null) {
+      activeChild = Image(
+        key: ValueKey(_displayedPath ?? 'lyric-preview-cover'),
+        image: _displayedCover!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    } else {
+      activeChild = placeholder;
+    }
 
-        final cover = snapshot.data;
-        if (cover == null) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: placeholder,
-          );
-        }
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Image(
-            image: cover,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => placeholder,
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: SizedBox.expand(child: activeChild),
+      ),
     );
   }
 }

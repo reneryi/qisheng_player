@@ -172,6 +172,8 @@ class AppTheme {
       tabBarTheme: AppComponentThemes.tabBarTheme(colorScheme, accents),
       tooltipTheme: TooltipThemeData(
         enableFeedback: false,
+        waitDuration: const Duration(milliseconds: 300),
+        showDuration: const Duration(seconds: 2),
         textStyle: TextStyle(
           color: colorScheme.onInverseSurface,
           fontSize: 14,

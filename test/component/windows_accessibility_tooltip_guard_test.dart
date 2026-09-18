@@ -5,25 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
 
 void main() {
-  test('Windows 语义树启用时仅隐藏可视 Tooltip', () {
+  test('Windows 语义树启用时 Tooltip 依然保持可用', () {
     expect(
       shouldShowTooltips(isWindows: true, semanticsEnabled: false),
       isTrue,
     );
     expect(
       shouldShowTooltips(isWindows: true, semanticsEnabled: true),
-      isFalse,
+      isTrue,
     );
   });
 
-  test('其他平台不受 Windows 引擎规避逻辑影响', () {
+  test('其他平台 Tooltip 保持可用', () {
     expect(
       shouldShowTooltips(isWindows: false, semanticsEnabled: true),
       isTrue,
     );
   });
 
-  testWidgets('启用语义树后不创建 Tooltip Overlay', (tester) async {
+  testWidgets('启用语义树后仍可正常创建 Tooltip Overlay', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MaterialApp(
@@ -31,16 +31,12 @@ void main() {
           isWindowsForTesting: true,
           semanticsEnabledForTesting: true,
           child: ListView(
-            children: [
-              Semantics(
-                label: 'Tooltip A',
-                excludeSemantics: true,
-                child: const Tooltip(
-                  message: 'Tooltip A',
-                  child: Text('A'),
-                ),
+            children: const [
+              Tooltip(
+                message: 'Tooltip A',
+                child: Text('A'),
               ),
-              const Tooltip(message: 'Tooltip B', child: Text('B')),
+              Tooltip(message: 'Tooltip B', child: Text('B')),
             ],
           ),
         ),
@@ -53,11 +49,7 @@ void main() {
     await gesture.moveTo(tester.getCenter(find.text('A')));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('Tooltip A'), findsNothing);
-    expect(
-      tester.getSemantics(find.text('A')),
-      matchesSemantics(label: 'Tooltip A'),
-    );
+    expect(find.text('Tooltip A'), findsOneWidget);
     await gesture.removePointer();
     semantics.dispose();
   });

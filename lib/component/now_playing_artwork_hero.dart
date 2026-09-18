@@ -149,6 +149,9 @@ class NowPlayingArtworkCard extends StatelessWidget {
   /// 全局同步封面内存缓存，杜绝任何页面转场与 Hero 降落时刻 FutureBuilder 的 1 帧占位闪屏
   static final Map<String, ImageProvider> _syncCoverCache = {};
 
+  /// 记录最近一次已呈现的有效封面，切歌时新封面加载就绪前平滑保持展示，彻底消除灰底空白占位符闪屏
+  static ImageProvider? _lastActiveCover;
+
   static ImageProvider? getSyncCover(Audio? audio) {
     if (audio == null) return null;
     return _syncCoverCache[audio.path];
@@ -160,6 +163,7 @@ class NowPlayingArtworkCard extends StatelessWidget {
       _syncCoverCache.remove(_syncCoverCache.keys.first);
     }
     _syncCoverCache[audio.path] = provider;
+    _lastActiveCover = provider;
   }
 
   static void evictCover(String? path) {
@@ -176,6 +180,9 @@ class NowPlayingArtworkCard extends StatelessWidget {
       cacheSyncCover(audio, coverProvider);
     }
     final cachedProvider = coverProvider ?? getSyncCover(audio);
+    if (cachedProvider != null) {
+      _lastActiveCover = cachedProvider;
+    }
 
     final placeholder = DecoratedBox(
       decoration: BoxDecoration(
@@ -208,14 +215,16 @@ class NowPlayingArtworkCard extends StatelessWidget {
         errorBuilder: (_, __, ___) => placeholder,
       );
     } else if (audio == null) {
+      _lastActiveCover = null;
       imageWidget = placeholder;
     } else {
+      final currentAudio = audio!;
       imageWidget = FutureBuilder<ImageProvider?>(
-        future: audio!.cover,
+        future: currentAudio.cover,
         builder: (context, snapshot) {
           final provider = snapshot.data;
           if (provider != null) {
-            cacheSyncCover(audio, provider);
+            cacheSyncCover(currentAudio, provider);
             return Image(
               image: provider,
               fit: BoxFit.cover,
@@ -223,10 +232,21 @@ class NowPlayingArtworkCard extends StatelessWidget {
               errorBuilder: (_, __, ___) => placeholder,
             );
           }
-          final fallbackSync = getSyncCover(audio);
+          final fallbackSync = getSyncCover(currentAudio);
           if (fallbackSync != null) {
+            _lastActiveCover = fallbackSync;
             return Image(
               image: fallbackSync,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => placeholder,
+            );
+          }
+          // 在新音频封面尚未加载完成的等待期间，平滑保持展示上一首有效封面，杜绝空白占位符闪屏
+          if (snapshot.connectionState != ConnectionState.done &&
+              _lastActiveCover != null) {
+            return Image(
+              image: _lastActiveCover!,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               errorBuilder: (_, __, ___) => placeholder,

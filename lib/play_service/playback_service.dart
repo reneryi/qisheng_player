@@ -441,6 +441,7 @@ class PlaybackService extends PlaybackController {
       _playlistIndex = audioIndex;
       nowPlaying = targetAudio;
       _cueAutoNextTriggered = false;
+      unawaited(targetAudio.cover);
 
       if (targetAudio.isCueTrack) {
         _player.seek((targetAudio.cueStartMs ?? 0) / 1000.0);

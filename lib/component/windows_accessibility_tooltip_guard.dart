@@ -7,7 +7,7 @@ bool shouldShowTooltips({
   required bool isWindows,
   required bool semanticsEnabled,
 }) {
-  return !(isWindows && semanticsEnabled);
+  return true;
 }
 
 /// Avoids a Flutter Windows AXTree race caused by Tooltip overlay removal

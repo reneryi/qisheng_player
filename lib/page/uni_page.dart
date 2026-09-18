@@ -61,7 +61,7 @@ enum ContentView {
 }
 
 const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-  maxCrossAxisExtent: 250,
+  maxCrossAxisExtent: 360,
   mainAxisExtent: 64,
   mainAxisSpacing: 8.0,
   crossAxisSpacing: 8.0,
@@ -167,7 +167,7 @@ class _SideNavAnimatedTableGrid extends StatelessWidget {
     required this.padding,
     required this.itemCount,
     required this.itemBuilder,
-    this.maxCrossAxisExtent = 250,
+    this.maxCrossAxisExtent = 360,
   });
 
   final ScrollController controller;
@@ -581,7 +581,7 @@ class UniPage<T> extends StatefulWidget {
     this.rightPaneBuilder,
     this.showRightPane = false,
     this.rightPaneWidth = 296,
-    this.tableMaxCrossAxisExtent = 250,
+    this.tableMaxCrossAxisExtent = 360,
   });
 
   final PagePreference pref;

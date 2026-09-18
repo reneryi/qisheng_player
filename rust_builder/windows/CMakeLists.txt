@@ -9,7 +9,14 @@ set(PROJECT_NAME "rust_lib_coriander_player")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 include("../cargokit/cmake/cargokit.cmake")
-apply_cargokit(${PROJECT_NAME} ../../../../../../rust rust_lib_coriander_player "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../rust/Cargo.toml")
+  set(RUST_DIR "../../rust")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../rust/Cargo.toml")
+  set(RUST_DIR "../../../../../../rust")
+else()
+  message(FATAL_ERROR "Cannot find rust directory containing Cargo.toml")
+endif()
+apply_cargokit(${PROJECT_NAME} ${RUST_DIR} rust_lib_coriander_player "")
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an

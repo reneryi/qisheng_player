@@ -232,219 +232,253 @@ class _AudioTileState extends State<AudioTile> {
                           controller.open(position: details.localPosition);
                         },
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Row(
-                          children: [
-                            if (widget.leading != null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 16.0),
-                                child: widget.leading!,
-                              ),
-                            Stack(
-                              clipBehavior: Clip.none,
+                        child: LayoutBuilder(
+                          builder: (context, tileConstraints) {
+                            final showDuration =
+                                tileConstraints.maxWidth >= 220;
+
+                            return Row(
                               children: [
-                                ScrollAwareFutureBuilder(
-                                  futureKey: audio.path,
-                                  future: () => audio.cover,
-                                  builder: (context, snapshot) {
-                                    return CoverFadeImage(
-                                      provider: snapshot.data,
-                                      index: widget.audioIndex,
-                                      width: 48,
-                                      height: 48,
-                                      borderRadius: 10,
-                                      placeholder: Center(child: placeholder),
-                                    );
-                                  },
-                                ),
-                                // 正在播放时展示右下角微型动态跳动均衡器徽章
-                                if (effectiveFocus)
-                                  Positioned(
-                                    right: -2,
-                                    bottom: -2,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: scheme.primary,
-                                        borderRadius: BorderRadius.circular(6),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: scheme.primary
-                                                .withValues(alpha: 0.4),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const EqualizerPlayingBars(
-                                        barColor: Colors.white,
-                                        height: 10,
-                                      ),
-                                    ),
+                                if (widget.leading != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 16.0),
+                                    child: widget.leading!,
                                   ),
-                              ],
-                            ),
-                            const SizedBox(width: 16.0),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    audio.title,
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.25,
-                                      letterSpacing: 0,
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    ScrollAwareFutureBuilder(
+                                      futureKey: audio.path,
+                                      future: () => audio.cover,
+                                      builder: (context, snapshot) {
+                                        return CoverFadeImage(
+                                          provider: snapshot.data,
+                                          index: widget.audioIndex,
+                                          width: 48,
+                                          height: 48,
+                                          borderRadius: 10,
+                                          placeholder:
+                                              Center(child: placeholder),
+                                        );
+                                      },
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4.0),
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          widget.showPlayCount
-                                              ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
-                                              : "${audio.artist} - ${audio.album}",
-                                          style: TextStyle(
-                                            color: textColor.withValues(
-                                              alpha: isDark ? 0.82 : 0.90,
-                                            ),
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                            height: 1.25,
-                                            letterSpacing: 0,
+                                    // 正在播放时展示右下角微型动态跳动均衡器徽章
+                                    if (effectiveFocus)
+                                      Positioned(
+                                        right: -2,
+                                        bottom: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 3,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                          decoration: BoxDecoration(
+                                            color: scheme.primary,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: scheme.primary
+                                                    .withValues(alpha: 0.4),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const EqualizerPlayingBars(
+                                            barColor: Colors.white,
+                                            height: 10,
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(width: 8.0),
-                                      AudioFormatBadge(
-                                        audio: audio,
-                                        compact: true,
+                                  ],
+                                ),
+                                const SizedBox(width: 16.0),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        audio.title,
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.25,
+                                          letterSpacing: 0,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4.0),
+                                      LayoutBuilder(
+                                        builder: (context, subtitleConstraints) {
+                                          final showBadge = subtitleConstraints
+                                                  .maxWidth >=
+                                              150;
+
+                                          return Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  widget.showPlayCount
+                                                      ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                                      : "${audio.artist} - ${audio.album}",
+                                                  style: TextStyle(
+                                                    color: textColor.withValues(
+                                                      alpha:
+                                                          isDark ? 0.82 : 0.90,
+                                                    ),
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w500,
+                                                    height: 1.25,
+                                                    letterSpacing: 0,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (showBadge) ...[
+                                                const SizedBox(width: 8.0),
+                                                AudioFormatBadge(
+                                                  audio: audio,
+                                                  compact: true,
+                                                ),
+                                              ],
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8.0),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 220),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // 极简锐利模式下展示右侧彩色 Pill 胶囊徽章（自适应空间）
-                                  Text(
-                                    Duration(seconds: audio.duration)
-                                        .toStringHMMSS(),
-                                    style: TextStyle(
-                                      color: effectiveFocus
-                                          ? scheme.primary
-                                          : scheme.onSurface.withValues(alpha: 0.72),
-                                      fontWeight: FontWeight.w500,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
+                                ),
+                                const SizedBox(width: 8.0),
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 220),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (showDuration) ...[
+                                        // 极简锐利模式下展示右侧彩色 Pill 胶囊徽章（自适应空间）
+                                        Text(
+                                          Duration(seconds: audio.duration)
+                                              .toStringHMMSS(),
+                                          style: TextStyle(
+                                            color: effectiveFocus
+                                                ? scheme.primary
+                                                : scheme.onSurface
+                                                    .withValues(alpha: 0.72),
+                                            fontWeight: FontWeight.w500,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8.0),
                                       ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8.0),
-                                  AudioContextMenu(
-                                    audio: audio,
-                                    playlist: widget.playlist,
-                                    audioIndex: widget.audioIndex,
-                                    onEdit: () => showModernDialog(
-                                      context: context,
-                                      builder: (context) =>
-                                          AudioEditDialog(audio: audio),
-                                    ),
-                                    builder: (context, moreMenuController, _) {
-                                      return Semantics(
-                                        label: '更多',
-                                        button: true,
-                                        child: Focus(
-                                          skipTraversal: true,
-                                          canRequestFocus: false,
-                                          child: IconButton(
-                                            tooltip: '更多',
-                                            onPressed: () {
-                                              if (moreMenuController.isOpen) {
-                                                moreMenuController.close();
-                                              } else {
-                                                AudioContextMenuManager.closeActive(
-                                                  except: moreMenuController,
-                                                );
-                                                moreMenuController.open();
-                                              }
-                                            },
-                                            icon: const Icon(Symbols.more_vert),
-                                            color: textColor.withValues(
-                                              alpha: 0.76,
-                                            ),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            style: IconButton.styleFrom(
-                                              minimumSize: const Size(36, 36),
-                                              fixedSize: const Size(36, 36),
-                                              padding: EdgeInsets.zero,
-                                              elevation: 0,
-                                              shadowColor: Colors.transparent,
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              side: BorderSide.none,
-                                              tapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
-                                            ).copyWith(
-                                              overlayColor:
-                                                  WidgetStatePropertyAll(
-                                                scheme.primary.withValues(
-                                                  alpha: 0.08,
+                                      AudioContextMenu(
+                                        audio: audio,
+                                        playlist: widget.playlist,
+                                        audioIndex: widget.audioIndex,
+                                        onEdit: () => showModernDialog(
+                                          context: context,
+                                          builder: (context) => AudioEditDialog(
+                                              audio: audio),
+                                        ),
+                                        builder: (context, moreMenuController,
+                                            _) {
+                                          return Semantics(
+                                            label: '更多',
+                                            button: true,
+                                            child: Focus(
+                                              skipTraversal: true,
+                                              canRequestFocus: false,
+                                              child: IconButton(
+                                                tooltip: '更多',
+                                                onPressed: () {
+                                                  if (moreMenuController
+                                                      .isOpen) {
+                                                    moreMenuController.close();
+                                                  } else {
+                                                    AudioContextMenuManager
+                                                        .closeActive(
+                                                      except:
+                                                          moreMenuController,
+                                                    );
+                                                    moreMenuController.open();
+                                                  }
+                                                },
+                                                icon: const Icon(
+                                                    Symbols.more_vert),
+                                                color: textColor.withValues(
+                                                  alpha: 0.76,
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                style: IconButton.styleFrom(
+                                                  minimumSize:
+                                                      const Size(36, 36),
+                                                  fixedSize: const Size(36, 36),
+                                                  padding: EdgeInsets.zero,
+                                                  elevation: 0,
+                                                  shadowColor:
+                                                      Colors.transparent,
+                                                  backgroundColor:
+                                                      Colors.transparent,
+                                                  side: BorderSide.none,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                ).copyWith(
+                                                  overlayColor:
+                                                      WidgetStatePropertyAll(
+                                                    scheme.primary.withValues(
+                                                      alpha: 0.08,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
-                            if (widget.multiSelectController
-                                    ?.enableMultiSelectView ==
-                                true)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 8.0),
-                                child: Checkbox(
-                                  value: widget.multiSelectController!.selected
-                                      .contains(audio),
-                                  onChanged: (_) {
-                                    widget.multiSelectController!
-                                        .toggleSelectionWithIndex(
-                                      index: widget.audioIndex,
-                                      item: audio,
-                                      items: widget.playlist,
-                                      shiftPressed: MultiSelectController
-                                          .isShiftPressed(),
-                                    );
-                                  },
                                 ),
-                              ),
-                            if (widget.action != null)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 8.0),
-                                child: widget.action!,
-                              ),
-                          ],
+                                if (widget.multiSelectController
+                                        ?.enableMultiSelectView ==
+                                    true)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: Checkbox(
+                                      value: widget
+                                          .multiSelectController!.selected
+                                          .contains(audio),
+                                      onChanged: (_) {
+                                        widget.multiSelectController!
+                                            .toggleSelectionWithIndex(
+                                          index: widget.audioIndex,
+                                          item: audio,
+                                          items: widget.playlist,
+                                          shiftPressed: MultiSelectController
+                                              .isShiftPressed(),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                if (widget.action != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: widget.action!,
+                                  ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
