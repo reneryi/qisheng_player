@@ -564,6 +564,79 @@ void main() {
     expect(playback.volumeDsp, closeTo(0.54, 0.001));
     expect(find.text('54%'), findsNothing);
   });
+
+  testWidgets('BottomPlayerBar transport controls strictly have no hover tooltips', (tester) async {
+    final audio = TestAudio(
+      title: 'Tooltip Test Song',
+      artist: 'Tooltip Artist',
+      album: 'Tooltip Album',
+      path: r'E:\Music\tooltip.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: audio,
+      queue: [audio],
+    );
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: FakeLyricController(
+          Lrc(buildLongLrcLines(), LrcSource.local),
+        ),
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const Center(
+          child: SizedBox(
+            width: 1360,
+            child: BottomPlayerBar(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final transportKeys = [
+      const ValueKey('bottom-player-bar-shuffle-button'),
+      const ValueKey('bottom-player-bar-prev-button'),
+      const ValueKey('bottom-player-bar-play-button'),
+      const ValueKey('bottom-player-bar-next-button'),
+      const ValueKey('bottom-player-bar-sequence-button'),
+    ];
+
+    for (final key in transportKeys) {
+      final buttonFinder = find.byKey(key);
+      expect(buttonFinder, findsOneWidget);
+
+      // Verify no Tooltip widget exists as descendant or direct ancestor of the button
+      expect(
+        find.descendant(of: buttonFinder, matching: find.byType(Tooltip)),
+        findsNothing,
+      );
+      expect(
+        find.ancestor(of: buttonFinder, matching: find.byType(Tooltip)),
+        findsNothing,
+      );
+
+      // Simulate mouse hover over each transport control
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(tester.getCenter(buttonFinder));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 1000));
+
+      // Strictly assert no tooltips or text bubbles are shown on hover
+      expect(find.text('随机播放'), findsNothing);
+      expect(find.text('上一首'), findsNothing);
+      expect(find.text('播放'), findsNothing);
+      expect(find.text('暂停'), findsNothing);
+      expect(find.text('下一首'), findsNothing);
+      expect(find.text('顺序播放'), findsNothing);
+      expect(find.text('单曲循环'), findsNothing);
+      expect(find.text('列表循环'), findsNothing);
+
+      await gesture.removePointer();
+    }
+  });
 }
 
 class _LongFakePlaybackController extends FakePlaybackController {

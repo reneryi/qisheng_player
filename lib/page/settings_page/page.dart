@@ -11,10 +11,10 @@ import 'package:qisheng_player/page/settings_page/theme_settings.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 
 enum _SettingsCategory {
-  appearance('外观与特效', Symbols.palette),
-  playback('播放与音频', Symbols.music_note),
-  system('系统与热键', Symbols.keyboard),
-  about('关于与更新', Symbols.info);
+  appearance('外观与特效', Symbols.palette_rounded),
+  playback('播放与音频', Symbols.music_note_rounded),
+  system('系统与热键', Symbols.keyboard_rounded),
+  about('关于与更新', Symbols.info_rounded);
 
   const _SettingsCategory(this.title, this.icon);
   final String title;
@@ -94,6 +94,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         Icon(
                           category.icon,
                           size: 21,
+                          fill: 1.0,
+                          weight: selected ? 700 : 600,
+                          grade: 0.25,
+                          opticalSize: 24,
                           color: selected
                               ? scheme.primary
                               : scheme.onSurface.withValues(
@@ -175,7 +179,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
                   label: Text(category.title),
-                  avatar: Icon(category.icon, size: 16),
+                  avatar: Icon(
+                    category.icon,
+                    size: 16,
+                    fill: 1.0,
+                    weight: selected ? 700 : 600,
+                    grade: 0.25,
+                  ),
                   selected: selected,
                   onSelected: (_) =>
                       setState(() => _selectedCategory = category),

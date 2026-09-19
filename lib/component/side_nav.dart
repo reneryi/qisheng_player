@@ -47,12 +47,12 @@ class DestinationDesc {
 }
 
 const destinations = <DestinationDesc>[
-  DestinationDesc(Symbols.library_music, '音乐', app_paths.AUDIOS_PAGE),
-  DestinationDesc(Symbols.artist, '艺术家', app_paths.ARTISTS_PAGE),
-  DestinationDesc(Symbols.album, '专辑', app_paths.ALBUMS_PAGE),
-  DestinationDesc(Symbols.folder, '文件夹', app_paths.FOLDERS_PAGE),
-  DestinationDesc(Symbols.list, '歌单', app_paths.PLAYLISTS_PAGE),
-  DestinationDesc(Symbols.settings, '设置', app_paths.SETTINGS_PAGE),
+  DestinationDesc(Symbols.library_music_rounded, '音乐', app_paths.AUDIOS_PAGE),
+  DestinationDesc(Symbols.artist_rounded, '艺术家', app_paths.ARTISTS_PAGE),
+  DestinationDesc(Symbols.album_rounded, '专辑', app_paths.ALBUMS_PAGE),
+  DestinationDesc(Symbols.folder_rounded, '文件夹', app_paths.FOLDERS_PAGE),
+  DestinationDesc(Symbols.queue_music_rounded, '歌单', app_paths.PLAYLISTS_PAGE),
+  DestinationDesc(Symbols.settings_rounded, '设置', app_paths.SETTINGS_PAGE),
 ];
 
 class SideNav extends StatelessWidget {
@@ -318,6 +318,10 @@ class _MetalNavIcon extends StatelessWidget {
           icon,
           size: 22,
           color: color,
+          fill: 1.0,
+          weight: selected ? 700 : 600,
+          grade: 0.25,
+          opticalSize: 24,
         );
       },
     );

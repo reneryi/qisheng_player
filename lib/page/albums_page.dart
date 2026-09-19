@@ -32,7 +32,7 @@ class AlbumsPage extends StatelessWidget {
         enableHero: true,
       ),
       primaryAction: FilledButton.tonalIcon(
-        icon: const Icon(Symbols.auto_awesome, size: 18),
+        icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
         label: const Text('一键匹配封面'),
         onPressed: () => showBatchArtworkMatchDialog(
           context,
@@ -46,7 +46,7 @@ class AlbumsPage extends StatelessWidget {
       enableContentViewSwitch: true,
       sortMethods: [
         SortMethodDesc(
-          icon: Symbols.title,
+          icon: Symbols.title_rounded,
           name: "标题",
           method: (list, order) {
             switch (order) {
@@ -60,7 +60,7 @@ class AlbumsPage extends StatelessWidget {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.music_note,
+          icon: Symbols.music_note_rounded,
           name: "作品数量",
           method: (list, order) {
             switch (order) {

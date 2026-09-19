@@ -302,7 +302,7 @@ class _AlbumCover extends StatelessWidget {
       ),
       child: Center(
         child: Icon(
-          Symbols.album,
+          Symbols.album_rounded,
           size: 64,
           color: scheme.onSurface.withValues(alpha: 0.3),
         ),

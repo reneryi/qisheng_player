@@ -235,7 +235,7 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                       controller: _controller,
                       focusNode: _focusNode,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Symbols.search, size: 20),
+                        prefixIcon: const Icon(Symbols.search_rounded, size: 20),
                         suffixIcon: IconButton(
                           enableFeedback: false,
                           tooltip: '关闭搜索',
@@ -243,7 +243,7 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                             _controller.clear();
                             _toggleExpanded(false);
                           },
-                          icon: const Icon(Symbols.close, size: 18),
+                          icon: const Icon(Symbols.close_rounded, size: 18),
                         ),
                         hintText: '搜索歌曲、艺术家、专辑',
                         border: InputBorder.none,
@@ -264,7 +264,7 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                       tooltip: '搜索',
                       onPressed: () => _toggleExpanded(true),
                       icon: Icon(
-                        Symbols.search,
+                        Symbols.search_rounded,
                         size: 20,
                         color: scheme.onSurface.withValues(alpha: 0.68),
                       ),
@@ -306,7 +306,7 @@ class _OpenDrawerBtn extends StatelessWidget {
         enableFeedback: false,
         tooltip: '打开导航栏',
         onPressed: () => Scaffold.of(context).openDrawer(),
-        icon: const Icon(Symbols.side_navigation),
+        icon: const Icon(Symbols.side_navigation_rounded),
       ),
     );
   }
@@ -329,7 +329,7 @@ class NavBackBtn extends StatelessWidget {
           onPressed: context.canPop() || navigation.canGoBack
               ? () => navigation.navigateBack(context, fallback: '')
               : null,
-          icon: const Icon(Symbols.navigate_before),
+          icon: const Icon(Symbols.navigate_before_rounded),
         );
       },
     );
@@ -353,7 +353,7 @@ class NavForwardBtn extends StatelessWidget {
           onPressed: navigation.canGoForward
               ? () => navigation.navigateForward(context)
               : null,
-          icon: const Icon(Symbols.navigate_next),
+          icon: const Icon(Symbols.navigate_next_rounded),
         );
       },
     );
@@ -524,24 +524,28 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         _WindowButton(
           tooltip: _isFullScreen ? '退出全屏' : '全屏',
           onPressed: _isProcessing ? null : _toggleFullScreen,
-          icon: _isFullScreen ? Symbols.close_fullscreen : Symbols.open_in_full,
+          icon: _isFullScreen
+              ? Symbols.close_fullscreen_rounded
+              : Symbols.open_in_full_rounded,
         ),
         const _WindowButton(
           tooltip: '最小化',
           onPressed: WindowControls.minimize,
-          icon: Symbols.remove,
+          icon: Symbols.remove_rounded,
         ),
         _WindowButton(
           key: _maximizeButtonKey,
           tooltip: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
           onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
-          icon: _isMaximized ? Symbols.fullscreen_exit : Symbols.fullscreen,
+          icon: _isMaximized
+              ? Symbols.fullscreen_exit_rounded
+              : Symbols.fullscreen_rounded,
         ),
         _WindowButton(
           tooltip: '退出',
           // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
           onPressed: () => unawaited(WindowControls.exitApp()),
-          icon: Symbols.close,
+          icon: Symbols.close_rounded,
           color: scheme.error,
         ),
       ],

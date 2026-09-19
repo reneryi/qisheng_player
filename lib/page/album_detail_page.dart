@@ -137,7 +137,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
       ],
       sortMethods: [
         SortMethodDesc(
-          icon: Symbols.title,
+          icon: Symbols.title_rounded,
           name: "标题",
           method: (list, order) {
             switch (order) {
@@ -151,7 +151,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.artist,
+          icon: Symbols.artist_rounded,
           name: "艺术家",
           method: (list, order) {
             switch (order) {
@@ -165,7 +165,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.art_track,
+          icon: Symbols.art_track_rounded,
           name: "音轨",
           method: (list, order) {
             switch (order) {
@@ -179,7 +179,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.add,
+          icon: Symbols.add_rounded,
           name: "创建时间",
           method: (list, order) {
             switch (order) {
@@ -193,7 +193,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.edit,
+          icon: Symbols.edit_rounded,
           name: "修改时间",
           method: (list, order) {
             switch (order) {

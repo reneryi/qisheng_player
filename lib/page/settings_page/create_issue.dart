@@ -19,7 +19,7 @@ class CreateIssueTile extends StatelessWidget {
       action: FilledButton.icon(
         onPressed: () => context.push(app_paths.SETTINGS_ISSUE_PAGE),
         label: const Text("创建问题"),
-        icon: const Icon(Symbols.help),
+        icon: const Icon(Symbols.help_rounded),
       ),
     );
   }

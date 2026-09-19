@@ -84,12 +84,12 @@ class _FoldersPageState extends State<FoldersPage> {
         children: [
           FilledButton.icon(
             onPressed: () => _openFolderManager(allowFolderEdit: true),
-            icon: const Icon(Symbols.folder_managed),
+            icon: const Icon(Symbols.folder_managed_rounded),
             label: const Text("管理文件夹"),
           ),
           FilledButton.icon(
             onPressed: () => _openFolderManager(allowFolderEdit: false),
-            icon: const Icon(Symbols.scan),
+            icon: const Icon(Symbols.scan_rounded),
             label: const Text("扫描音乐库"),
           ),
         ],
@@ -100,7 +100,7 @@ class _FoldersPageState extends State<FoldersPage> {
       enableContentViewSwitch: true,
       sortMethods: [
         SortMethodDesc(
-          icon: Symbols.title,
+          icon: Symbols.title_rounded,
           name: "路径",
           method: (list, order) {
             switch (order) {
@@ -114,7 +114,7 @@ class _FoldersPageState extends State<FoldersPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.edit,
+          icon: Symbols.edit_rounded,
           name: "修改日期",
           method: (list, order) {
             switch (order) {
@@ -128,7 +128,7 @@ class _FoldersPageState extends State<FoldersPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.music_note,
+          icon: Symbols.music_note_rounded,
           name: "歌曲数量",
           method: (list, order) {
             switch (order) {

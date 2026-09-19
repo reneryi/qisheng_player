@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
@@ -613,6 +614,14 @@ class _GlowSliderThumbShape extends SliderComponentShape {
   }
 }
 
+enum _TransportMotionDirection {
+  none,
+  left,
+  right,
+  spin,
+  vertical,
+}
+
 class _PlaybackControls extends StatelessWidget {
   const _PlaybackControls({required this.dense});
 
@@ -635,16 +644,15 @@ class _PlaybackControls extends StatelessWidget {
             final playerState = snapshot.data ?? PlayerState.stopped;
             final isPlaying = playerState == PlayerState.playing;
             final icon = switch (playerState) {
-              PlayerState.completed => Symbols.replay,
-              PlayerState.playing => Symbols.pause,
-              _ => Symbols.play_arrow,
+              PlayerState.completed => Symbols.replay_rounded,
+              PlayerState.playing => Symbols.pause_rounded,
+              _ => Symbols.play_arrow_rounded,
             };
             final onPressed = switch (playerState) {
               PlayerState.completed => playback.playAgain,
               PlayerState.playing => playback.pause,
               _ => playback.start,
             };
-
             final controls = SizedBox(
               width: clusterWidth,
               child: Row(
@@ -655,8 +663,9 @@ class _PlaybackControls extends StatelessWidget {
                   _TransportIconButton(
                     key: const ValueKey('bottom-player-bar-prev-button'),
                     onPressed: playback.lastAudio,
-                    icon: Symbols.skip_previous,
+                    icon: Symbols.skip_previous_rounded,
                     dense: dense,
+                    motionDirection: _TransportMotionDirection.left,
                   ),
                   SizedBox(width: innerGap),
                   _PrimaryTransportButton(
@@ -670,8 +679,9 @@ class _PlaybackControls extends StatelessWidget {
                   _TransportIconButton(
                     key: const ValueKey('bottom-player-bar-next-button'),
                     onPressed: playback.nextAudio,
-                    icon: Symbols.skip_next,
+                    icon: Symbols.skip_next_rounded,
                     dense: dense,
+                    motionDirection: _TransportMotionDirection.right,
                   ),
                   SizedBox(width: outerGap),
                   _SequenceModeControl(dense: dense),
@@ -722,6 +732,7 @@ class _ShuffleModeControl extends StatelessWidget {
           icon: Symbols.shuffle,
           dense: dense,
           selected: shuffle,
+          motionDirection: _TransportMotionDirection.spin,
         );
       },
     );
@@ -769,6 +780,7 @@ class _SequenceModeControl extends StatelessWidget {
               icon: icon,
               dense: dense,
               selected: selected,
+              motionDirection: _TransportMotionDirection.vertical,
             );
           },
         );
@@ -784,93 +796,273 @@ class _TransportIconButton extends StatefulWidget {
     required this.icon,
     required this.dense,
     this.selected = false,
+    this.motionDirection = _TransportMotionDirection.none,
   });
 
   final VoidCallback? onPressed;
   final IconData icon;
   final bool dense;
   final bool selected;
+  final _TransportMotionDirection motionDirection;
 
   @override
   State<_TransportIconButton> createState() => _TransportIconButtonState();
 }
 
-class _TransportIconButtonState extends State<_TransportIconButton> {
+class _TransportIconButtonState extends State<_TransportIconButton>
+    with TickerProviderStateMixin {
+  AnimationController? _pressController;
+  late Animation<double> _pressScaleAnimation;
+  late Animation<double> _pressOffsetAnimation;
+  AnimationController? _hoverController;
+  late Animation<double> _hoverScaleAnimation;
   bool _hovered = false;
-  bool _pressed = false;
+  Timer? _releaseTimer;
+  DateTime? _tapDownTime;
 
   bool get _enabled => widget.onPressed != null;
 
   @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    if (_pressController == null) {
+      final pressController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 90),
+        reverseDuration: const Duration(milliseconds: 240),
+      );
+      _pressScaleAnimation = Tween<double>(begin: 1.0, end: 0.88).animate(
+        CurvedAnimation(
+          parent: pressController,
+          curve: Curves.easeOutQuad,
+          reverseCurve: Curves.easeOutBack,
+        ),
+      );
+      _pressOffsetAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: pressController,
+          curve: Curves.easeOutQuad,
+          reverseCurve: Curves.easeOutBack,
+        ),
+      );
+      _pressController = pressController;
+    }
+
+    if (_hoverController == null) {
+      final hoverController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 160),
+      );
+      _hoverScaleAnimation = Tween<double>(begin: 1.0, end: 1.07).animate(
+        CurvedAnimation(
+          parent: hoverController,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeOutCubic,
+        ),
+      );
+      _hoverController = hoverController;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _TransportIconButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_enabled && _hovered) {
+      _hovered = false;
+      _hoverController?.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _releaseTimer?.cancel();
+    _pressController?.dispose();
+    _hoverController?.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails _) {
+    if (!_enabled) return;
+    _initAnimations();
+    _releaseTimer?.cancel();
+    _tapDownTime = DateTime.now();
+    _pressController?.forward();
+  }
+
+  void _handleRelease() {
+    if (!_enabled) return;
+    final elapsed = _tapDownTime != null
+        ? DateTime.now().difference(_tapDownTime!).inMilliseconds
+        : 90;
+    final remaining = (60 - elapsed).clamp(0, 60);
+    _releaseTimer?.cancel();
+    if (remaining > 0) {
+      _releaseTimer = Timer(Duration(milliseconds: remaining), () {
+        if (mounted) _pressController?.reverse();
+      });
+    } else {
+      _pressController?.reverse();
+    }
+  }
+
+  void _handleTapUp(TapUpDetails _) {
+    if (!_enabled) return;
+    _handleRelease();
+  }
+
+  void _handleTapCancel() {
+    if (!_enabled) return;
+    _handleRelease();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _initAnimations();
     final scheme = Theme.of(context).colorScheme;
     final accents = context.accents;
     final motion = context.motion;
-    // 视觉圆形尺寸：根据 dense 模式在 34dp 与 40dp 间切换
     final visualSize = widget.dense ? 34.0 : 40.0;
-    final radius = BorderRadius.circular(999);
-    final iconColor = !_enabled
-        ? scheme.onSurface.withValues(alpha: 0.34)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final baseIconColor = !_enabled
+        ? scheme.onSurface.withValues(alpha: 0.30)
         : widget.selected
             ? accents.accent
-            : scheme.onSurface.withValues(alpha: _hovered ? 0.96 : 0.82);
+            : scheme.onSurface.withValues(alpha: _hovered ? 0.98 : 0.78);
 
-    final button = MouseRegion(
+    final double offsetDx = switch (widget.motionDirection) {
+      _TransportMotionDirection.left => -2.5,
+      _TransportMotionDirection.right => 2.5,
+      _ => 0.0,
+    };
+    final double offsetDy = switch (widget.motionDirection) {
+      _TransportMotionDirection.vertical => -2.0,
+      _ => 0.0,
+    };
+    final double spinAngle = widget.motionDirection == _TransportMotionDirection.spin
+        ? -0.25 * 2 * math.pi
+        : 0.0;
+
+    Widget button = MouseRegion(
       cursor: _enabled ? SystemMouseCursors.click : MouseCursor.defer,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _pressed = false;
-      }),
-      // 扩展外层透明点击热区，在常规模式下 >= 44x44 dp，dense 紧凑模式下为 36x36 dp
+      onEnter: (_) {
+        if (!_enabled) return;
+        setState(() => _hovered = true);
+        _initAnimations();
+        _hoverController?.forward();
+      },
+      onExit: (_) {
+        setState(() {
+          _hovered = false;
+          _handleRelease();
+        });
+        _hoverController?.reverse();
+      },
       child: ConstrainedBox(
         constraints: BoxConstraints(
           minWidth: widget.dense ? 36.0 : 44.0,
           minHeight: widget.dense ? 36.0 : 44.0,
         ),
         child: Center(
-          child: AnimatedScale(
-            scale: _pressed ? 0.95 : (_hovered ? 1.06 : 1),
-            duration: motion.microInteractionDuration,
-            curve: motion.fast,
-            child: AnimatedContainer(
-              duration: motion.controlTransitionDuration,
-              curve: motion.normal,
-              width: visualSize,
-              height: visualSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.selected
-                    ? accents.accent.withValues(alpha: 0.13)
-                    : _hovered
-                        ? Colors.white.withValues(alpha: 0.045)
-                        : Colors.transparent,
-                boxShadow: [
-                  if (widget.selected)
-                    BoxShadow(
-                      color: accents.accentGlow.withValues(alpha: 0.18),
-                      blurRadius: 12,
-                      spreadRadius: -8,
-                    ),
-                ],
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  enableFeedback: false,
-                  borderRadius: radius,
-                  onTap: widget.onPressed,
-                  // 统一由 InkWell 响应按压高亮状态，移除外层手势竞争
-                  onHighlightChanged: _enabled
-                      ? (highlighted) => setState(() => _pressed = highlighted)
-                      : null,
-                  child: Center(
-                    child: Icon(
-                      widget.icon,
-                      size: widget.dense ? 18 : 22,
-                      color: iconColor,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: _handleTapDown,
+            onTapUp: _handleTapUp,
+            onTapCancel: _handleTapCancel,
+            onTap: widget.onPressed,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_pressController!, _hoverController!]),
+              builder: (context, child) {
+                final pressScale = _pressScaleAnimation.value;
+                final hoverScale = _hoverScaleAnimation.value;
+                final combinedScale = pressScale * hoverScale;
+                final currentDx = offsetDx * _pressOffsetAnimation.value;
+                final currentDy = offsetDy * _pressOffsetAnimation.value;
+                final currentAngle = spinAngle * _pressOffsetAnimation.value;
+
+                return Transform.translate(
+                  offset: Offset(currentDx, currentDy),
+                  child: Transform.rotate(
+                    angle: currentAngle,
+                    child: Transform.scale(
+                      scale: combinedScale,
+                      child: child,
                     ),
                   ),
+                );
+              },
+              child: AnimatedContainer(
+                duration: motion.controlTransitionDuration,
+                curve: motion.normal,
+                width: visualSize,
+                height: visualSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.selected
+                      ? accents.accent.withValues(alpha: isDark ? 0.16 : 0.12)
+                      : _hovered
+                          ? scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.06)
+                          : Colors.transparent,
+                  border: Border.all(
+                    color: widget.selected
+                        ? accents.accent.withValues(alpha: isDark ? 0.35 : 0.28)
+                        : _hovered
+                            ? scheme.onSurface.withValues(alpha: isDark ? 0.12 : 0.08)
+                            : Colors.transparent,
+                    width: 1.0,
+                  ),
+                  boxShadow: [
+                    if (widget.selected)
+                      BoxShadow(
+                        color: accents.accentGlow.withValues(alpha: 0.26),
+                        blurRadius: 12,
+                        spreadRadius: -4,
+                      ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    _buildIconTransition(context, baseIconColor),
+                    Positioned(
+                      bottom: widget.dense ? 2.5 : 3.5,
+                      child: AnimatedOpacity(
+                        duration: motion.controlTransitionDuration,
+                        curve: motion.normal,
+                        opacity: widget.selected ? 1.0 : 0.0,
+                        child: AnimatedScale(
+                          duration: motion.controlTransitionDuration,
+                          curve: motion.emphasized,
+                          scale: widget.selected ? 1.0 : 0.0,
+                          child: Container(
+                            width: 3.5,
+                            height: 3.5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: accents.accent,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accents.accentGlow.withValues(alpha: 0.6),
+                                  blurRadius: 4,
+                                  spreadRadius: 0.5,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -880,6 +1072,44 @@ class _TransportIconButtonState extends State<_TransportIconButton> {
     );
 
     return button;
+  }
+
+  Widget _buildIconTransition(BuildContext context, Color iconColor) {
+    final iconWidget = Icon(
+      widget.icon,
+      key: ValueKey(widget.icon),
+      size: widget.dense ? 19 : 22,
+      color: iconColor,
+      fill: 1.0,
+      weight: 600,
+      grade: 0.25,
+      opticalSize: 24,
+    );
+
+    if (widget.motionDirection == _TransportMotionDirection.vertical) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.linear,
+        switchOutCurve: Curves.linear,
+        transitionBuilder: (child, animation) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.0, 0.35),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+            ),
+            child: FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+          );
+        },
+        child: iconWidget,
+      );
+    }
+
+    return iconWidget;
   }
 }
 
@@ -902,91 +1132,243 @@ class _PrimaryTransportButton extends StatefulWidget {
       _PrimaryTransportButtonState();
 }
 
-class _PrimaryTransportButtonState extends State<_PrimaryTransportButton> {
+class _PrimaryTransportButtonState extends State<_PrimaryTransportButton>
+    with TickerProviderStateMixin {
+  AnimationController? _pressController;
+  late Animation<double> _pressAnimation;
+  AnimationController? _hoverController;
+  late Animation<double> _hoverAnimation;
   bool _hovered = false;
-  bool _pressed = false;
+  Timer? _releaseTimer;
+  DateTime? _tapDownTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    if (_pressController == null) {
+      final pressController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 90),
+        reverseDuration: const Duration(milliseconds: 260),
+      );
+      _pressAnimation = Tween<double>(begin: 1.0, end: 0.91).animate(
+        CurvedAnimation(
+          parent: pressController,
+          curve: Curves.easeOutQuad,
+          reverseCurve: Curves.easeOutBack,
+        ),
+      );
+      _pressController = pressController;
+    }
+
+    if (_hoverController == null) {
+      final hoverController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 180),
+      );
+      _hoverAnimation = Tween<double>(begin: 1.0, end: 1.045).animate(
+        CurvedAnimation(
+          parent: hoverController,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeOutCubic,
+        ),
+      );
+      _hoverController = hoverController;
+    }
+  }
+
+  @override
+  void dispose() {
+    _releaseTimer?.cancel();
+    _pressController?.dispose();
+    _hoverController?.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails _) {
+    _initAnimations();
+    _releaseTimer?.cancel();
+    _tapDownTime = DateTime.now();
+    _pressController?.forward();
+  }
+
+  void _handleRelease() {
+    final elapsed = _tapDownTime != null
+        ? DateTime.now().difference(_tapDownTime!).inMilliseconds
+        : 90;
+    final remaining = (65 - elapsed).clamp(0, 65);
+    _releaseTimer?.cancel();
+    if (remaining > 0) {
+      _releaseTimer = Timer(Duration(milliseconds: remaining), () {
+        if (mounted) _pressController?.reverse();
+      });
+    } else {
+      _pressController?.reverse();
+    }
+  }
+
+  void _handleTapUp(TapUpDetails _) {
+    _handleRelease();
+  }
+
+  void _handleTapCancel() {
+    _handleRelease();
+  }
 
   @override
   Widget build(BuildContext context) {
+    _initAnimations();
     final accents = context.accents;
     final motion = context.motion;
-    final glowAlpha = widget.isPlaying ? 0.38 : 0.26;
-    return MouseRegion(
+
+    final dynamicGlowAlpha = widget.isPlaying
+        ? (_hovered ? 0.44 : 0.36)
+        : (_hovered ? 0.28 : 0.18);
+    final dynamicBlurRadius = widget.isPlaying
+        ? (_hovered ? 28.0 : 22.0)
+        : (_hovered ? 20.0 : 16.0);
+    final dynamicSpreadRadius = widget.isPlaying ? 1.5 : 0.5;
+
+    Widget button = MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _pressed = false;
-      }),
+      onEnter: (_) {
+        setState(() => _hovered = true);
+        _initAnimations();
+        _hoverController?.forward();
+      },
+      onExit: (_) {
+        setState(() {
+          _hovered = false;
+          _handleRelease();
+        });
+        _hoverController?.reverse();
+      },
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedScale(
-          scale: _pressed ? 0.95 : (_hovered ? 1.035 : 1),
-          duration: motion.microInteractionDuration,
-          curve: motion.fast,
-          child: AnimatedContainer(
-            duration: motion.controlTransitionDuration,
-            curve: motion.normal,
-            width: widget.size,
-            height: widget.size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.lerp(accents.accent, Colors.white, 0.18)!,
-                  accents.accent,
-                  Color.lerp(accents.accent, Colors.black, 0.08)!,
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accents.accentGlow.withValues(
-                    alpha: _hovered ? glowAlpha + 0.06 : glowAlpha - 0.04,
+        behavior: HitTestBehavior.opaque,
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
+        onTap: widget.onPressed,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_pressController!, _hoverController!]),
+          builder: (context, child) {
+            final pressScale = _pressAnimation.value;
+            final hoverScale = _hoverAnimation.value;
+            final combinedScale = pressScale * hoverScale;
+
+            return Transform.scale(
+              scale: combinedScale,
+              child: AnimatedContainer(
+                duration: motion.controlTransitionDuration,
+                curve: motion.normal,
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(accents.accent, Colors.white, 0.24)!,
+                      accents.accent,
+                      Color.lerp(accents.accent, Colors.black, 0.10)!,
+                    ],
                   ),
-                  blurRadius: widget.isPlaying ? 28 : 22,
-                  spreadRadius: widget.isPlaying ? 3 : 1,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    width: 0.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accents.accentGlow.withValues(alpha: dynamicGlowAlpha),
+                      blurRadius: dynamicBlurRadius,
+                      spreadRadius: dynamicSpreadRadius,
+                      offset: const Offset(0, 3),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                enableFeedback: false,
-                customBorder: const CircleBorder(),
-                onTap: widget.onPressed,
-                child: AnimatedSwitcher(
-                  duration: motion.microInteractionDuration,
-                  switchInCurve: motion.emphasized,
-                  switchOutCurve: motion.fast,
-                  transitionBuilder: (child, animation) {
-                    final curved = CurvedAnimation(
-                      parent: animation,
-                      curve: motion.emphasized,
-                    );
-                    return FadeTransition(
-                      opacity: curved,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.78, end: 1)
-                            .animate(curved),
-                        child: child,
+                child: child,
+              ),
+            );
+          },
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              reverseDuration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.linear,
+              switchOutCurve: Curves.linear,
+              transitionBuilder: (child, animation) {
+                final isPlay = (child.key as ValueKey?)?.value == Symbols.play_arrow_rounded ||
+                    (child.key as ValueKey?)?.value == Symbols.play_arrow;
+                return FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: const Interval(0.0, 0.85, curve: Curves.easeOut),
+                  ),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.68, end: 1.0).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutBack,
                       ),
-                    );
-                  },
-                  child: Icon(
-                    widget.icon,
-                    key: ValueKey(widget.icon),
-                    color: accents.onAccent,
-                    size: widget.size < 60 ? 24 : 28,
+                    ),
+                    child: RotationTransition(
+                      turns: Tween<double>(
+                        begin: isPlay ? -0.08 : 0.08,
+                        end: 0.0,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                      child: child,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
+              child: _buildPrimaryIcon(accents),
             ),
           ),
         ),
+      ),
+    );
+
+    return button;
+  }
+
+  Widget _buildPrimaryIcon(dynamic accents) {
+    final isPlay = widget.icon == Symbols.play_arrow_rounded ||
+        widget.icon == Symbols.play_arrow;
+    final iconSize = widget.size < 60 ? 26.0 : 30.0;
+
+    return Transform.translate(
+      key: ValueKey(widget.icon),
+      offset: Offset(isPlay ? 1.5 : 0.0, 0.0),
+      child: Icon(
+        widget.icon,
+        key: ValueKey(widget.icon),
+        color: accents.onAccent,
+        size: iconSize,
+        fill: 1.0,
+        weight: 700,
+        grade: 0.25,
+        opticalSize: 28,
       ),
     );
   }
@@ -1204,9 +1586,9 @@ class _VolumeControlState extends State<_VolumeControl>
             : 0.0;
         final showSlider = effectiveWidth >= minInteractiveSliderWidth;
         final icon = switch (current) {
-          <= 0 => Symbols.volume_off,
-          < 0.35 => Symbols.volume_down,
-          _ => Symbols.volume_up,
+          <= 0 => Symbols.volume_off_rounded,
+          < 0.35 => Symbols.volume_down_rounded,
+          _ => Symbols.volume_up_rounded,
         };
 
         final double targetX = showSlider
@@ -1454,8 +1836,8 @@ class _DesktopLyricControl extends StatelessWidget {
               icon: ready
                   ? Icon(
                       desktopLyricService.isLocked
-                          ? Symbols.lock
-                          : Symbols.toast,
+                          ? Symbols.lock_rounded
+                          : Symbols.toast_rounded,
                       fill: enabled ? 1 : 0,
                     )
                   : const SizedBox(
@@ -1583,7 +1965,7 @@ class _QueueEntryButton extends StatelessWidget {
                                 variant: CpButtonVariant.immersive,
                                 tooltip: '关闭',
                                 onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Symbols.close),
+                                icon: const Icon(Symbols.close_rounded),
                               ),
                             ],
                           ),
@@ -1640,7 +2022,7 @@ class _QueueEntryButton extends StatelessWidget {
           onPressed: canOpenQueue ? () => _openQueueDrawer(context) : null,
           icon: Badge(
             label: Text('${playlist.length}'),
-            child: const Icon(Symbols.queue_music),
+            child: const Icon(Symbols.queue_music_rounded),
           ),
         );
       },

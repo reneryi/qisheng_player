@@ -15,7 +15,7 @@ class ArtistSeparatorEditor extends StatelessWidget {
     return SettingsTile(
       description: "自定义艺术家分隔符",
       action: FilledButton.icon(
-        icon: const Icon(Symbols.edit),
+        icon: const Icon(Symbols.edit_rounded),
         label: const Text("管理艺术家分隔符"),
         onPressed: () {
           showModernDialog(
@@ -58,7 +58,7 @@ class __ArtistSeparatorEditDialogState
                 children.remove(currEditController.text);
               });
             },
-            icon: const Icon(Symbols.remove),
+            icon: const Icon(Symbols.remove_rounded),
           ),
         );
         editing = false;
@@ -79,7 +79,7 @@ class __ArtistSeparatorEditDialogState
               children.remove(item);
             });
           },
-          icon: const Icon(Symbols.remove),
+          icon: const Icon(Symbols.remove_rounded),
         ),
       );
     }
@@ -105,7 +105,7 @@ class __ArtistSeparatorEditDialogState
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Symbols.edit,
+                    Symbols.edit_rounded,
                     size: 20,
                     color: scheme.primary,
                   ),
@@ -156,7 +156,7 @@ class __ArtistSeparatorEditDialogState
                             decoration: InputDecoration(
                               suffixIcon: IconButton(
                                 onPressed: _addArtistSeparator,
-                                icon: const Icon(Symbols.done),
+                                icon: const Icon(Symbols.done_rounded),
                               ),
                             ),
                             onSubmitted: (value) {

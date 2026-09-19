@@ -95,7 +95,7 @@ class ThemeSelector extends StatelessWidget {
           await AppSettings.instance.saveSettings();
         },
         label: const Text("选择颜色"),
-        icon: const Icon(Symbols.palette),
+        icon: const Icon(Symbols.palette_rounded),
       ),
     );
   }
@@ -128,12 +128,12 @@ class _ThemeModeControlState extends State<ThemeModeControl> {
         segments: const [
           ButtonSegment<ThemeMode>(
             value: ThemeMode.light,
-            icon: Icon(Symbols.light_mode),
+            icon: Icon(Symbols.light_mode_rounded),
             label: Text("浅色"),
           ),
           ButtonSegment<ThemeMode>(
             value: ThemeMode.dark,
-            icon: Icon(Symbols.dark_mode),
+            icon: Icon(Symbols.dark_mode_rounded),
             label: Text("深色"),
           ),
         ],
@@ -275,22 +275,22 @@ class _WindowBackdropModeControlState extends State<WindowBackdropModeControl> {
           segments: const [
             ButtonSegment<WindowBackdropMode>(
               value: WindowBackdropMode.defaultGradient,
-              icon: Icon(Symbols.gradient, size: 18),
+              icon: Icon(Symbols.gradient_rounded, size: 18),
               label: Text("默认"),
             ),
             ButtonSegment<WindowBackdropMode>(
               value: WindowBackdropMode.meshFlow,
-              icon: Icon(Symbols.bubble_chart, size: 18),
+              icon: Icon(Symbols.bubble_chart_rounded, size: 18),
               label: Text("弥散流彩"),
             ),
             ButtonSegment<WindowBackdropMode>(
               value: WindowBackdropMode.waterRipple,
-              icon: Icon(Symbols.waves, size: 18),
+              icon: Icon(Symbols.waves_rounded, size: 18),
               label: Text("水波纹"),
             ),
             ButtonSegment<WindowBackdropMode>(
               value: WindowBackdropMode.prismaticGlass,
-              icon: Icon(Symbols.lens_blur, size: 18),
+              icon: Icon(Symbols.lens_blur_rounded, size: 18),
               label: Text("极光漫染"),
             ),
           ],
@@ -654,7 +654,7 @@ class SelectFontCombobox extends StatelessWidget {
               }
             },
             label: const Text("选择字体"),
-            icon: const Icon(Symbols.text_fields),
+            icon: const Icon(Symbols.text_fields_rounded),
           ),
           OutlinedButton.icon(
             onPressed: () async {
@@ -666,7 +666,7 @@ class SelectFontCombobox extends StatelessWidget {
               }
             },
             label: const Text("添加字体"),
-            icon: const Icon(Symbols.add),
+            icon: const Icon(Symbols.add_rounded),
           ),
           if (hasCustomFont)
             TextButton.icon(
@@ -674,7 +674,7 @@ class SelectFontCombobox extends StatelessWidget {
                 await _resetToDefaultFont();
               },
               label: const Text("恢复默认"),
-              icon: const Icon(Symbols.restart_alt),
+              icon: const Icon(Symbols.restart_alt_rounded),
             ),
         ],
       ),
@@ -1104,7 +1104,7 @@ class _FontSelectorState extends State<_FontSelector> {
             IconButton(
               tooltip: "返回字体列表",
               icon: Icon(
-                Symbols.arrow_back,
+                Symbols.arrow_back_rounded,
                 size: 20,
                 color: scheme.onSurface,
               ),
@@ -1255,7 +1255,7 @@ class _FontSelectorState extends State<_FontSelector> {
                             IconButton(
                               tooltip: "删除该规格",
                               icon: Icon(
-                                Symbols.delete_outline,
+                                Symbols.delete_outline_rounded,
                                 size: 18,
                                 color: scheme.error,
                               ),
@@ -1296,7 +1296,7 @@ class _FontSelectorState extends State<_FontSelector> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 visualDensity: VisualDensity.compact,
               ),
-              icon: const Icon(Symbols.arrow_back, size: 16),
+              icon: const Icon(Symbols.arrow_back_rounded, size: 16),
               label: const Text("返回字体列表"),
               onPressed: () => setState(() => _activeFamily = null),
             );
@@ -1309,7 +1309,7 @@ class _FontSelectorState extends State<_FontSelector> {
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     visualDensity: VisualDensity.compact,
                   ),
-                  icon: const Icon(Symbols.auto_awesome, size: 16),
+                  icon: const Icon(Symbols.auto_awesome_rounded, size: 16),
                   label: const Text("应用全字重家族"),
                   onPressed: () => _popWithResult(
                     _FontSelectorResult(
@@ -1380,7 +1380,7 @@ class _FontSelectorState extends State<_FontSelector> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Symbols.text_fields,
+                Symbols.text_fields_rounded,
                 size: 20,
                 color: scheme.primary,
               ),
@@ -1428,10 +1428,10 @@ class _FontSelectorState extends State<_FontSelector> {
           controller: _searchController,
           decoration: InputDecoration(
             hintText: "搜索字体...",
-            prefixIcon: const Icon(Symbols.search, size: 18),
+            prefixIcon: const Icon(Symbols.search_rounded, size: 18),
             suffixIcon: _filter.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Symbols.clear, size: 18),
+                    icon: const Icon(Symbols.clear_rounded, size: 18),
                     onPressed: () {
                       _searchController.clear();
                       setState(() => _filter = '');
@@ -1470,7 +1470,7 @@ class _FontSelectorState extends State<_FontSelector> {
                               borderRadius: BorderRadius.circular(8.0),
                             ),
                             leading: Icon(
-                              Symbols.font_download,
+                              Symbols.font_download_rounded,
                               color: theme.fontFamily == null
                                   ? scheme.primary
                                   : scheme.onSurfaceVariant,
@@ -1661,7 +1661,7 @@ class _FontSelectorState extends State<_FontSelector> {
               ),
               const SizedBox(width: 4),
               Icon(
-                Symbols.chevron_right,
+                Symbols.chevron_right_rounded,
                 size: 18,
                 color: scheme.onSurfaceVariant,
               ),
@@ -1670,7 +1670,7 @@ class _FontSelectorState extends State<_FontSelector> {
               IconButton(
                 tooltip: "删除字体",
                 icon: Icon(
-                  Symbols.delete_outline,
+                  Symbols.delete_outline_rounded,
                   size: 18,
                   color: scheme.error,
                 ),
@@ -1794,7 +1794,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
                   settings.notifyBackgroundChanged();
                   await settings.saveSettings();
                 },
-                icon: const Icon(Symbols.image),
+                icon: const Icon(Symbols.image_rounded),
                 label: Text(hasBackground ? "更换背景" : "选择背景"),
               ),
               FilledButton.tonalIcon(
@@ -1807,7 +1807,7 @@ class _BackgroundImageSettingsState extends State<BackgroundImageSettings> {
                         await settings.saveSettings();
                       }
                     : null,
-                icon: const Icon(Symbols.delete),
+                icon: const Icon(Symbols.delete_rounded),
                 label: const Text("清除"),
               ),
             ],
@@ -1868,17 +1868,17 @@ class ProgressBarTypeControl extends StatelessWidget {
             segments: const [
               ButtonSegment<ProgressBarType>(
                 value: ProgressBarType.fluidGlow,
-                icon: Icon(Symbols.linear_scale),
+                icon: Icon(Symbols.linear_scale_rounded),
                 label: Text("流体微光"),
               ),
               ButtonSegment<ProgressBarType>(
                 value: ProgressBarType.adaptiveWaveform,
-                icon: Icon(Symbols.graphic_eq),
+                icon: Icon(Symbols.graphic_eq_rounded),
                 label: Text("动态声波"),
               ),
               ButtonSegment<ProgressBarType>(
                 value: ProgressBarType.dualLayerRhythm,
-                icon: Icon(Symbols.blur_on),
+                icon: Icon(Symbols.blur_on_rounded),
                 label: Text("灵动呼吸"),
               ),
             ],

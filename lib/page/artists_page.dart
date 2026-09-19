@@ -27,7 +27,7 @@ class ArtistsPage extends StatelessWidget {
       ),
       tableMaxCrossAxisExtent: 250,
       primaryAction: FilledButton.tonalIcon(
-        icon: const Icon(Symbols.auto_awesome, size: 18),
+        icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
         label: const Text('一键匹配头像'),
         onPressed: () => showBatchArtworkMatchDialog(
           context,
@@ -41,7 +41,7 @@ class ArtistsPage extends StatelessWidget {
       enableContentViewSwitch: true,
       sortMethods: [
         SortMethodDesc(
-          icon: Symbols.title,
+          icon: Symbols.title_rounded,
           name: "名称",
           method: (list, order) {
             switch (order) {
@@ -55,7 +55,7 @@ class ArtistsPage extends StatelessWidget {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.music_note,
+          icon: Symbols.music_note_rounded,
           name: "作品数量",
           method: (list, order) {
             switch (order) {

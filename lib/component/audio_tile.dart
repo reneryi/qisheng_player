@@ -440,7 +440,7 @@ class _AudioTileState extends State<AudioTile> {
                                                   }
                                                 },
                                                 icon: const Icon(
-                                                    Symbols.more_vert),
+                                                    Symbols.more_vert_rounded),
                                                 color: textColor.withValues(
                                                   alpha: 0.76,
                                                 ),

@@ -116,7 +116,7 @@ class _AudiosPageState extends State<AudiosPage> {
           tooltipDirection: ModernTooltipDirection.bottom,
           onPressed: _toggleLyricPreview,
           icon: Icon(
-            Symbols.lyrics,
+            Symbols.lyrics_rounded,
             fill: _showLyricPreview ? 1 : 0,
             color: _showLyricPreview
                 ? Theme.of(context).colorScheme.primary
@@ -151,7 +151,7 @@ class _AudiosPageState extends State<AudiosPage> {
       rightPaneWidth: 284,
       sortMethods: [
         SortMethodDesc(
-          icon: Symbols.title,
+          icon: Symbols.title_rounded,
           name: "标题",
           method: (list, order) {
             switch (order) {
@@ -165,7 +165,7 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.artist,
+          icon: Symbols.artist_rounded,
           name: "艺术家",
           method: (list, order) {
             switch (order) {
@@ -179,7 +179,7 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.album,
+          icon: Symbols.album_rounded,
           name: "专辑",
           method: (list, order) {
             switch (order) {
@@ -193,7 +193,7 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.add,
+          icon: Symbols.add_rounded,
           name: "创建时间",
           method: (list, order) {
             switch (order) {
@@ -207,7 +207,7 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.edit,
+          icon: Symbols.edit_rounded,
           name: "修改时间",
           method: (list, order) {
             switch (order) {
@@ -221,7 +221,7 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.bar_chart,
+          icon: Symbols.bar_chart_rounded,
           name: "播放次数",
           method: (list, order) {
             switch (order) {

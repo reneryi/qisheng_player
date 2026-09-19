@@ -88,7 +88,7 @@ class _AudioGridTileState extends State<AudioGridTile> {
           ),
           child: Center(
             child: Icon(
-              Symbols.music_note,
+              Symbols.music_note_rounded,
               size: 44.0,
               color: scheme.onSurface.withValues(alpha: 0.38),
             ),
@@ -322,7 +322,7 @@ class _AudioGridTileState extends State<AudioGridTile> {
                                       ),
                                     ),
                                     child: Icon(
-                                      Symbols.play_arrow,
+                                      Symbols.play_arrow_rounded,
                                       size: 16,
                                       color: scheme.primary,
                                     ),

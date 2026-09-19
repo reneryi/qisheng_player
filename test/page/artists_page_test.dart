@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/page/artists_page.dart';
@@ -79,7 +80,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final findItems = find.byType(Tooltip);
+    final findItems = find.byType(ArtistTile);
     expect(findItems, findsWidgets);
 
     // Find all rendered artist tiles

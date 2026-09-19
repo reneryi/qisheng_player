@@ -35,12 +35,12 @@ class _DefaultLyricSourceControlState extends State<DefaultLyricSourceControl> {
         segments: const [
           ButtonSegment<bool>(
             value: true,
-            icon: Icon(Symbols.cloud_off),
+            icon: Icon(Symbols.cloud_off_rounded),
             label: Text("本地"),
           ),
           ButtonSegment<bool>(
             value: false,
-            icon: Icon(Symbols.cloud),
+            icon: Icon(Symbols.cloud_rounded),
             label: Text("在线"),
           ),
         ],
@@ -192,6 +192,10 @@ class _LyricOptionButton extends StatelessWidget {
                   color: selected
                       ? activeFg
                       : scheme.onSurfaceVariant.withValues(alpha: 0.70),
+                  fill: 1.0,
+                  weight: selected ? 700 : 600,
+                  grade: 0.25,
+                  opticalSize: 20,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -223,6 +227,8 @@ class _LyricOptionButton extends StatelessWidget {
                           Symbols.check_rounded,
                           size: 13,
                           color: activeBg,
+                          fill: 1.0,
+                          weight: 700,
                         )
                       : null,
                 ),
@@ -288,7 +294,7 @@ class AudioLibraryEditor extends StatelessWidget {
     return SettingsTile(
       description: "文件夹管理",
       action: FilledButton.icon(
-        icon: const Icon(Symbols.folder),
+        icon: const Icon(Symbols.folder_rounded),
         label: const Text("文件夹管理"),
         onPressed: () {
           showModernDialog(
@@ -325,10 +331,10 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
     final scheme = Theme.of(context).colorScheme;
 
     return ModernDialogFrame(
-      maxWidth: 480.0,
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      maxWidth: 580,
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
       child: SizedBox(
-        height: 450.0,
+        height: 460,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -342,7 +348,7 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Symbols.folder,
+                    Symbols.folder_rounded,
                     size: 20,
                     color: scheme.primary,
                   ),
@@ -388,7 +394,7 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                                   folders.removeAt(i);
                                 });
                               },
-                              icon: const Icon(Symbols.delete),
+                              icon: const Icon(Symbols.delete_rounded),
                             ),
                           ),
                         )
@@ -549,7 +555,7 @@ class HotkeySettingsTile extends StatelessWidget {
             builder: (context) => const _HotkeySettingsDialog(),
           );
         },
-        icon: const Icon(Symbols.keyboard),
+        icon: const Icon(Symbols.keyboard_rounded),
         label: const Text("配置快捷键"),
       ),
     );
@@ -585,7 +591,7 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Symbols.keyboard,
+                    Symbols.keyboard_rounded,
                     size: 20,
                     color: scheme.primary,
                   ),
@@ -649,7 +655,7 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                                   action, captured);
                               if (mounted) setState(() {});
                             },
-                            icon: const Icon(Symbols.keyboard),
+                            icon: const Icon(Symbols.keyboard_rounded),
                           ),
                           IconButton(
                             tooltip: "恢复默认",
@@ -657,7 +663,7 @@ class _HotkeySettingsDialogState extends State<_HotkeySettingsDialog> {
                               await HotkeysHelper.resetToDefault(action);
                               if (mounted) setState(() {});
                             },
-                            icon: const Icon(Symbols.restore),
+                            icon: const Icon(Symbols.restore_rounded),
                           ),
                         ],
                       ),
@@ -754,7 +760,7 @@ class _HotkeyCaptureDialogState extends State<_HotkeyCaptureDialog> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Symbols.keyboard,
+                  Symbols.keyboard_rounded,
                   size: 20,
                   color: scheme.primary,
                 ),

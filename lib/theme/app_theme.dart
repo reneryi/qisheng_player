@@ -141,6 +141,20 @@ class AppTheme {
         accents,
         visuals,
       ),
+      iconTheme: IconThemeData(
+        color: colorScheme.onSurface,
+        fill: 1.0,
+        weight: 600,
+        grade: 0.25,
+        opticalSize: 24,
+      ),
+      primaryIconTheme: IconThemeData(
+        color: accents.onAccent,
+        fill: 1.0,
+        weight: 600,
+        grade: 0.25,
+        opticalSize: 24,
+      ),
       inputDecorationTheme: AppComponentThemes.inputDecorationTheme(
         colorScheme,
         surfaces,
@@ -179,7 +193,7 @@ class AppTheme {
           color: accents.accent.computeLuminance() > 0.45
               ? const Color(0xFF1C1B1F)
               : Colors.white,
-          fontSize: 13.5,
+          fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),

@@ -48,13 +48,13 @@ class AudioDetailPage extends StatelessWidget {
             extra: audio,
           );
         },
-        icon: const Icon(Symbols.my_location),
+        icon: const Icon(Symbols.my_location_rounded),
         label: const Text('定位到音乐列表'),
       ),
       secondaryActions: [
         OutlinedButton.icon(
           onPressed: () => _openInExplorer(context),
-          icon: const Icon(Symbols.folder_open),
+          icon: const Icon(Symbols.folder_open_rounded),
           label: const Text('在资源管理器中显示'),
         ),
       ],
@@ -218,7 +218,7 @@ class _AudioDetailHero extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Icon(
-        Symbols.broken_image,
+        Symbols.broken_image_rounded,
         size: 48,
         color: scheme.onSurface.withValues(alpha: 0.64),
       ),
@@ -286,17 +286,17 @@ class _AudioDetailHero extends StatelessWidget {
                 runSpacing: 10,
                 children: [
                   _AudioMetadataChip(
-                    icon: Symbols.audio_file,
+                    icon: Symbols.audio_file_rounded,
                     label: audio.qualitySummary,
                   ),
                   _AudioMetadataChip(
-                    icon: Symbols.schedule,
+                    icon: Symbols.schedule_rounded,
                     label: Duration(
                       milliseconds: (audio.duration * 1000).toInt(),
                     ).toStringHMMSS(),
                   ),
                   _AudioMetadataChip(
-                    icon: Symbols.bar_chart,
+                    icon: Symbols.bar_chart_rounded,
                     label: '播放 ${PlayCountStore.instance.get(audio)} 次',
                   ),
                 ],

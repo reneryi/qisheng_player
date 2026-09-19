@@ -43,7 +43,7 @@ List<Widget> buildAlbumContextMenuChildren(
       onPressed: works.isEmpty
           ? null
           : () => PlayService.instance.playbackService.play(0, works),
-      leadingIcon: const Icon(Symbols.play_arrow),
+      leadingIcon: const Icon(Symbols.play_arrow_rounded),
       child: const Text('播放专辑'),
     ),
     MenuItemButton(
@@ -56,7 +56,7 @@ List<Widget> buildAlbumContextMenuChildren(
                 playback.addToNext(audio);
               }
             },
-      leadingIcon: const Icon(Symbols.plus_one),
+      leadingIcon: const Icon(Symbols.plus_one_rounded),
       child: const Text('下一首播放'),
     ),
     MenuItemButton(
@@ -69,7 +69,7 @@ List<Widget> buildAlbumContextMenuChildren(
               }
               showTextOnSnackBar('已追加专辑「${album.name}」到队列');
             },
-      leadingIcon: const Icon(Symbols.playlist_add),
+      leadingIcon: const Icon(Symbols.playlist_add_rounded),
       child: const Text('追加到队列'),
     ),
     SubmenuButton(
@@ -95,7 +95,7 @@ List<Widget> buildAlbumContextMenuChildren(
                         : '已添加 $added 首歌曲到歌单「${playlist.name}」',
                   );
                 },
-                leadingIcon: const Icon(Symbols.queue_music),
+                leadingIcon: const Icon(Symbols.queue_music_rounded),
                 child: Text(playlist.name),
               ),
             ),
@@ -105,7 +105,7 @@ List<Widget> buildAlbumContextMenuChildren(
     ),
     MenuItemButton(
       onPressed: () => context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album),
-      leadingIcon: const Icon(Symbols.album),
+      leadingIcon: const Icon(Symbols.album_rounded),
       child: const Text('查看专辑详情'),
     ),
     if (album.artistsMap.isNotEmpty)
@@ -119,7 +119,7 @@ List<Widget> buildAlbumContextMenuChildren(
                     app_paths.ARTIST_DETAIL_PAGE,
                     extra: artist,
                   ),
-                  leadingIcon: const Icon(Symbols.artist),
+                  leadingIcon: const Icon(Symbols.artist_rounded),
                   child: Text(artist.name),
                 ),
               )
@@ -138,7 +138,7 @@ List<Widget> buildAlbumContextMenuChildren(
                 showTextOnSnackBar('无法在资源管理器中定位专辑文件');
               }
             },
-      leadingIcon: const Icon(Symbols.folder_open),
+      leadingIcon: const Icon(Symbols.folder_open_rounded),
       child: const Text('定位首曲文件'),
     ),
   ];

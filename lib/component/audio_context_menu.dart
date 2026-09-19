@@ -151,14 +151,14 @@ List<Widget> buildAudioContextMenuChildren(
             : list.indexOf(audio);
         playback.play(index < 0 ? 0 : index, list);
       },
-      leadingIcon: const Icon(Symbols.play_arrow),
+      leadingIcon: const Icon(Symbols.play_arrow_rounded),
       child: const Text("播放"),
     ),
     MenuItemButton(
       onPressed: () {
         PlayService.instance.playbackService.addToNext(audio);
       },
-      leadingIcon: const Icon(Symbols.plus_one),
+      leadingIcon: const Icon(Symbols.plus_one_rounded),
       child: const Text("下一首播放"),
     ),
     MenuItemButton(
@@ -166,7 +166,7 @@ List<Widget> buildAudioContextMenuChildren(
         PlayService.instance.playbackService.addToQueue(audio);
         showTextOnSnackBar("已追加「${audio.title}」到队列末尾");
       },
-      leadingIcon: const Icon(Symbols.playlist_add),
+      leadingIcon: const Icon(Symbols.playlist_add_rounded),
       child: const Text("追加到队列"),
     ),
     SubmenuButton(
@@ -195,7 +195,7 @@ List<Widget> buildAudioContextMenuChildren(
               scheduleSavePlaylists();
               showTextOnSnackBar("已创建歌单“$trimmed”并添加当前歌曲");
             },
-            leadingIcon: const Icon(Symbols.add),
+            leadingIcon: const Icon(Symbols.add_rounded),
             child: const Text("新建歌单并添加"),
           ),
           if (PLAYLISTS.isEmpty)
@@ -218,7 +218,7 @@ List<Widget> buildAudioContextMenuChildren(
                     "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
                   );
                 },
-                leadingIcon: const Icon(Symbols.queue_music),
+                leadingIcon: const Icon(Symbols.queue_music_rounded),
                 child: Text(PLAYLISTS[i].name),
               ),
             ),
@@ -241,7 +241,7 @@ List<Widget> buildAudioContextMenuChildren(
                   if (artist == null) return;
                   context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist);
                 },
-                leadingIcon: const Icon(Symbols.artist),
+                leadingIcon: const Icon(Symbols.artist_rounded),
                 child: Text(artistName),
               );
             },
@@ -255,7 +255,7 @@ List<Widget> buildAudioContextMenuChildren(
         if (album == null) return;
         context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album);
       },
-      leadingIcon: const Icon(Symbols.album),
+      leadingIcon: const Icon(Symbols.album_rounded),
       child: Text(audio.album),
     ),
     MenuItemButton(
@@ -265,7 +265,7 @@ List<Widget> buildAudioContextMenuChildren(
           showTextOnSnackBar("无法在资源管理器中定位：${audio.mediaPath}");
         }
       },
-      leadingIcon: const Icon(Symbols.folder_open),
+      leadingIcon: const Icon(Symbols.folder_open_rounded),
       child: const Text("定位到本地文件"),
     ),
     MenuItemButton(
@@ -274,14 +274,14 @@ List<Widget> buildAudioContextMenuChildren(
                 context: context,
                 builder: (context) => AudioEditDialog(audio: audio),
               ),
-      leadingIcon: const Icon(Symbols.lyrics),
+      leadingIcon: const Icon(Symbols.lyrics_rounded),
       child: const Text("匹配歌词 / 音乐编辑"),
     ),
     MenuItemButton(
       onPressed: () {
         context.push(app_paths.AUDIO_DETAIL_PAGE, extra: audio);
       },
-      leadingIcon: const Icon(Symbols.info),
+      leadingIcon: const Icon(Symbols.info_rounded),
       child: const Text("详细信息"),
     ),
   ];

@@ -26,7 +26,7 @@ class ShufflePlay<T> extends StatelessWidget {
       onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
         contentList as List<Audio>,
       ),
-      icon: const Icon(Symbols.shuffle),
+      icon: const Icon(Symbols.shuffle_rounded),
       label: const Text("随机播放"),
       style: const ButtonStyle(
         enableFeedback: false,
@@ -161,7 +161,7 @@ class SortMethodComboBox<T> extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Symbols.sort,
+                          Symbols.sort_rounded,
                           size: 24,
                           color: scheme.onSecondaryContainer,
                         ),
@@ -172,7 +172,7 @@ class SortMethodComboBox<T> extends StatelessWidget {
                         ),
                         const SizedBox(width: 4.0),
                         Icon(
-                          Symbols.arrow_drop_down,
+                          Symbols.arrow_drop_down_rounded,
                           size: 24,
                           color: scheme.onSecondaryContainer,
                         ),
@@ -203,7 +203,7 @@ class SortOrderSwitch<T> extends StatelessWidget {
       onPressed: () => setSortOrder(
         isAscending ? SortOrder.descending : SortOrder.ascending,
       ),
-      icon: Icon(isAscending ? Symbols.arrow_upward : Symbols.arrow_downward),
+      icon: Icon(isAscending ? Symbols.arrow_upward_rounded : Symbols.arrow_downward_rounded),
     );
   }
 }
@@ -217,9 +217,9 @@ class ContentViewSwitch<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, tooltip, nextView) = switch (contentView) {
-      ContentView.list => (Symbols.list, "列表视图", ContentView.table),
-      ContentView.table => (Symbols.table, "表格视图", ContentView.grid),
-      ContentView.grid => (Symbols.grid_view, "网格视图", ContentView.list),
+      ContentView.list => (Symbols.list_rounded, "列表视图", ContentView.table),
+      ContentView.table => (Symbols.table_rounded, "表格视图", ContentView.grid),
+      ContentView.grid => (Symbols.grid_view_rounded, "网格视图", ContentView.list),
     };
 
     return CpIconButton(
@@ -291,7 +291,7 @@ class AddAllToPlaylist extends StatelessWidget {
                       ),
                     ),
                     child: Icon(
-                      Symbols.queue_music,
+                      Symbols.queue_music_rounded,
                       color: scheme.primary,
                       size: 22,
                     ),
@@ -370,7 +370,7 @@ class AddAllToPlaylist extends StatelessWidget {
                             child: Row(
                               children: [
                                 Icon(
-                                  Symbols.queue_music,
+                                  Symbols.queue_music_rounded,
                                   color: scheme.primary,
                                   size: 20,
                                 ),
@@ -428,7 +428,7 @@ class AddAllToPlaylist extends StatelessWidget {
                         Navigator.pop(context, playlist);
                       }
                     },
-                    icon: const Icon(Symbols.add, size: 16),
+                    icon: const Icon(Symbols.add_rounded, size: 16),
                     label: const Text("创建歌单"),
                   ),
                 ],
@@ -476,7 +476,7 @@ class AddAllToPlaylist extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton.icon(
       onPressed: () => _handleAddToPlaylist(context),
-      icon: const Icon(Symbols.add),
+      icon: const Icon(Symbols.add_rounded),
       label: const Text("添加到歌单"),
       style: const ButtonStyle(
         fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
@@ -727,7 +727,7 @@ class DeleteSelectedAudios extends StatelessWidget {
         backgroundColor: WidgetStatePropertyAll(scheme.error),
         foregroundColor: WidgetStatePropertyAll(scheme.onError),
       ),
-      icon: const Icon(Symbols.delete),
+      icon: const Icon(Symbols.delete_rounded),
     );
   }
 }
@@ -757,8 +757,8 @@ class MultiSelectSelectOrClearAll<T> extends StatelessWidget {
         },
         icon: Icon(
           multiSelectController.selected.isEmpty
-              ? Symbols.select_all
-              : Symbols.clear_all,
+              ? Symbols.select_all_rounded
+              : Symbols.clear_all_rounded,
         ),
       ),
     );
@@ -779,7 +779,7 @@ class MultiSelectExit<T> extends StatelessWidget {
         multiSelectController.useMultiSelectView(false);
         multiSelectController.clear();
       },
-      icon: const Icon(Symbols.cancel),
+      icon: const Icon(Symbols.cancel_rounded),
     );
   }
 }
@@ -842,7 +842,7 @@ class SharpCardDashboardHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12.0),
                 ),
                 child: Icon(
-                  Symbols.graphic_eq,
+                  Symbols.graphic_eq_rounded,
                   color: scheme.onPrimary,
                   size: 24,
                 ),
@@ -884,7 +884,7 @@ class SharpCardDashboardHeader extends StatelessWidget {
               ),
               const Spacer(),
               Icon(
-                Symbols.graphic_eq,
+                Symbols.graphic_eq_rounded,
                 color: scheme.onSurface.withValues(alpha: 0.3),
               ),
             ],

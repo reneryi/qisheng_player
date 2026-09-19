@@ -28,7 +28,7 @@ class AudioLyricPreviewPanel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
       child: audio == null
           ? _LyricPreviewEmptyState(
-              icon: Symbols.music_note,
+              icon: Symbols.music_note_rounded,
               title: '暂无正在播放的歌曲',
               message: '开始播放后，这里会显示封面、歌曲信息和歌词预览。',
               color: scheme.onSurface,
@@ -85,7 +85,7 @@ class AudioLyricPreviewPanel extends StatelessWidget {
                       final lyric = snapshot.data;
                       if (lyric == null || lyric.lines.isEmpty) {
                         return _LyricPreviewEmptyState(
-                          icon: Symbols.lyrics,
+                          icon: Symbols.lyrics_rounded,
                           title: '暂无歌词',
                           message: '当前歌曲还没有可用歌词。',
                           compact: true,
@@ -174,7 +174,7 @@ class _LyricPreviewArtworkState extends State<_LyricPreviewArtwork> {
       ),
       child: Center(
         child: Icon(
-          Symbols.music_note,
+          Symbols.music_note_rounded,
           size: 34,
           color: scheme.onSurface.withValues(alpha: 0.56),
         ),

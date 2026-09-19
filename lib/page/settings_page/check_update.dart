@@ -251,7 +251,7 @@ class _CheckForUpdateState extends State<CheckForUpdate> {
   Widget build(BuildContext context) {
     return Row(children: [
       FilledButton.icon(
-        icon: const Icon(Symbols.update),
+        icon: const Icon(Symbols.update_rounded),
         label: const Text("检查更新"),
         onPressed: isChecking
             ? null
@@ -340,7 +340,7 @@ class NewestUpdateView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Symbols.update,
+                    Symbols.update_rounded,
                     size: 20,
                     color: scheme.primary,
                   ),
@@ -427,7 +427,7 @@ class NewestUpdateView extends StatelessWidget {
 
                     Navigator.pop(context);
                   },
-                  icon: const Icon(Symbols.arrow_outward, size: 18),
+                  icon: const Icon(Symbols.arrow_outward_rounded, size: 18),
                   label: const Text("获取更新"),
                 ),
               ],
