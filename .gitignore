@@ -55,7 +55,7 @@ dist/windows/*
 
 # Local runtime preferences and agent session folders
 qisheng_player/
-.agents/*/
+.agents/
 
 # Temporary testing & diagnostic artifacts
 *.wav

@@ -2,7 +2,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/ui/modern_tooltip.dart';
+import 'package:qisheng_player/window_controls.dart';
 
 void main() {
   group('BubbleShapeBorder tests', () {
@@ -260,6 +264,242 @@ void main() {
       final tooltipTop = tester.getTopLeft(containerFinder).dy;
       final buttonBottom = tester.getBottomLeft(find.text('按钮')).dy;
       expect(tooltipTop, greaterThan(buttonBottom));
+    });
+  });
+
+  group('ModernTooltip.computePositionAndArrowOffset mathematical tests', () {
+    test('computes zero arrowOffset when target is centered horizontally', () {
+      final result = ModernTooltip.computePositionAndArrowOffset(
+        targetCenter: const Offset(400, 100),
+        targetSize: const Size(40, 40),
+        childSize: const Size(200, 40),
+        overlaySize: const Size(800, 600),
+        direction: ModernTooltipDirection.bottom,
+      );
+
+      // Ideal left = 400 - 100 = 300. Fits within margin 8 and right bound 800 - 200 - 8 = 592.
+      expect(result.offset.dx, 300.0);
+      expect(result.offset.dy, 100 + 20 + 6.0); // targetBottom + gap
+      expect(result.arrowOffset, 0.0);
+    });
+
+    test('computes positive arrowOffset when clamped on screen right boundary', () {
+      final result = ModernTooltip.computePositionAndArrowOffset(
+        targetCenter: const Offset(760, 100),
+        targetSize: const Size(40, 40),
+        childSize: const Size(240, 40),
+        overlaySize: const Size(800, 600),
+        direction: ModernTooltipDirection.bottom,
+      );
+
+      // Right boundary clamp = 800 - 240 - 8 = 552.
+      expect(result.offset.dx, 552.0);
+      // bubbleCenterX = 552 + 120 = 672.
+      // arrowOffset = 760 - 672 = 88.0.
+      expect(result.arrowOffset, 88.0);
+      // Verify tip aligns exactly with targetCenter.dx
+      expect(result.offset.dx + 240 / 2 + result.arrowOffset, 760.0);
+    });
+
+    test('computes negative arrowOffset when clamped on screen left boundary', () {
+      final result = ModernTooltip.computePositionAndArrowOffset(
+        targetCenter: const Offset(40, 100),
+        targetSize: const Size(40, 40),
+        childSize: const Size(240, 40),
+        overlaySize: const Size(800, 600),
+        direction: ModernTooltipDirection.bottom,
+      );
+
+      // Left boundary clamp = margin = 8.0.
+      expect(result.offset.dx, 8.0);
+      // bubbleCenterX = 8 + 120 = 128.
+      // arrowOffset = 40 - 128 = -88.0.
+      expect(result.arrowOffset, -88.0);
+      // Verify tip aligns exactly with targetCenter.dx
+      expect(result.offset.dx + 240 / 2 + result.arrowOffset, 40.0);
+    });
+
+    test('computes vertical arrowOffset for left and right directions when clamped', () {
+      // Near top edge, direction: left
+      final topResult = ModernTooltip.computePositionAndArrowOffset(
+        targetCenter: const Offset(500, 30),
+        targetSize: const Size(40, 40),
+        childSize: const Size(120, 80),
+        overlaySize: const Size(800, 600),
+        direction: ModernTooltipDirection.left,
+      );
+      expect(topResult.offset.dy, 8.0); // clamped to top margin
+      expect(topResult.arrowOffset, 30 - (8.0 + 40.0)); // 30 - 48 = -18.0
+      expect(topResult.offset.dy + 80 / 2 + topResult.arrowOffset, 30.0);
+
+      // Near bottom edge, direction: right
+      final bottomResult = ModernTooltip.computePositionAndArrowOffset(
+        targetCenter: const Offset(300, 580),
+        targetSize: const Size(40, 40),
+        childSize: const Size(120, 80),
+        overlaySize: const Size(800, 600),
+        direction: ModernTooltipDirection.right,
+      );
+      expect(bottomResult.offset.dy, 600 - 80 - 8.0); // 512.0
+      expect(bottomResult.arrowOffset, 580 - (512.0 + 40.0)); // 580 - 552 = 28.0
+      expect(bottomResult.offset.dy + 80 / 2 + bottomResult.arrowOffset, 580.0);
+    });
+  });
+
+  group('ModernTooltip widget right-clamp arrow alignment tests', () {
+    testWidgets('arrow offset aligns with button center when clamped at screen right', (tester) async {
+      tester.view.physicalSize = const Size(800, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20, right: 16),
+                child: ModernTooltip(
+                  message: '切换页面视图：当前为列表视图',
+                  direction: ModernTooltipDirection.bottom,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    color: Colors.blue,
+                    child: const Text('BTN'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final btnCenter = tester.getCenter(find.text('BTN'));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(btnCenter);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final textFinder = find.text('切换页面视图：当前为列表视图');
+      expect(textFinder, findsOneWidget);
+
+      final containerFinder =
+          find.ancestor(of: textFinder, matching: find.byType(Container)).first;
+      final container = tester.widget<Container>(containerFinder);
+      final decoration = container.decoration as ShapeDecoration;
+      final shape = decoration.shape as BubbleShapeBorder;
+
+      // Because the button is near right edge and tooltip is ~200px wide,
+      // arrowOffset must be positive to compensate for leftward clamp.
+      expect(shape.arrowOffset, greaterThan(20.0));
+
+      // Global tip X = containerTopLeft.dx + width / 2 + arrowOffset
+      final containerRect = tester.getRect(containerFinder);
+      final tipGlobalX = containerRect.left + containerRect.width / 2 + shape.arrowOffset;
+      expect((tipGlobalX - btnCenter.dx).abs(), lessThan(1.0));
+    });
+  });
+
+  group('R1: TopBar control buttons tooltip suppression & semantics tests', () {
+    testWidgets('CpIconButton with semanticsLabel renders no Tooltip and has semantics', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: CpIconButton(
+                icon: const Icon(Icons.arrow_back),
+                semanticsLabel: '返回',
+                onPressed: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Verify no Tooltip or ModernTooltip widget is mounted
+      expect(find.byType(Tooltip), findsNothing);
+      expect(find.byType(ModernTooltip), findsNothing);
+
+      // Verify Semantics label is present
+      expect(find.bySemanticsLabel('返回'), findsOneWidget);
+
+      // Hover over button and verify no tooltip appears
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(tester.getCenter(find.byType(CpIconButton)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Ensure no text overlay popped up
+      expect(find.text('返回'), findsNothing);
+    });
+
+    testWidgets('TitleBar navigation buttons have no Tooltip and retain Semantics', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                NavBackBtn(),
+                NavForwardBtn(),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Verify zero Tooltip widgets in Nav buttons
+      expect(find.descendant(of: find.byType(NavBackBtn), matching: find.byType(Tooltip)), findsNothing);
+      expect(find.descendant(of: find.byType(NavForwardBtn), matching: find.byType(Tooltip)), findsNothing);
+
+      // Verify Semantics labels are accessible
+      expect(find.bySemanticsLabel('返回'), findsOneWidget);
+      expect(find.bySemanticsLabel('前进'), findsOneWidget);
+    });
+
+    testWidgets('WindowControlls buttons have no Tooltip and update Semantics on layoutMode changes', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: WindowControlls(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify no Tooltip widget in WindowControlls
+      expect(find.descendant(of: find.byType(WindowControlls), matching: find.byType(Tooltip)), findsNothing);
+
+      // Verify semantics
+      expect(find.bySemanticsLabel('最大化'), findsOneWidget);
+      expect(find.bySemanticsLabel('最小化'), findsOneWidget);
+      expect(find.bySemanticsLabel('全屏'), findsOneWidget);
+      expect(find.bySemanticsLabel('退出'), findsOneWidget);
+
+      // Switch to maximized mode
+      WindowControls.layoutMode.value = WindowLayoutMode.maximized;
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('还原'), findsOneWidget);
+      expect(find.bySemanticsLabel('最大化'), findsNothing);
+
+      // Switch to fullscreen mode
+      WindowControls.layoutMode.value = WindowLayoutMode.fullscreen;
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('退出全屏'), findsOneWidget);
+      expect(find.bySemanticsLabel('全屏模式下不可用'), findsOneWidget);
+
+      // Reset back to normal
+      WindowControls.layoutMode.value = WindowLayoutMode.normal;
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('最大化'), findsOneWidget);
     });
   });
 }

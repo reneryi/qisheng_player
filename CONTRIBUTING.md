@@ -44,7 +44,7 @@ flutter analyze --no-fatal-infos
 flutter build windows --release
 Set-Location ..\..
 
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.0.0
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.4.0
 ```
 
 ## 分支与提交建议

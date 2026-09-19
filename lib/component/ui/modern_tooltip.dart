@@ -232,6 +232,17 @@ class ModernTooltipManager {
 ///
 /// 沿用音量数值指示气泡的设计规范：
 /// - 纯正强调色气泡与高对比度文字
+/// 气泡位置与箭头偏移计算结果
+class TooltipLayoutResult {
+  const TooltipLayoutResult({
+    required this.offset,
+    required this.arrowOffset,
+  });
+
+  final Offset offset;
+  final double arrowOffset;
+}
+
 /// - 带有指示箭头的圆角卡片
 /// - 弹出时微弹簧缩放+渐显动画（0.82 -> 1.0）
 /// - 穿透指针交互（IgnorePointer），杜绝遮挡临近交互按钮
@@ -256,6 +267,69 @@ class ModernTooltip extends StatefulWidget {
   final Duration exitDuration;
   final bool enabled;
   final double fontSize;
+
+  /// 计算气泡在 Overlay 中的放置坐标及动态箭头偏移量，确保尖角精准对齐目标中心
+  static TooltipLayoutResult computePositionAndArrowOffset({
+    required Offset targetCenter,
+    required Size targetSize,
+    required Size childSize,
+    required Size overlaySize,
+    required ModernTooltipDirection direction,
+    double margin = 8.0,
+    double gap = 6.0,
+  }) {
+    final targetLeft = targetCenter.dx - targetSize.width / 2;
+    final targetRight = targetCenter.dx + targetSize.width / 2;
+    final targetTop = targetCenter.dy - targetSize.height / 2;
+    final targetBottom = targetCenter.dy + targetSize.height / 2;
+
+    double x;
+    double y;
+    double arrowOffset = 0.0;
+
+    switch (direction) {
+      case ModernTooltipDirection.bottom:
+        final maxRight = (overlaySize.width - childSize.width - margin)
+            .clamp(margin, double.infinity);
+        x = (targetCenter.dx - childSize.width / 2).clamp(margin, maxRight);
+        y = targetBottom + gap;
+        final bubbleCenterX = x + childSize.width / 2;
+        arrowOffset = targetCenter.dx - bubbleCenterX;
+        break;
+
+      case ModernTooltipDirection.top || ModernTooltipDirection.auto:
+        final maxRight = (overlaySize.width - childSize.width - margin)
+            .clamp(margin, double.infinity);
+        x = (targetCenter.dx - childSize.width / 2).clamp(margin, maxRight);
+        y = targetTop - childSize.height - gap;
+        final bubbleCenterX = x + childSize.width / 2;
+        arrowOffset = targetCenter.dx - bubbleCenterX;
+        break;
+
+      case ModernTooltipDirection.left:
+        x = targetLeft - childSize.width - gap;
+        final maxBottom = (overlaySize.height - childSize.height - margin)
+            .clamp(margin, double.infinity);
+        y = (targetCenter.dy - childSize.height / 2).clamp(margin, maxBottom);
+        final bubbleCenterY = y + childSize.height / 2;
+        arrowOffset = targetCenter.dy - bubbleCenterY;
+        break;
+
+      case ModernTooltipDirection.right:
+        x = targetRight + gap;
+        final maxBottom = (overlaySize.height - childSize.height - margin)
+            .clamp(margin, double.infinity);
+        y = (targetCenter.dy - childSize.height / 2).clamp(margin, maxBottom);
+        final bubbleCenterY = y + childSize.height / 2;
+        arrowOffset = targetCenter.dy - bubbleCenterY;
+        break;
+    }
+
+    return TooltipLayoutResult(
+      offset: Offset(x, y),
+      arrowOffset: arrowOffset,
+    );
+  }
 
   @override
   State<ModernTooltip> createState() => _ModernTooltipState();
@@ -407,25 +481,13 @@ class _ModernTooltipState extends State<ModernTooltip>
             _ => widget.direction,
           };
 
-          final (arrowDirection, transformAlignment) =
-              switch (resolvedDirection) {
-            ModernTooltipDirection.bottom => (
-                BubbleArrowDirection.up,
-                Alignment.topCenter
-              ),
+          final arrowDirection = switch (resolvedDirection) {
+            ModernTooltipDirection.bottom => BubbleArrowDirection.up,
             ModernTooltipDirection.top ||
-            ModernTooltipDirection.auto => (
-                BubbleArrowDirection.down,
-                Alignment.bottomCenter
-              ),
-            ModernTooltipDirection.left => (
-                BubbleArrowDirection.right,
-                Alignment.centerRight
-              ),
-            ModernTooltipDirection.right => (
-                BubbleArrowDirection.left,
-                Alignment.centerLeft
-              ),
+            ModernTooltipDirection.auto =>
+              BubbleArrowDirection.down,
+            ModernTooltipDirection.left => BubbleArrowDirection.right,
+            ModernTooltipDirection.right => BubbleArrowDirection.left,
           };
 
           final contentPadding = switch (arrowDirection) {
@@ -439,6 +501,83 @@ class _ModernTooltipState extends State<ModernTooltip>
               const EdgeInsets.only(left: 10, right: 12, top: 6, bottom: 6),
             BubbleArrowDirection.none =>
               const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          };
+
+          const arrowHeight = 6.0;
+          final shapeDimensions = switch (arrowDirection) {
+            BubbleArrowDirection.down =>
+              const EdgeInsets.only(bottom: arrowHeight),
+            BubbleArrowDirection.up =>
+              const EdgeInsets.only(top: arrowHeight),
+            BubbleArrowDirection.left =>
+              const EdgeInsets.only(left: arrowHeight),
+            BubbleArrowDirection.right =>
+              const EdgeInsets.only(right: arrowHeight),
+            BubbleArrowDirection.none => EdgeInsets.zero,
+          };
+          final totalPadding = contentPadding.add(shapeDimensions);
+
+          final textScaler =
+              MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+          final textPainter = TextPainter(
+            text: TextSpan(
+              text: widget.message,
+              style: TextStyle(
+                fontSize: widget.fontSize,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
+                decoration: TextDecoration.none,
+              ),
+            ),
+            textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+            textScaler: textScaler,
+            maxLines: 1,
+          )..layout();
+
+          final estimatedChildSize = Size(
+            (textPainter.width + totalPadding.horizontal).ceilToDouble(),
+            (textPainter.height + totalPadding.vertical).ceilToDouble(),
+          );
+
+          final layoutResult = ModernTooltip.computePositionAndArrowOffset(
+            targetCenter: targetCenter,
+            targetSize: targetSize,
+            childSize: estimatedChildSize,
+            overlaySize: screenSize,
+            direction: resolvedDirection,
+          );
+
+          final transformAlignment = switch (resolvedDirection) {
+            ModernTooltipDirection.bottom => Alignment(
+                estimatedChildSize.width > 0
+                    ? (layoutResult.arrowOffset / (estimatedChildSize.width / 2))
+                        .clamp(-1.0, 1.0)
+                    : 0.0,
+                -1.0,
+              ),
+            ModernTooltipDirection.top ||
+            ModernTooltipDirection.auto =>
+              Alignment(
+                estimatedChildSize.width > 0
+                    ? (layoutResult.arrowOffset / (estimatedChildSize.width / 2))
+                        .clamp(-1.0, 1.0)
+                    : 0.0,
+                1.0,
+              ),
+            ModernTooltipDirection.left => Alignment(
+                1.0,
+                estimatedChildSize.height > 0
+                    ? (layoutResult.arrowOffset / (estimatedChildSize.height / 2))
+                        .clamp(-1.0, 1.0)
+                    : 0.0,
+              ),
+            ModernTooltipDirection.right => Alignment(
+                -1.0,
+                estimatedChildSize.height > 0
+                    ? (layoutResult.arrowOffset / (estimatedChildSize.height / 2))
+                        .clamp(-1.0, 1.0)
+                    : 0.0,
+              ),
           };
 
           return Positioned.fill(
@@ -477,6 +616,7 @@ class _ModernTooltipState extends State<ModernTooltip>
                               borderRadius: 6.0,
                               arrowWidth: 11.0,
                               arrowHeight: 6.0,
+                              arrowOffset: layoutResult.arrowOffset,
                             ),
                           ),
                           padding: contentPadding,
@@ -536,46 +676,15 @@ class _ModernTooltipPositionDelegate extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final targetLeft = targetCenter.dx - targetSize.width / 2;
-    final targetRight = targetCenter.dx + targetSize.width / 2;
-    final targetTop = targetCenter.dy - targetSize.height / 2;
-    final targetBottom = targetCenter.dy + targetSize.height / 2;
-
-    double x;
-    double y;
-
-    switch (direction) {
-      case ModernTooltipDirection.bottom:
-        x = (targetCenter.dx - childSize.width / 2).clamp(
-          margin,
-          (size.width - childSize.width - margin).clamp(margin, double.infinity),
-        );
-        y = targetBottom + gap;
-        break;
-      case ModernTooltipDirection.top || ModernTooltipDirection.auto:
-        x = (targetCenter.dx - childSize.width / 2).clamp(
-          margin,
-          (size.width - childSize.width - margin).clamp(margin, double.infinity),
-        );
-        y = targetTop - childSize.height - gap;
-        break;
-      case ModernTooltipDirection.left:
-        x = targetLeft - childSize.width - gap;
-        y = (targetCenter.dy - childSize.height / 2).clamp(
-          margin,
-          (size.height - childSize.height - margin).clamp(margin, double.infinity),
-        );
-        break;
-      case ModernTooltipDirection.right:
-        x = targetRight + gap;
-        y = (targetCenter.dy - childSize.height / 2).clamp(
-          margin,
-          (size.height - childSize.height - margin).clamp(margin, double.infinity),
-        );
-        break;
-    }
-
-    return Offset(x, y);
+    return ModernTooltip.computePositionAndArrowOffset(
+      targetCenter: targetCenter,
+      targetSize: targetSize,
+      childSize: childSize,
+      overlaySize: size,
+      direction: direction,
+      margin: margin,
+      gap: gap,
+    ).offset;
   }
 
   @override

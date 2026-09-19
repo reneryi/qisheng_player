@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -41,6 +43,23 @@ class ReleaseVersion implements Comparable<ReleaseVersion> {
   }
 
   bool operator >(ReleaseVersion other) => compareTo(other) > 0;
+  bool operator <(ReleaseVersion other) => compareTo(other) < 0;
+  bool operator >=(ReleaseVersion other) => compareTo(other) >= 0;
+  bool operator <=(ReleaseVersion other) => compareTo(other) <= 0;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReleaseVersion &&
+          major == other.major &&
+          minor == other.minor &&
+          patch == other.patch;
+
+  @override
+  int get hashCode => Object.hash(major, minor, patch);
+
+  @override
+  String toString() => '$major.$minor.$patch';
 }
 
 Stream<Release> fetchReleases() {
@@ -52,15 +71,267 @@ Stream<Release> fetchReleases() {
   );
 }
 
-bool _isQishengRelease(Release release) {
+@visibleForTesting
+bool isQishengRelease(Release release) {
   final name = release.name?.trim().toLowerCase() ?? '';
-  if (name.startsWith('qisheng player')) return true;
+  final tagName = release.tagName?.trim().toLowerCase() ?? '';
 
+  // 1. 精确拦截历史 fork 库残留 (coriander_player)
+  if (name.contains('coriander') || tagName.contains('coriander')) {
+    return false;
+  }
   final assets = release.assets ?? const <ReleaseAsset>[];
-  return assets.any((asset) {
-    final assetName = asset.name?.trim().toLowerCase() ?? '';
-    return assetName.startsWith('qisheng-player-v');
-  });
+  if (assets.any((a) => (a.name?.toLowerCase() ?? '').contains('coriander'))) {
+    return false;
+  }
+
+  // 2. 匹配歧声专属标志 (标题、Tag 或资产包含 qisheng 或 歧声)
+  if (name.contains('qisheng') || name.contains('歧声')) return true;
+  if (tagName.contains('qisheng') || tagName.contains('歧声')) return true;
+  if (assets.any((a) {
+    final an = a.name?.toLowerCase() ?? '';
+    return an.contains('qisheng') || an.contains('歧声');
+  })) {
+    return true;
+  }
+
+  // 3. 放宽语义版本过滤：只要无历史 fork 污染且符合语义版本规则即视为有效
+  if (ReleaseVersion.parse(release.tagName) != null) {
+    return true;
+  }
+
+  return false;
+}
+
+bool _isQishengRelease(Release release) => isQishengRelease(release);
+
+String _unescapeXml(String text) {
+  return text
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&apos;', "'");
+}
+
+String _cleanXmlText(String text) {
+  var result = text.trim();
+  if (result.startsWith('<![CDATA[') && result.endsWith(']]>')) {
+    result = result.substring(9, result.length - 3).trim();
+  }
+  return _unescapeXml(result);
+}
+
+String _htmlToMarkdown(String html) {
+  var text = _cleanXmlText(html).replaceAll('&nbsp;', ' ');
+  text = text.replaceAllMapped(
+    RegExp(r'<h[1-6][^>]*>(.*?)</h[1-6]>', caseSensitive: false, dotAll: true),
+    (m) => '\n\n## ${m[1]?.trim()}\n\n',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'<li[^>]*>(.*?)</li>', caseSensitive: false, dotAll: true),
+    (m) => '- ${m[1]?.trim()}\n',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'<code[^>]*>(.*?)</code>', caseSensitive: false, dotAll: true),
+    (m) => '`${m[1]?.trim()}`',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', caseSensitive: false, dotAll: true),
+    (m) => '[${m[2]?.trim()}](${m[1]})',
+  );
+  text = text.replaceAll(RegExp(r'</?(?:ul|ol|p|div|span|article|section)[^>]*>', caseSensitive: false), '\n');
+  text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+  text = text.replaceAll(RegExp(r'<[^>]+>'), '');
+  text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+  return text.trim();
+}
+
+@visibleForTesting
+List<Release> parseReleasesFromAtom(String xmlContent) {
+  final releases = <Release>[];
+  final entryMatches = RegExp(r'<entry>([\s\S]*?)</entry>').allMatches(xmlContent);
+
+  for (final entryMatch in entryMatches) {
+    final entry = entryMatch.group(1) ?? '';
+
+    final titleMatch = RegExp(r'<title[^>]*>([\s\S]*?)</title>').firstMatch(entry);
+    final title = titleMatch != null ? _cleanXmlText(titleMatch.group(1)!) : null;
+
+    final linkMatch = RegExp(r'<link[^>]+href="([^"]+)"').firstMatch(entry);
+    final htmlUrl = linkMatch?.group(1);
+
+    String? tagName;
+    if (htmlUrl != null) {
+      final tagMatch = RegExp(r'/releases/tag/([^/?#"\s]+)').firstMatch(htmlUrl);
+      if (tagMatch != null) {
+        tagName = Uri.decodeComponent(tagMatch.group(1)!);
+      }
+    }
+    if (tagName == null || tagName.isEmpty) {
+      final idMatch = RegExp(r'<id[^>]*>[\s\S]*?/([^/<\s]+)</id>').firstMatch(entry);
+      if (idMatch != null) {
+        tagName = Uri.decodeComponent(idMatch.group(1)!);
+      }
+    }
+    tagName ??= title;
+    if (tagName == null || tagName.isEmpty) continue;
+
+    DateTime? publishedAt;
+    final updatedMatch = RegExp(r'<updated>([\s\S]*?)</updated>').firstMatch(entry);
+    if (updatedMatch != null) {
+      publishedAt = DateTime.tryParse(updatedMatch.group(1)!.trim());
+    }
+
+    final contentMatch = RegExp(r'<content[^>]*>([\s\S]*?)</content>').firstMatch(entry);
+    final rawContent = contentMatch?.group(1);
+    final summaryMatch = RegExp(r'<summary[^>]*>([\s\S]*?)</summary>').firstMatch(entry);
+    final rawSummary = summaryMatch?.group(1);
+
+    final body = rawContent != null
+        ? _htmlToMarkdown(rawContent)
+        : (rawSummary != null ? _htmlToMarkdown(rawSummary) : null);
+
+    releases.add(Release(
+      tagName: tagName,
+      name: title ?? tagName,
+      htmlUrl: htmlUrl,
+      body: body,
+      publishedAt: publishedAt,
+      isDraft: false,
+      isPrerelease: tagName.contains('-') || (title?.contains('-') ?? false),
+    ));
+  }
+
+  return releases;
+}
+
+@visibleForTesting
+Future<List<Release>> fetchReleasesFromAtom({
+  String owner = AppSettings.releaseRepoOwner,
+  String repo = AppSettings.releaseRepoName,
+  HttpClient? client,
+}) async {
+  final httpClient = client ?? (HttpClient()..connectionTimeout = const Duration(seconds: 10));
+  try {
+    final uri = Uri.https('github.com', '/$owner/$repo/releases.atom');
+    final request = await httpClient.getUrl(uri);
+    request.headers.set(HttpHeaders.userAgentHeader, 'QishengPlayer');
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok) {
+      throw HttpException('Atom feed HTTP ${response.statusCode}', uri: uri);
+    }
+    final content = await utf8.decodeStream(response);
+    return parseReleasesFromAtom(content);
+  } finally {
+    if (client == null) {
+      httpClient.close();
+    }
+  }
+}
+
+@visibleForTesting
+Future<Release?> fetchLatestReleaseFromRedirect({
+  String owner = AppSettings.releaseRepoOwner,
+  String repo = AppSettings.releaseRepoName,
+  HttpClient? client,
+}) async {
+  final httpClient = client ?? (HttpClient()..connectionTimeout = const Duration(seconds: 10));
+  try {
+    final uri = Uri.https('github.com', '/$owner/$repo/releases/latest');
+    final request = await httpClient.getUrl(uri);
+    request.followRedirects = false;
+    request.headers.set(HttpHeaders.userAgentHeader, 'QishengPlayer');
+    final response = await request.close();
+    await response.drain();
+
+    String? location = response.headers.value(HttpHeaders.locationHeader);
+    if ((location == null || location.isEmpty) && response.redirects.isNotEmpty) {
+      location = response.redirects.last.location.toString();
+    }
+
+    if (location != null && location.isNotEmpty) {
+      final match = RegExp(r'/releases/tag/([^/?#"\s]+)').firstMatch(location);
+      final tag = match != null ? Uri.decodeComponent(match.group(1)!) : null;
+      if (tag != null && tag.isNotEmpty) {
+        return Release(
+          tagName: tag,
+          name: tag,
+          htmlUrl: location.startsWith('http')
+              ? location
+              : 'https://github.com/$owner/$repo/releases/tag/$tag',
+          body: '发现新版本 $tag，点击“获取更新”前往发布页面下载更新。',
+          isDraft: false,
+          isPrerelease: false,
+          publishedAt: DateTime.now(),
+        );
+      }
+    }
+    return null;
+  } finally {
+    if (client == null) {
+      httpClient.close();
+    }
+  }
+}
+
+class UpdateException implements Exception {
+  final String message;
+  final Object? cause;
+  const UpdateException(this.message, [this.cause]);
+
+  @override
+  String toString() => message;
+}
+
+class RateLimitException extends UpdateException {
+  const RateLimitException([super.message = 'GitHub 访问频率超限，请稍后再试', super.cause]);
+}
+
+class NetworkOfflineException extends UpdateException {
+  const NetworkOfflineException([super.message = '网络连接不可用', super.cause]);
+}
+
+class UpdateCheckState {
+  static bool lastCheckUsedFallback = false;
+  static bool lastCheckEncounteredRateLimit = false;
+}
+
+bool _isRateLimitError(Object? error) {
+  if (error == null) return false;
+  if (error is RateLimitHit || error is AccessForbidden) return true;
+  if (error is GitHubError) {
+    final msg = error.message?.toLowerCase() ?? '';
+    if (msg.contains('rate limit') || msg.contains('403') || msg.contains('forbidden')) {
+      return true;
+    }
+  }
+  if (error is HttpException) {
+    final msg = error.message.toLowerCase();
+    if (msg.contains('403') || msg.contains('rate limit')) return true;
+  }
+  final errStr = error.toString().toLowerCase();
+  return errStr.contains('rate limit') ||
+      errStr.contains('ratelimithit') ||
+      errStr.contains('403 forbidden') ||
+      errStr.contains('api rate limit exceeded');
+}
+
+bool _isNetworkOfflineError(Object? error) {
+  if (error == null) return false;
+  if (error is SocketException) return true;
+  if (error is TimeoutException) return true;
+  if (error is HandshakeException) return true;
+  final errStr = error.toString().toLowerCase();
+  return errStr.contains('socketexception') ||
+      errStr.contains('timeoutexception') ||
+      errStr.contains('network is unreachable') ||
+      errStr.contains('connection refused') ||
+      errStr.contains('connection timed out') ||
+      errStr.contains('failed host lookup') ||
+      errStr.contains('clientexception') ||
+      errStr.contains('network offline');
 }
 
 @visibleForTesting
@@ -130,20 +401,109 @@ bool isNewerRelease(Release release) {
   return isNewerReleaseForVersion(release, currentVersion);
 }
 
-Future<Release?> checkForNewRelease() async {
+typedef ReleaseFetcher = Stream<Release> Function();
+typedef AtomFetcher = Future<List<Release>> Function();
+typedef LatestRedirectFetcher = Future<Release?> Function();
+
+Future<Release?> checkForNewRelease({
+  ReleaseFetcher? fetchApiReleases,
+  AtomFetcher? fetchAtomReleases,
+  LatestRedirectFetcher? fetchLatestRedirect,
+}) async {
   final currentVersion = ReleaseVersion.parse(AppSettings.version);
   if (currentVersion == null) {
     LOGGER.w('[update check] invalid current version: ${AppSettings.version}');
     return null;
   }
 
-  await for (final release in fetchReleases()) {
-    if (isNewerReleaseForVersion(release, currentVersion)) {
-      return release;
+  UpdateCheckState.lastCheckUsedFallback = false;
+  UpdateCheckState.lastCheckEncounteredRateLimit = false;
+
+  bool rateLimitHit = false;
+  Object? firstError;
+  Object? lastError;
+
+  // Level 1: GitHub REST API
+  try {
+    final fetcher = fetchApiReleases ?? fetchReleases;
+    await for (final release in fetcher()) {
+      if (isNewerReleaseForVersion(release, currentVersion)) {
+        LOGGER.i('[update check] Tier 1 found newer release: ${release.tagName}');
+        return release;
+      }
+    }
+    LOGGER.i('[update check] Tier 1 completed: current version is up to date.');
+    return null;
+  } catch (err, trace) {
+    firstError = err;
+    lastError = err;
+    if (_isRateLimitError(err)) {
+      rateLimitHit = true;
+      UpdateCheckState.lastCheckEncounteredRateLimit = true;
+      LOGGER.w('[update check] Tier 1 hit GitHub API rate limit: $err');
+    } else {
+      LOGGER.w('[update check] Tier 1 REST API failed: $err', stackTrace: trace);
     }
   }
-  return null;
+
+  // Level 2: GitHub releases.atom RSS Feed
+  try {
+    UpdateCheckState.lastCheckUsedFallback = true;
+    LOGGER.i('[update check] Tier 2: falling back to releases.atom RSS feed...');
+    final atomFetcher = fetchAtomReleases ?? fetchReleasesFromAtom;
+    final atomReleases = await atomFetcher();
+    if (atomReleases.isNotEmpty) {
+      for (final release in atomReleases) {
+        if (isNewerReleaseForVersion(release, currentVersion)) {
+          LOGGER.i('[update check] Tier 2 found newer release: ${release.tagName}');
+          return release;
+        }
+      }
+      LOGGER.i('[update check] Tier 2 completed: no newer release in atom feed.');
+      return null;
+    }
+    LOGGER.w('[update check] Tier 2 atom feed was empty, proceeding to Tier 3...');
+  } catch (err, trace) {
+    lastError = err;
+    if (_isRateLimitError(err)) {
+      rateLimitHit = true;
+      UpdateCheckState.lastCheckEncounteredRateLimit = true;
+    }
+    LOGGER.w('[update check] Tier 2 atom feed failed: $err', stackTrace: trace);
+  }
+
+  // Level 3: GitHub releases/latest HTTP 302 Redirect
+  try {
+    LOGGER.i('[update check] Tier 3: falling back to releases/latest redirect...');
+    final redirectFetcher = fetchLatestRedirect ?? fetchLatestReleaseFromRedirect;
+    final latestRelease = await redirectFetcher();
+    if (latestRelease != null) {
+      if (isNewerReleaseForVersion(latestRelease, currentVersion)) {
+        LOGGER.i('[update check] Tier 3 found newer release: ${latestRelease.tagName}');
+        return latestRelease;
+      }
+      LOGGER.i('[update check] Tier 3 completed: tag ${latestRelease.tagName} is not newer than current.');
+      return null;
+    }
+  } catch (err, trace) {
+    lastError = err;
+    if (_isRateLimitError(err)) {
+      rateLimitHit = true;
+      UpdateCheckState.lastCheckEncounteredRateLimit = true;
+    }
+    LOGGER.w('[update check] Tier 3 latest redirect failed: $err', stackTrace: trace);
+  }
+
+  LOGGER.e('[update check] All update check channels failed. RateLimit=$rateLimitHit, lastError=$lastError');
+  if (rateLimitHit) {
+    throw RateLimitException('GitHub 访问频率超限，请稍后再试', firstError);
+  }
+  if (_isNetworkOfflineError(lastError) || _isNetworkOfflineError(firstError)) {
+    throw NetworkOfflineException('网络连接不可用', lastError);
+  }
+  throw UpdateException('检查更新失败: $lastError', lastError);
 }
+
 
 class StartupUpdatePrompt extends StatefulWidget {
   const StartupUpdatePrompt({

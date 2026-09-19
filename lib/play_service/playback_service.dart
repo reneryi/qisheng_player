@@ -81,6 +81,23 @@ double resolveCueTrackLength({
   return playerLength ?? 0.0;
 }
 
+@visibleForTesting
+double calculateReplayGainVolume({
+  required double baseVolume,
+  required bool enableVolumeLeveling,
+  required double? replayGainDb,
+  required double preampDb,
+}) {
+  if (baseVolume <= 0.0) return 0.0;
+  if (!enableVolumeLeveling) return baseVolume;
+  if (replayGainDb == null) return baseVolume;
+
+  // 遵循标准 ReplayGain 规范：正 gainDb 增加增益，负 gainDb 衰减输出
+  final compensationDb = replayGainDb + preampDb;
+  final scale = math.pow(10.0, compensationDb / 20.0).toDouble();
+  return (baseVolume * scale).clamp(0.0, 3.0);
+}
+
 /// 鎾斁鐩稿叧鐘舵€佷笌鎺у埗鎺ュ彛锛屼究浜庢闈?UI 鍜屾祴璇曞叡鐢ㄣ€?
 /// Playback state and controls shared by UI and tests.
 abstract class PlaybackController extends ChangeNotifier {
@@ -351,16 +368,16 @@ class PlaybackService extends PlaybackController {
 
   double get volumeDsp => _pref.volumeDsp;
 
+  @visibleForTesting
+  double resolveOutputVolumeDsp(Audio? audio) => _resolveOutputVolumeDsp(audio);
+
   double _resolveOutputVolumeDsp(Audio? audio) {
-    final baseVolume = _pref.volumeDsp;
-    if (!_pref.enableVolumeLeveling) return baseVolume;
-
-    final gainDb = audio?.replayGainDb;
-    if (gainDb == null) return baseVolume;
-
-    final compensationDb = (-gainDb) + _pref.volumeLevelingPreampDb;
-    final scale = math.pow(10.0, compensationDb / 20.0).toDouble();
-    return (baseVolume * scale).clamp(0.05, 3.0);
+    return calculateReplayGainVolume(
+      baseVolume: _pref.volumeDsp,
+      enableVolumeLeveling: _pref.enableVolumeLeveling,
+      replayGainDb: audio?.replayGainDb,
+      preampDb: _pref.volumeLevelingPreampDb,
+    );
   }
 
   void _applyOutputVolume(Audio? audio) {

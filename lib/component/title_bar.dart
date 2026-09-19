@@ -5,7 +5,6 @@ import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/horizontal_lyric_view.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
-import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/navigation_state.dart';
@@ -236,14 +235,17 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                       focusNode: _focusNode,
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Symbols.search_rounded, size: 20),
-                        suffixIcon: IconButton(
-                          enableFeedback: false,
-                          tooltip: '关闭搜索',
-                          onPressed: () {
-                            _controller.clear();
-                            _toggleExpanded(false);
-                          },
-                          icon: const Icon(Symbols.close_rounded, size: 18),
+                        suffixIcon: Semantics(
+                          label: '关闭搜索',
+                          button: true,
+                          child: IconButton(
+                            enableFeedback: false,
+                            onPressed: () {
+                              _controller.clear();
+                              _toggleExpanded(false);
+                            },
+                            icon: const Icon(Symbols.close_rounded, size: 18),
+                          ),
                         ),
                         hintText: '搜索歌曲、艺术家、专辑',
                         border: InputBorder.none,
@@ -259,14 +261,17 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                         }
                       },
                     )
-                  : IconButton(
-                      enableFeedback: false,
-                      tooltip: '搜索',
-                      onPressed: () => _toggleExpanded(true),
-                      icon: Icon(
-                        Symbols.search_rounded,
-                        size: 20,
-                        color: scheme.onSurface.withValues(alpha: 0.68),
+                  : Semantics(
+                      label: '搜索',
+                      button: true,
+                      child: IconButton(
+                        enableFeedback: false,
+                        onPressed: () => _toggleExpanded(true),
+                        icon: Icon(
+                          Symbols.search_rounded,
+                          size: 20,
+                          color: scheme.onSurface.withValues(alpha: 0.68),
+                        ),
                       ),
                     ),
             ),
@@ -321,12 +326,17 @@ class NavBackBtn extends StatelessWidget {
     return ListenableBuilder(
       listenable: navigation,
       builder: (context, _) {
-        // 重构：使用沉浸式按钮变体 CpIconButton(variant: CpButtonVariant.immersive)
+        final canPop = () {
+          try {
+            return context.canPop();
+          } catch (_) {
+            return false;
+          }
+        }();
         return CpIconButton(
           variant: CpButtonVariant.immersive,
-          tooltip: '返回',
-          tooltipDirection: ModernTooltipDirection.bottom,
-          onPressed: context.canPop() || navigation.canGoBack
+          semanticsLabel: '返回',
+          onPressed: canPop || navigation.canGoBack
               ? () => navigation.navigateBack(context, fallback: '')
               : null,
           icon: const Icon(Symbols.navigate_before_rounded),
@@ -348,8 +358,7 @@ class NavForwardBtn extends StatelessWidget {
         // 重构：使用沉浸式按钮变体 CpIconButton(variant: CpButtonVariant.immersive)
         return CpIconButton(
           variant: CpButtonVariant.immersive,
-          tooltip: '前进',
-          tooltipDirection: ModernTooltipDirection.bottom,
+          semanticsLabel: '前进',
           onPressed: navigation.canGoForward
               ? () => navigation.navigateForward(context)
               : null,
@@ -522,27 +531,27 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
       mainAxisSize: MainAxisSize.min,
       children: [
         _WindowButton(
-          tooltip: _isFullScreen ? '退出全屏' : '全屏',
+          semanticsLabel: _isFullScreen ? '退出全屏' : '全屏',
           onPressed: _isProcessing ? null : _toggleFullScreen,
           icon: _isFullScreen
               ? Symbols.close_fullscreen_rounded
               : Symbols.open_in_full_rounded,
         ),
         const _WindowButton(
-          tooltip: '最小化',
+          semanticsLabel: '最小化',
           onPressed: WindowControls.minimize,
           icon: Symbols.remove_rounded,
         ),
         _WindowButton(
           key: _maximizeButtonKey,
-          tooltip: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
+          semanticsLabel: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
           onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
           icon: _isMaximized
               ? Symbols.fullscreen_exit_rounded
               : Symbols.fullscreen_rounded,
         ),
         _WindowButton(
-          tooltip: '退出',
+          semanticsLabel: '退出',
           // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
           onPressed: () => unawaited(WindowControls.exitApp()),
           icon: Symbols.close_rounded,
@@ -556,13 +565,13 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
 class _WindowButton extends StatelessWidget {
   const _WindowButton({
     super.key,
-    required this.tooltip,
+    required this.semanticsLabel,
     required this.onPressed,
     required this.icon,
     this.color,
   });
 
-  final String tooltip;
+  final String semanticsLabel;
   final VoidCallback? onPressed;
   final IconData icon;
   final Color? color;
@@ -572,32 +581,36 @@ class _WindowButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final defaultColor = color ?? scheme.onSurface;
 
-    return IconButton(
-      enableFeedback: false,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon),
-      // 重构：定义完全沉浸式的 ButtonStyle，消除默认与交互时的所有物理底色及描边边框
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.transparent,
-        side: BorderSide.none,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-      ).copyWith(
-        // 通过状态属性动态控制图标前景色透明度和高亮颜色，实现无圆底纯色悬停效果
-        iconColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.disabled)) {
-            return defaultColor.withValues(alpha: 0.34);
-          }
-          if (states.contains(WidgetState.pressed)) {
-            return color ??
-                scheme.primary; // 按下时非退出按钮显示强调色，退出按钮显示原色（如 error 红色）
-          }
-          if (states.contains(WidgetState.hovered)) {
-            return defaultColor; // 悬停状态下图标呈现完全不透明高亮
-          }
-          return defaultColor.withValues(alpha: 0.62); // 默认状态显示为 62% 不透明度的半透明图标
-        }),
+    return Semantics(
+      label: semanticsLabel,
+      button: true,
+      child: IconButton(
+        enableFeedback: false,
+        tooltip: null,
+        onPressed: onPressed,
+        icon: Icon(icon),
+        // 重构：定义完全沉浸式的 ButtonStyle，消除默认与交互时的所有物理底色及描边边框
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          side: BorderSide.none,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+        ).copyWith(
+          // 通过状态属性动态控制图标前景色透明度和高亮颜色，实现无圆底纯色悬停效果
+          iconColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return defaultColor.withValues(alpha: 0.34);
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return color ??
+                  scheme.primary; // 按下时非退出按钮显示强调色，退出按钮显示原色（如 error 红色）
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return defaultColor; // 悬停状态下图标呈现完全不透明高亮
+            }
+            return defaultColor.withValues(alpha: 0.62); // 默认状态显示为 62% 不透明度的半透明图标
+          }),
+        ),
       ),
     );
   }

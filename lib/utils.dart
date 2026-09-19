@@ -398,7 +398,7 @@ final SCAFFOLD_MESSAGER = GlobalKey<ScaffoldMessengerState>();
 void showTextOnSnackBar(String text) {
   final state = SCAFFOLD_MESSAGER.currentState;
   if (state != null) {
-    state.hideCurrentSnackBar();
+    state.clearSnackBars();
     state.showSnackBar(SnackBar(content: Text(text)));
   }
 }

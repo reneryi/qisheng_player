@@ -11,6 +11,7 @@ import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:path/path.dart' as path;
 
 class PlaylistsPage extends StatefulWidget {
@@ -154,6 +155,31 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    key: ValueKey('play-playlist-${PLAYLISTS[i].name}'),
+                    tooltip: "播放歌单",
+                    onPressed: () {
+                      final audios = PLAYLISTS[i].audios.values.toList();
+                      if (audios.isEmpty) {
+                        showTextOnSnackBar("歌单“${PLAYLISTS[i].name}”为空，暂无歌曲可播放");
+                        return;
+                      }
+                      PlayService.instance.playbackService.play(0, audios);
+                      showTextOnSnackBar("开始播放歌单“${PLAYLISTS[i].name}”");
+                    },
+                    icon: const Icon(Symbols.play_arrow_rounded),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      side: BorderSide.none,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                    ).copyWith(
+                      overlayColor: WidgetStatePropertyAll(
+                        scheme.primary.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4.0),
                   IconButton(
                     tooltip: "编辑",
                     onPressed: () => editPlaylist(context, PLAYLISTS[i]),

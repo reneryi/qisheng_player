@@ -627,6 +627,7 @@ class CpIconButton extends StatelessWidget {
     this.tooltipDirection = ModernTooltipDirection.auto,
     this.variant = CpButtonVariant.ghost,
     this.small = false,
+    this.semanticsLabel,
   });
 
   final Widget icon;
@@ -635,10 +636,11 @@ class CpIconButton extends StatelessWidget {
   final ModernTooltipDirection tooltipDirection;
   final CpButtonVariant variant;
   final bool small;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
-    final button = IconButton(
+    Widget button = IconButton(
       onPressed: onPressed,
       enableFeedback: false,
       iconSize: small ? 18 : 22,
@@ -646,6 +648,13 @@ class CpIconButton extends StatelessWidget {
       style: _iconButtonStyle(context),
       visualDensity: small ? VisualDensity.compact : VisualDensity.standard,
     );
+    if (semanticsLabel != null) {
+      button = Semantics(
+        label: semanticsLabel,
+        button: true,
+        child: button,
+      );
+    }
     if (tooltip == null || tooltip!.isEmpty) return button;
     return ModernTooltip(
       message: tooltip!,

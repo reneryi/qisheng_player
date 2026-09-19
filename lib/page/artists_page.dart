@@ -1,4 +1,5 @@
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/artist_grid_tile.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/component/batch_artwork_match_dialog.dart';
 import 'package:qisheng_player/utils.dart';
@@ -20,6 +21,12 @@ class ArtistsPage extends StatelessWidget {
       contentList: contentList,
       contentRevision: AudioLibrary.revision.value,
       contentBuilder: (_, item, __, multiSelectController) => ArtistTile(
+        artist: item,
+        enableHero: true,
+        selected: multiSelectController?.selected.contains(item) ?? false,
+        multiSelectController: multiSelectController,
+      ),
+      gridBuilder: (_, item, __, multiSelectController) => ArtistGridTile(
         artist: item,
         enableHero: true,
         selected: multiSelectController?.selected.contains(item) ?? false,

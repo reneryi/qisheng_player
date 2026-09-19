@@ -26,6 +26,10 @@ class PlayService {
     return _instance!;
   }
 
+  static void setPlaybackServiceForTesting(PlaybackService? service) {
+    instance._playbackService = service;
+  }
+
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
