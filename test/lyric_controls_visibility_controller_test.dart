@@ -34,4 +34,29 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(controller.visible, isFalse);
   });
+
+  test('controller auto-hides after idle delay in region and wakes up on pointer move',
+      () async {
+    final controller = LyricControlsVisibilityController(
+      idleHideDelay: const Duration(milliseconds: 100),
+      hideDelay: const Duration(milliseconds: 50),
+    );
+    addTearDown(controller.dispose);
+
+    controller.setRegionHovered(true);
+    expect(controller.visible, isTrue);
+
+    // After idle delay without mouse movement, it should stealthily hide
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    expect(controller.visible, isFalse);
+
+    // Mouse movement in region wakes it up
+    controller.onRegionPointerMove();
+    expect(controller.visible, isTrue);
+
+    // But if hovering controls, it should NOT auto-hide after idle delay
+    controller.setControlsHovered(true);
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    expect(controller.visible, isTrue);
+  });
 }

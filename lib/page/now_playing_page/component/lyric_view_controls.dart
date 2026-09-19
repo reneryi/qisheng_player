@@ -7,6 +7,7 @@ import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 
 enum LyricTextAlign {
   left,
@@ -134,16 +135,19 @@ class _LyricAlignSwitchBtn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final lyricViewController = context.watch<LyricViewController>();
 
-    return IconButton(
-      enableFeedback: false,
-      onPressed: lyricViewController.switchLyricTextAlign,
-      tooltip: "切换歌词对齐方向",
-      color: scheme.onSecondaryContainer,
-      icon: Icon(switch (lyricViewController.lyricTextAlign) {
-        LyricTextAlign.left => Symbols.format_align_left,
-        LyricTextAlign.center => Symbols.format_align_center,
-        LyricTextAlign.right => Symbols.format_align_right,
-      }),
+    return ModernTooltip(
+      message: "切换歌词对齐方向",
+      direction: ModernTooltipDirection.left,
+      child: IconButton(
+        enableFeedback: false,
+        onPressed: lyricViewController.switchLyricTextAlign,
+        color: scheme.onSecondaryContainer,
+        icon: Icon(switch (lyricViewController.lyricTextAlign) {
+          LyricTextAlign.left => Symbols.format_align_left,
+          LyricTextAlign.center => Symbols.format_align_center,
+          LyricTextAlign.right => Symbols.format_align_right,
+        }),
+      ),
     );
   }
 }
@@ -156,12 +160,15 @@ class _IncreaseFontSizeBtn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final lyricViewController = context.watch<LyricViewController>();
 
-    return IconButton(
-      enableFeedback: false,
-      onPressed: lyricViewController.increaseFontSize,
-      tooltip: "增大歌词字体",
-      color: scheme.onSecondaryContainer,
-      icon: const Icon(Symbols.text_increase),
+    return ModernTooltip(
+      message: "增大歌词字体",
+      direction: ModernTooltipDirection.left,
+      child: IconButton(
+        enableFeedback: false,
+        onPressed: lyricViewController.increaseFontSize,
+        color: scheme.onSecondaryContainer,
+        icon: const Icon(Symbols.text_increase),
+      ),
     );
   }
 }
@@ -174,15 +181,18 @@ class _TranslationSwitchBtn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final lyricViewController = context.watch<LyricViewController>();
 
-    return IconButton(
-      enableFeedback: false,
-      onPressed: lyricViewController.toggleShowTranslation,
-      tooltip: lyricViewController.showTranslation ? "隐藏翻译" : "显示翻译",
-      color: scheme.onSecondaryContainer,
-      icon: Icon(
-        lyricViewController.showTranslation
-            ? Symbols.subtitles
-            : Symbols.subtitles_off,
+    return ModernTooltip(
+      message: lyricViewController.showTranslation ? "隐藏翻译" : "显示翻译",
+      direction: ModernTooltipDirection.left,
+      child: IconButton(
+        enableFeedback: false,
+        onPressed: lyricViewController.toggleShowTranslation,
+        color: scheme.onSecondaryContainer,
+        icon: Icon(
+          lyricViewController.showTranslation
+              ? Symbols.subtitles
+              : Symbols.subtitles_off,
+        ),
       ),
     );
   }
@@ -196,12 +206,15 @@ class _DecreaseFontSizeBtn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final lyricViewController = context.watch<LyricViewController>();
 
-    return IconButton(
-      enableFeedback: false,
-      onPressed: lyricViewController.decreaseFontSize,
-      tooltip: "减小歌词字体",
-      color: scheme.onSecondaryContainer,
-      icon: const Icon(Symbols.text_decrease),
+    return ModernTooltip(
+      message: "减小歌词字体",
+      direction: ModernTooltipDirection.left,
+      child: IconButton(
+        enableFeedback: false,
+        onPressed: lyricViewController.decreaseFontSize,
+        color: scheme.onSecondaryContainer,
+        icon: const Icon(Symbols.text_decrease),
+      ),
     );
   }
 }

@@ -140,6 +140,9 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
       onExit: (_) {
         visibilityController.setRegionHovered(false);
       },
+      onHover: (_) {
+        visibilityController.onRegionPointerMove();
+      },
       child: Material(
         type: MaterialType.transparency,
         child: ScrollConfiguration(
@@ -150,12 +153,19 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
               ChangeNotifierProvider.value(value: visibilityController),
             ],
             child: Listener(
-              onPointerDown: _handlePointerDown,
-              onPointerMove: _handlePointerMove,
+              onPointerDown: (event) {
+                visibilityController.onRegionPointerMove();
+                _handlePointerDown(event);
+              },
+              onPointerMove: (event) {
+                visibilityController.onRegionPointerMove();
+                _handlePointerMove(event);
+              },
               onPointerUp: _handlePointerUp,
               onPointerCancel: _handlePointerCancel,
               // 监听 Ctrl + 鼠标滚轮/触控板双指滚动的字号修改
               onPointerSignal: (pointerSignal) {
+                visibilityController.onRegionPointerMove();
                 if (pointerSignal is PointerScrollEvent) {
                   final isCtrlPressed =
                       HardwareKeyboard.instance.isControlPressed;

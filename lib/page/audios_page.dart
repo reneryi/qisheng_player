@@ -5,6 +5,7 @@ import 'package:qisheng_player/component/audio_lyric_preview_panel.dart';
 import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/page/uni_page.dart';
@@ -112,6 +113,7 @@ class _AudiosPageState extends State<AudiosPage> {
           key: const ValueKey('toggle-lyric-preview'),
           variant: CpButtonVariant.immersive,
           tooltip: _showLyricPreview ? '关闭歌词预览' : '打开歌词预览',
+          tooltipDirection: ModernTooltipDirection.bottom,
           onPressed: _toggleLyricPreview,
           icon: Icon(
             Symbols.lyrics,

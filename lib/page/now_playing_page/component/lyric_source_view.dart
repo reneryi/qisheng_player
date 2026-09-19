@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/component/ui/modern_dialog.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
@@ -92,8 +93,9 @@ class _SetLyricSourceBtn extends StatelessWidget {
           child: const Text("本地"),
         ),
       ]),
-      builder: (context, controller, _) => Tooltip(
+      builder: (context, controller, _) => ModernTooltip(
         message: "选择歌词来源",
+        direction: ModernTooltipDirection.left,
         child: IconButton(
           enableFeedback: false,
           onPressed: PlayService.instance.playbackService.nowPlaying == null

@@ -5,6 +5,7 @@ import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/component/horizontal_lyric_view.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/navigation_state.dart';
@@ -324,6 +325,7 @@ class NavBackBtn extends StatelessWidget {
         return CpIconButton(
           variant: CpButtonVariant.immersive,
           tooltip: '返回',
+          tooltipDirection: ModernTooltipDirection.bottom,
           onPressed: context.canPop() || navigation.canGoBack
               ? () => navigation.navigateBack(context, fallback: '')
               : null,
@@ -347,6 +349,7 @@ class NavForwardBtn extends StatelessWidget {
         return CpIconButton(
           variant: CpButtonVariant.immersive,
           tooltip: '前进',
+          tooltipDirection: ModernTooltipDirection.bottom,
           onPressed: navigation.canGoForward
               ? () => navigation.navigateForward(context)
               : null,

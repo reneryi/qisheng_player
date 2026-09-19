@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_brand.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/fluid_glow_progress_slider.dart';
 import 'package:qisheng_player/component/adaptive_waveform_slider.dart';
@@ -1116,11 +1118,56 @@ class _VolumeControl extends StatefulWidget {
   State<_VolumeControl> createState() => _VolumeControlState();
 }
 
-class _VolumeControlState extends State<_VolumeControl> {
+class _VolumeControlState extends State<_VolumeControl>
+    with SingleTickerProviderStateMixin {
   bool _hovering = false;
   bool _dragging = false;
   double _dragValue = 0;
   double _lastNonZeroVolume = 0.2;
+
+  final OverlayPortalController _indicatorOverlayController =
+      OverlayPortalController();
+  late final AnimationController _indicatorAnimationController;
+  Timer? _indicatorHideTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _indicatorAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 170),
+      reverseDuration: const Duration(milliseconds: 120),
+    );
+  }
+
+  @override
+  void dispose() {
+    _indicatorHideTimer?.cancel();
+    _indicatorAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _showScrollIndicator() {
+    if (_dragging) return;
+    _indicatorHideTimer?.cancel();
+    if (!_indicatorOverlayController.isShowing) {
+      _indicatorOverlayController.show();
+      _indicatorAnimationController.forward(from: 0.0);
+    } else {
+      _indicatorAnimationController.forward();
+    }
+    _indicatorHideTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted) {
+        _indicatorAnimationController.reverse().then((_) {
+          if (mounted &&
+              _indicatorAnimationController.value == 0 &&
+              _indicatorOverlayController.isShowing) {
+            _indicatorOverlayController.hide();
+          }
+        });
+      }
+    });
+  }
 
   void _setVolume(PlaybackController playback, double value) {
     final normalized = value.isFinite ? value.clamp(0.0, 1.0).toDouble() : 0.0;
@@ -1131,10 +1178,12 @@ class _VolumeControlState extends State<_VolumeControl> {
   }
 
   void _handleScroll(PointerScrollEvent event, PlaybackController playback, double current) {
+    if (event.scrollDelta.dy == 0) return;
     // 鼠标滚轮向上滚动增加音量，向下滚动减小音量
     final delta = event.scrollDelta.dy < 0 ? 0.04 : -0.04;
     final next = (current + delta).clamp(0.0, 1.0).toDouble();
     _setVolume(playback, next);
+    _showScrollIndicator();
   }
 
   @override
@@ -1160,128 +1209,221 @@ class _VolumeControlState extends State<_VolumeControl> {
           _ => Symbols.volume_up,
         };
 
-        return Listener(
-          onPointerSignal: (signal) {
-            if (signal is PointerScrollEvent) {
-              _handleScroll(signal, playback, current);
-            }
-          },
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _hovering = true),
-            onExit: (_) => setState(() => _hovering = false),
-            child: SizedBox(
-              height: 42,
-              child: Padding(
-                padding: EdgeInsets.only(right: showSlider ? 8 : 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CpIconButton(
-                      key: const ValueKey('bottom-player-bar-volume-button'),
-                      variant: CpButtonVariant.immersive,
-                      onPressed: () {
-                        if (current > 0.0001) {
-                          _lastNonZeroVolume = current;
-                        }
-                        final next = current <= 0.0001 ? _lastNonZeroVolume : 0.0;
-                        _setVolume(playback, next);
-                      },
-                      icon: AnimatedSwitcher(
-                        duration: motion.microInteractionDuration,
-                        switchInCurve: motion.emphasized,
-                        switchOutCurve: motion.fast,
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(
-                              scale: Tween<double>(begin: 0.82, end: 1)
-                                  .animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Icon(icon, key: ValueKey(icon)),
-                      ),
-                    ),
-                    ClipRect(
-                      child: AnimatedContainer(
-                        duration: motion.controlTransitionDuration,
-                        curve: motion.normal,
-                        width: effectiveWidth,
-                        child: !showSlider
-                            ? const SizedBox.shrink()
-                            : LayoutBuilder(
-                                builder: (context, sliderConstraints) {
-                                  if (!canPaintSliderAtWidth(
-                                    sliderConstraints.maxWidth,
-                                  )) {
-                                    return const SizedBox.shrink();
-                                  }
+        final double targetX = showSlider
+            ? 40.0 +
+                12.0 +
+                current * (effectiveWidth - 24.0).clamp(0.0, double.infinity)
+            : 20.0;
+        final isLight = accents.accent.computeLuminance() > 0.45;
+        final textColor = isLight ? const Color(0xFF1C1B1F) : Colors.white;
 
-                                  return TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(
-                                      end: resolveSliderThumbRadius(
-                                        hovering: _hovering,
-                                        dragging: _dragging,
-                                        visibleRadius: 5,
-                                      ),
-                                    ),
-                                    duration: motion.microInteractionDuration,
-                                    curve: motion.fast,
-                                    builder: (context, animatedThumbRadius, _) {
-                                      return SliderTheme(
-                                        data: SliderTheme.of(context).copyWith(
-                                          trackHeight: 2,
-                                          activeTrackColor:
-                                              accents.progressActive,
-                                          inactiveTrackColor:
-                                              accents.progressInactive,
-                                          thumbColor: accents.accent,
-                                          overlayShape:
-                                              SliderComponentShape.noOverlay,
-                                          thumbShape: _GlowSliderThumbShape(
-                                            radius: animatedThumbRadius,
-                                            color: accents.accent,
+        return OverlayPortal.overlayChildLayoutBuilder(
+          controller: _indicatorOverlayController,
+          overlayChildBuilder: (context, layoutInfo) {
+            if (layoutInfo.childPaintTransform.determinant() == 0.0) {
+              return const SizedBox.shrink();
+            }
+            final target = MatrixUtils.transformPoint(
+              layoutInfo.childPaintTransform,
+              Offset(targetX, 0),
+            );
+            return Positioned.fill(
+              child: IgnorePointer(
+                child: CustomSingleChildLayout(
+                  delegate: _VolumeIndicatorLayoutDelegate(target: target),
+                  child: AnimatedBuilder(
+                    animation: _indicatorAnimationController,
+                    builder: (context, _) {
+                      final curved = Curves.easeOutCubic.transform(
+                        _indicatorAnimationController.value,
+                      );
+                      final scale = 0.82 + 0.18 * curved;
+                      final opacity =
+                          _indicatorAnimationController.value.clamp(0.0, 1.0);
+
+                      return Opacity(
+                        opacity: opacity,
+                        child: Transform.scale(
+                          scale: scale,
+                          alignment: Alignment.bottomCenter,
+                          child: Container(
+                            decoration: ShapeDecoration(
+                              color: accents.accent,
+                              shadows: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.24),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              shape: const BubbleShapeBorder(
+                                arrowDirection: BubbleArrowDirection.down,
+                                borderRadius: 6.0,
+                                arrowWidth: 11.0,
+                                arrowHeight: 6.0,
+                              ),
+                            ),
+                            padding: const EdgeInsets.only(
+                              left: 10,
+                              right: 10,
+                              top: 4.5,
+                              bottom: 9.5,
+                            ),
+                            child: Text(
+                              '${(current * 100).round()}%',
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 13.0,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+          child: Listener(
+              onPointerSignal: (signal) {
+                if (signal is PointerScrollEvent) {
+                  _handleScroll(signal, playback, current);
+                }
+              },
+              child: MouseRegion(
+                onEnter: (_) => setState(() => _hovering = true),
+                onExit: (_) => setState(() => _hovering = false),
+                child: SizedBox(
+                  height: 42,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: showSlider ? 8 : 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CpIconButton(
+                          key: const ValueKey('bottom-player-bar-volume-button'),
+                          variant: CpButtonVariant.immersive,
+                          onPressed: () {
+                            if (current > 0.0001) {
+                              _lastNonZeroVolume = current;
+                            }
+                            final next =
+                                current <= 0.0001 ? _lastNonZeroVolume : 0.0;
+                            _setVolume(playback, next);
+                          },
+                          icon: AnimatedSwitcher(
+                            duration: motion.microInteractionDuration,
+                            switchInCurve: motion.emphasized,
+                            switchOutCurve: motion.fast,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(begin: 0.82, end: 1)
+                                      .animate(animation),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: Icon(icon, key: ValueKey(icon)),
+                          ),
+                        ),
+                        ClipRect(
+                          child: AnimatedContainer(
+                            duration: motion.controlTransitionDuration,
+                            curve: motion.normal,
+                            width: effectiveWidth,
+                            child: !showSlider
+                                ? const SizedBox.shrink()
+                                : LayoutBuilder(
+                                    builder: (context, sliderConstraints) {
+                                      if (!canPaintSliderAtWidth(
+                                        sliderConstraints.maxWidth,
+                                      )) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return TweenAnimationBuilder<double>(
+                                        tween: Tween<double>(
+                                          end: resolveSliderThumbRadius(
+                                            hovering: _hovering,
+                                            dragging: _dragging,
+                                            visibleRadius: 5,
                                           ),
-                                          showValueIndicator:
-                                              ShowValueIndicator.onDrag,
-                                          valueIndicatorShape:
-                                              const RectangularSliderValueIndicatorShape(),
-                                          valueIndicatorColor: accents.accent,
                                         ),
-                                        child: Slider(
-                                          min: 0,
-                                          max: 1,
-                                          value: current,
-                                          label: '${(current * 100).round()}%',
-                                          onChangeStart: (next) {
-                                            setState(() {
-                                              _dragging = true;
-                                              _dragValue = next;
-                                            });
-                                          },
-                                          onChanged: (next) {
-                                            setState(() => _dragValue = next);
-                                            _setVolume(playback, next);
-                                          },
-                                          onChangeEnd: (_) =>
-                                              setState(() => _dragging = false),
-                                        ),
+                                        duration: motion.microInteractionDuration,
+                                        curve: motion.fast,
+                                        builder:
+                                            (context, animatedThumbRadius, _) {
+                                          return SliderTheme(
+                                            data:
+                                                SliderTheme.of(context).copyWith(
+                                              trackHeight: 2,
+                                              activeTrackColor:
+                                                  accents.progressActive,
+                                              inactiveTrackColor:
+                                                  accents.progressInactive,
+                                              thumbColor: accents.accent,
+                                              overlayShape: SliderComponentShape
+                                                  .noOverlay,
+                                              thumbShape: _GlowSliderThumbShape(
+                                                radius: animatedThumbRadius,
+                                                color: accents.accent,
+                                              ),
+                                              showValueIndicator:
+                                                  ShowValueIndicator.onDrag,
+                                              valueIndicatorShape:
+                                                  const RectangularSliderValueIndicatorShape(),
+                                              valueIndicatorColor: accents.accent,
+                                            ),
+                                            child: Slider(
+                                              min: 0,
+                                              max: 1,
+                                              value: current,
+                                              label:
+                                                  '${(current * 100).round()}%',
+                                              onChangeStart: (next) {
+                                                _indicatorHideTimer?.cancel();
+                                                if (_indicatorOverlayController
+                                                    .isShowing) {
+                                                  _indicatorOverlayController
+                                                      .hide();
+                                                }
+                                                setState(() {
+                                                  _dragging = true;
+                                                  _dragValue = next;
+                                                });
+                                              },
+                                              onChanged: (next) {
+                                                setState(
+                                                    () => _dragValue = next);
+                                                _setVolume(playback, next);
+                                              },
+                                              onChangeEnd: (_) => setState(
+                                                  () => _dragging = false),
+                                            ),
+                                          );
+                                        },
                                       );
                                     },
-                                  );
-                                },
-                              ),
-                      ),
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
   }
 }
 
@@ -1301,6 +1443,7 @@ class _DesktopLyricControl extends StatelessWidget {
             return CpIconButton(
               variant: CpButtonVariant.immersive,
               tooltip: '桌面歌词${enabled ? "已开启" : "已关闭"}',
+              tooltipDirection: ModernTooltipDirection.top,
               onPressed: ready
                   ? enabled
                       ? desktopLyricService.isLocked
@@ -1502,5 +1645,34 @@ class _QueueEntryButton extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _VolumeIndicatorLayoutDelegate extends SingleChildLayoutDelegate {
+  _VolumeIndicatorLayoutDelegate({required this.target});
+
+  final Offset target;
+
+  static const double gap = 8.0;
+  static const double margin = 8.0;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    return constraints.loosen();
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final x = (target.dx - childSize.width / 2).clamp(
+      margin,
+      (size.width - childSize.width - margin).clamp(margin, double.infinity),
+    );
+    final y = target.dy - childSize.height - gap;
+    return Offset(x, y);
+  }
+
+  @override
+  bool shouldRelayout(covariant _VolumeIndicatorLayoutDelegate oldDelegate) {
+    return oldDelegate.target != target;
   }
 }

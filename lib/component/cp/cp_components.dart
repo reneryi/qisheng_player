@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 
 enum CpButtonVariant {
   primary,
@@ -623,6 +624,7 @@ class CpIconButton extends StatelessWidget {
     required this.icon,
     this.onPressed,
     this.tooltip,
+    this.tooltipDirection = ModernTooltipDirection.auto,
     this.variant = CpButtonVariant.ghost,
     this.small = false,
   });
@@ -630,6 +632,7 @@ class CpIconButton extends StatelessWidget {
   final Widget icon;
   final VoidCallback? onPressed;
   final String? tooltip;
+  final ModernTooltipDirection tooltipDirection;
   final CpButtonVariant variant;
   final bool small;
 
@@ -643,8 +646,12 @@ class CpIconButton extends StatelessWidget {
       style: _iconButtonStyle(context),
       visualDensity: small ? VisualDensity.compact : VisualDensity.standard,
     );
-    if (tooltip == null) return button;
-    return Tooltip(message: tooltip, child: button);
+    if (tooltip == null || tooltip!.isEmpty) return button;
+    return ModernTooltip(
+      message: tooltip!,
+      direction: tooltipDirection,
+      child: button,
+    );
   }
 
   ButtonStyle? _iconButtonStyle(BuildContext context) {

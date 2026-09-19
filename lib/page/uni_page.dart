@@ -4,6 +4,7 @@ import 'dart:ui' show lerpDouble;
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/side_nav.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/page/uni_page_components.dart';
 import 'package:qisheng_player/page/page_scaffold.dart';
 import 'package:qisheng_player/component/windows_accessibility_tooltip_guard.dart';
@@ -1261,6 +1262,7 @@ class _UniPageState<T> extends State<UniPage<T>>
           CpIconButton(
             variant: CpButtonVariant.immersive,
             tooltip: "多选",
+            tooltipDirection: ModernTooltipDirection.bottom,
             onPressed: () {
               multiSelectController.useMultiSelectView(true);
               multiSelectController.clear();

@@ -4,6 +4,7 @@ import 'package:qisheng_player/component/animated_menu_content.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/ui/app_surface.dart';
 import 'package:qisheng_player/component/ui/modern_dialog.dart';
+import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
 import 'package:qisheng_player/library/playlist.dart';
@@ -134,8 +135,9 @@ class SortMethodComboBox<T> extends StatelessWidget {
         ),
       ),
       builder: (context, menuController, _) {
-        return Tooltip(
+        return ModernTooltip(
           message: '排序方式：当前按${currSortMethod.name}排序',
+          direction: ModernTooltipDirection.bottom,
           child: SizedBox(
             height: 48.0,
             child: AppSurface(
@@ -223,6 +225,7 @@ class ContentViewSwitch<T> extends StatelessWidget {
     return CpIconButton(
       variant: CpButtonVariant.immersive,
       tooltip: "切换页面视图：当前为$tooltip",
+      tooltipDirection: ModernTooltipDirection.bottom,
       onPressed: () => setContentView(nextView),
       icon: Icon(icon),
     );

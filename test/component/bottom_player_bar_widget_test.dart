@@ -9,6 +9,7 @@ import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -490,6 +491,78 @@ void main() {
     expect(slider.height, equals(36.0));
 
     await tester.pump(const Duration(milliseconds: 600));
+  });
+
+  testWidgets(
+      'BottomPlayerBar reveals volume percentage bubble on mouse wheel scroll and auto-hides after inactivity',
+      (tester) async {
+    final audio = TestAudio(
+      title: 'Scroll Song',
+      artist: 'Scroll Artist',
+      album: 'Scroll Album',
+      path: r'E:\Music\scroll.flac',
+    );
+    final playback = FakePlaybackController(
+      audio: audio,
+      queue: [audio],
+    );
+    playback.setVolumeDsp(0.5);
+
+    await tester.pumpWidget(
+      buildMediaHarness(
+        playbackController: playback,
+        lyricController: FakeLyricController(Lrc([], LrcSource.local)),
+        desktopLyricController: FakeDesktopLyricController(),
+        child: const Center(
+          child: SizedBox(
+            width: 1200,
+            child: BottomPlayerBar(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final volumeButtonFinder =
+        find.byKey(const ValueKey('bottom-player-bar-volume-button'));
+    expect(volumeButtonFinder, findsOneWidget);
+
+    // Initial state: no percentage bubble shown yet
+    expect(find.text('50%'), findsNothing);
+
+    // Send a scroll event over the volume button
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(volumeButtonFinder),
+        scrollDelta: const Offset(0, -20), // scroll up -> increase volume
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Volume changed from 0.5 to 0.54 (54%) and bubble is revealed
+    expect(find.text('54%'), findsOneWidget);
+
+    // Wait for the inactivity timer (1100ms) + reverse animation (120ms)
+    await tester.pump(const Duration(milliseconds: 1250));
+    await tester.pump(const Duration(milliseconds: 150));
+
+    // The bubble auto-hides
+    expect(find.text('54%'), findsNothing);
+
+    // Send horizontal scroll event (dy == 0, dx != 0)
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(volumeButtonFinder),
+        scrollDelta: const Offset(30, 0), // pure horizontal scroll
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Volume stays at 0.54 and no bubble appears
+    expect(playback.volumeDsp, closeTo(0.54, 0.001));
+    expect(find.text('54%'), findsNothing);
   });
 }
 

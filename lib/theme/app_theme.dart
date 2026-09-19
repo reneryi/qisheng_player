@@ -172,14 +172,30 @@ class AppTheme {
       tabBarTheme: AppComponentThemes.tabBarTheme(colorScheme, accents),
       tooltipTheme: TooltipThemeData(
         enableFeedback: false,
-        waitDuration: const Duration(milliseconds: 300),
+        waitDuration: const Duration(milliseconds: 220),
+        exitDuration: const Duration(milliseconds: 100),
         showDuration: const Duration(seconds: 2),
         textStyle: TextStyle(
-          color: colorScheme.onInverseSurface,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+          color: accents.accent.computeLuminance() > 0.45
+              ? const Color(0xFF1C1B1F)
+              : Colors.white,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: ShapeDecoration(
+          color: accents.accent,
+          shadows: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
       ),
       sliderTheme: SliderThemeData(
         trackHeight: 2,
