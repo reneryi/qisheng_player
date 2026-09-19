@@ -37,7 +37,23 @@ class _AlbumTileState extends State<AlbumTile> {
   void initState() {
     super.initState();
     _initCoverFuture();
+    ArtworkStore.instance.addListener(_handleArtworkStoreChange);
   }
+
+  void _handleArtworkStoreChange() {
+    if (mounted) {
+      setState(() {
+        _initCoverFuture();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    ArtworkStore.instance.removeListener(_handleArtworkStoreChange);
+    super.dispose();
+  }
+
 
   void _initCoverFuture() {
     if (widget.album.cachedCover != null) {

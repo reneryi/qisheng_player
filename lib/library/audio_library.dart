@@ -893,12 +893,49 @@ class Artist {
   /// 作品
   List<Audio> works = [];
 
+  ImageProvider? _fallbackSongCover;
+
+  void invalidateCover() {
+    _fallbackSongCover = null;
+  }
+
   /// 只能用在artist detail page
   /// 200*200
   String get id => entityId("artist", normalizeEntityName(name));
   ArtistProfile get profile => ArtistProfile(id, name);
-  ImageProvider? get cachedPicture => ArtworkStore.instance.cached(id);
-  Future<ImageProvider?> get picture => ArtworkStore.instance.artistImage(this);
+  ImageProvider? get cachedPicture {
+    final storeImage = ArtworkStore.instance.cached(id);
+    if (storeImage != null) return storeImage;
+    if (_fallbackSongCover != null) return _fallbackSongCover;
+    for (final audio in works) {
+      final c = audio.cachedMediumCover ?? audio.cachedCover;
+      if (c != null) {
+        _fallbackSongCover = c;
+        return c;
+      }
+    }
+    return null;
+  }
+
+  Future<ImageProvider?> get picture async {
+    final storeImage = ArtworkStore.instance.cached(id);
+    if (storeImage != null) return storeImage;
+    final image = await ArtworkStore.instance.artistImage(this);
+    if (image != null) {
+      _fallbackSongCover = image;
+      return image;
+    }
+
+    if (_fallbackSongCover != null) return _fallbackSongCover;
+    for (final audio in works) {
+      final c = await audio.mediumCover ?? await audio.cover;
+      if (c != null) {
+        _fallbackSongCover = c;
+        return c;
+      }
+    }
+    return null;
+  }
 
   Artist({required this.name});
 }
@@ -954,8 +991,10 @@ class Album {
     if (storeCover != null) return storeCover;
     final image = await ArtworkStore.instance.albumImage(this);
     if (image != null) {
+      _fallbackSongCover = image;
       return image;
     }
+
     if (_fallbackSongCover != null) return _fallbackSongCover;
     for (final audio in works) {
       final c = await audio.mediumCover ?? await audio.cover;

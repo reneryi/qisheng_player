@@ -244,9 +244,21 @@ class ArtworkStore extends ChangeNotifier {
   }
 
   bool hasArtwork(String id) => cached(id) != null;
+  bool isReset(String id) => _records[id]?['reset'] == true;
 
-  Future<ImageProvider?> artistImage(Artist artist) =>
-      imageFor(artist.id, artist.name, 'artist', artist.works, '');
+  Future<ImageProvider?> artistImage(Artist artist) async {
+    final image = await imageFor(
+        artist.id, artist.name, 'artist', artist.works, '');
+    if (image != null) return image;
+    for (final audio in artist.works) {
+      final cover = audio.cachedMediumCover ??
+          audio.cachedCover ??
+          await audio.mediumCover ??
+          await audio.cover;
+      if (cover != null) return cover;
+    }
+    return null;
+  }
   Future<ImageProvider?> albumImage(Album album) async {
     final image = await imageFor(
         album.id, album.name, 'album', album.works, album.effectiveArtist);
@@ -269,7 +281,11 @@ class ArtworkStore extends ChangeNotifier {
     if (!_loaded || (works.isEmpty && name.isEmpty)) return Future.value(null);
     if (force) {
       _records[id]?.remove('failedAt');
+      _records[id]?.remove('reset');
     } else {
+      if (_records[id]?['reset'] == true) {
+        return Future.value(null);
+      }
       final failed = _records[id]?['failedAt'] as int?;
       if (failed != null &&
           DateTime.now().millisecondsSinceEpoch - failed < 86400000) {
@@ -422,16 +438,22 @@ class ArtworkStore extends ChangeNotifier {
     return unique.values.toList();
   }
 
-  Future<void> select(String id, MetadataCandidate candidate) async {
+  Future<void> select(String id, MetadataCandidate candidate,
+      {Uint8List? preloadedBytes}) async {
     await read();
     final version = (_versions[id] ?? 0) + 1;
     _versions[id] = version;
-    final detailed = await providers
-        .firstWhere((p) => p.source == candidate.source)
-        .detail(candidate);
-    await _persistImage(id, await _downloader(detailed.imageUrl!),
+    final detailed = (candidate.imageUrl != null &&
+            candidate.imageUrl!.trim().isNotEmpty)
+        ? candidate
+        : await providers
+            .firstWhere((p) => p.source == candidate.source)
+            .detail(candidate);
+    final bytes = preloadedBytes ?? await _downloader(detailed.imageUrl!);
+    await _persistImage(id, bytes,
         manual: true, candidate: detailed, expectedVersion: version);
   }
+
 
   Future<void> local(String id, Uint8List bytes) async {
     await read();
@@ -449,8 +471,7 @@ class ArtworkStore extends ChangeNotifier {
     }
     final previous =
         _records[id] == null ? null : Map<String, dynamic>.from(_records[id]!);
-    final candidate = _records[id]?['candidate'];
-    _records[id] = {if (candidate != null) 'candidate': candidate};
+    _records[id] = {'reset': true};
     try {
       await _save();
     } catch (_) {
@@ -461,6 +482,12 @@ class ArtworkStore extends ChangeNotifier {
       }
       rethrow;
     }
+    for (final artist in AudioLibrary.instance.artistCollection.values) {
+      if (artist.id == id) artist.invalidateCover();
+    }
+    for (final album in AudioLibrary.instance.albumCollection.values) {
+      if (album.id == id) album.invalidateCover();
+    }
     notifyListeners();
   }
 
@@ -470,8 +497,16 @@ class ArtworkStore extends ChangeNotifier {
     required String kind,
     required List<Audio> works,
     String albumArtist = '',
+    bool force = false,
   }) async {
     await read();
+    if (!force && isReset(id)) {
+      return const AutoMatchResult(
+        status: AutoMatchStatus.noCandidate,
+        message: '用户已设置恢复歌曲封面，跳过自动匹配',
+      );
+    }
+
     try {
       final list = await candidates(name, kind, works, albumArtist);
       if (list.isEmpty) {
@@ -684,8 +719,8 @@ class ArtworkStore extends ChangeNotifier {
       try {
         if (image.width > 16384 ||
             image.height > 16384 ||
-            image.width * image.height > 64000000) {
-          throw const FormatException('图片像素尺寸过大，超过 6400 万像素限制');
+            image.width * image.height > 268435456) {
+          throw const FormatException('图片像素尺寸过大，超过 16384 像素限制');
         }
       } finally {
         image.dispose();
@@ -702,8 +737,32 @@ class ArtworkStore extends ChangeNotifier {
   }
 
   static Future<Uint8List> download(String url) async {
-    final uri = Uri.parse(url);
-    if (!['http', 'https'].contains(uri.scheme)) {
+    final cleanUrl = url.trim();
+    if (cleanUrl.contains('126.net') && !cleanUrl.contains('param=')) {
+      try {
+        final neteaseOptimized = formatNeteaseImageUrl(cleanUrl, size: 1024);
+        return await _downloadDirect(neteaseOptimized);
+      } catch (e) {
+        LOGGER.w('NetEase 带参图片下载失败，降级原图下载: $e');
+      }
+    }
+    return await _downloadDirect(cleanUrl);
+  }
+
+  static Future<Uint8List> _downloadDirect(String url, {int redirects = 0}) async {
+    if (redirects > 5) {
+      throw const HttpException('图片重定向次数过多');
+    }
+    var targetUrl = url.trim();
+    if (targetUrl.startsWith('http://')) {
+      if (targetUrl.contains('126.net') ||
+          targetUrl.contains('gtimg.cn') ||
+          targetUrl.contains('qq.com')) {
+        targetUrl = 'https://${targetUrl.substring(7)}';
+      }
+    }
+    final uri = Uri.tryParse(targetUrl);
+    if (uri == null || !uri.hasScheme || !['http', 'https'].contains(uri.scheme)) {
       throw const FormatException('无效的图片地址');
     }
     final client = HttpClient()..connectionTimeout = onlineCoverRequestTimeout;
@@ -714,18 +773,29 @@ class ArtworkStore extends ChangeNotifier {
         HttpHeaders.userAgentHeader,
         'QishengPlayer/${AppSettings.version}',
       );
+      request.followRedirects = true;
+      request.maxRedirects = 5;
+
       final response = await request.close().timeout(onlineCoverRequestTimeout);
-      if (response.statusCode != 200 ||
-          response.contentLength > onlineCoverMaxBytes) {
-        throw const HttpException('图片下载失败');
+      if (response.isRedirect &&
+          response.headers.value(HttpHeaders.locationHeader) != null) {
+        final location = response.headers.value(HttpHeaders.locationHeader)!;
+        final redirectUri = uri.resolve(location);
+        return _downloadDirect(redirectUri.toString(), redirects: redirects + 1);
       }
-      final bytes = await readBoundedCoverBytes(response);
+      if (response.statusCode != 200 ||
+          (response.contentLength > 0 && response.contentLength > maxArtworkBytes)) {
+        throw HttpException('图片下载失败: HTTP ${response.statusCode}');
+      }
+      final bytes = await readBoundedCoverBytes(response,
+          maxBytes: maxArtworkBytes, timeout: onlineCoverRequestTimeout);
       await validateImage(bytes);
       return bytes;
     } finally {
       client.close(force: true);
     }
   }
+
 
   static Map<String, Map<String, dynamic>> _copyMap(
           Map<String, Map<String, dynamic>> source) =>

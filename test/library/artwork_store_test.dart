@@ -308,4 +308,75 @@ void main() {
     expect(optimized.length, greaterThan(0));
     expect(detectCoverExtension(optimized), isNotNull);
   });
+
+  test('ArtworkStore.reset marks record as reset and suppresses automatic download', () async {
+    final directory = await Directory.systemTemp.createTemp('artwork-reset-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = ArtworkStore.testing(
+      directory: directory,
+      providers: [_Provider()],
+      downloader: (_) async => _png,
+    );
+
+    final audio = TestAudio(
+      title: 'Song',
+      artist: 'Artist',
+      album: 'Album',
+      path: r'E:\Music\song.flac',
+    );
+    final id = entityId('artist', normalizeEntityName('Artist'));
+
+    // Populate an initial local artwork
+    await store.local(id, _png);
+    expect(store.hasArtwork(id), isTrue);
+
+    // Call reset
+    await store.reset(id);
+    expect(store.hasArtwork(id), isFalse);
+
+    // imageFor should return null and not automatically re-download
+    final result = await store.imageFor(id, 'Artist', 'artist', [audio], '');
+    expect(result, isNull);
+    expect(store.hasArtwork(id), isFalse);
+    expect(store.isReset(id), isTrue);
+
+    // autoMatchEntity should respect isReset and skip when force is false
+    final autoResult = await store.autoMatchEntity(
+      id: id,
+      name: 'Artist',
+      kind: 'artist',
+      works: [audio],
+    );
+    expect(autoResult.status, AutoMatchStatus.noCandidate);
+    expect(autoResult.message, contains('用户已设置恢复歌曲封面'));
+  });
+
+  test('ArtworkStore.select with preloadedBytes persists without invoking downloader', () async {
+    final directory = await Directory.systemTemp.createTemp('artwork-preload-');
+    addTearDown(() => directory.delete(recursive: true));
+    var downloaderCalled = false;
+    final store = ArtworkStore.testing(
+      directory: directory,
+      providers: [_Provider()],
+      downloader: (_) async {
+        downloaderCalled = true;
+        return _png;
+      },
+    );
+
+    const candidate = MetadataCandidate(
+      source: ResultSource.netease,
+      id: '12345',
+      name: 'Preloaded Artist',
+      kind: 'artist',
+      imageUrl: 'https://example.com/art.jpg',
+    );
+    final id = entityId('artist', normalizeEntityName('Preloaded Artist'));
+
+    await store.select(id, candidate, preloadedBytes: _png);
+    expect(downloaderCalled, isFalse);
+    expect(store.hasArtwork(id), isTrue);
+    expect(store.isReset(id), isFalse);
+  });
 }
+

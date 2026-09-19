@@ -36,7 +36,23 @@ class _ArtistTileState extends State<ArtistTile> {
   void initState() {
     super.initState();
     _initPictureFuture();
+    ArtworkStore.instance.addListener(_handleArtworkStoreChange);
   }
+
+  void _handleArtworkStoreChange() {
+    if (mounted) {
+      setState(() {
+        _initPictureFuture();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    ArtworkStore.instance.removeListener(_handleArtworkStoreChange);
+    super.dispose();
+  }
+
 
   void _initPictureFuture() {
     final cached = widget.artist.cachedPicture ??

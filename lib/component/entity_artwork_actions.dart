@@ -16,11 +16,14 @@ class EntityArtworkActions extends StatelessWidget {
     required this.works,
     this.albumArtist = '',
     this.album,
+    this.artist,
   });
 
   final String id, name, kind, albumArtist;
   final List<Audio> works;
   final Album? album;
+  final Artist? artist;
+
 
   Future<void> _run(
       BuildContext context, Future<void> Function() action) async {
@@ -68,11 +71,14 @@ class EntityArtworkActions extends StatelessWidget {
                   '已成功设置本地${kind == 'artist' ? '歌手头像' : '专辑封面'}');
             }
           } else if (value == 'reset') {
+            artist?.invalidateCover();
+            album?.invalidateCover();
             await ArtworkStore.instance.reset(id);
             if (context.mounted) {
               showTextOnSnackBar('已恢复使用歌曲封面');
             }
-          } else if (value == 'merge' && album != null) {
+          }
+ else if (value == 'merge' && album != null) {
             final others = AudioLibrary.instance.albumCollection.values
                 .where((a) => a.id != id && a.name == name)
                 .toList();
@@ -500,12 +506,14 @@ class _ArtworkSearchState extends State<_ArtworkSearch> {
       );
 
       if (selected == true) {
-        await ArtworkStore.instance.select(widget.id, detail);
+        await ArtworkStore.instance
+            .select(widget.id, detail, preloadedBytes: bytes);
         if (!mounted) return;
         showTextOnSnackBar(
             '已成功更新${widget.kind == "artist" ? "歌手头像" : "专辑封面"}');
         Navigator.pop(context);
       }
+
     } catch (e) {
       if (mounted) {
         setState(() => _error = '获取并应用图片失败: $e');
@@ -563,9 +571,13 @@ class _CandidateCard extends StatelessWidget {
                   child: hasImage
                       ? Image.network(
                           candidate.imageUrl!,
+                          cacheWidth: 96,
+                          cacheHeight: 96,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _fallbackIcon(isArtist, scheme),
+                          errorBuilder: (_, __, ___) =>
+                              _fallbackIcon(isArtist, scheme),
                         )
+
                       : _fallbackIcon(isArtist, scheme),
                 ),
               ),

@@ -5,6 +5,29 @@ import 'package:qisheng_player/music_matcher.dart';
 String normalizeEntityName(String value) =>
     value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
+String formatNeteaseImageUrl(String? url, {int size = 1024}) {
+  if (url == null || url.trim().isEmpty) return '';
+  var trimmed = url.trim();
+  if (trimmed.startsWith('http://')) {
+    trimmed = 'https://${trimmed.substring(7)}';
+  }
+  if (!trimmed.contains('126.net')) return trimmed;
+  if (trimmed.contains('param=')) return trimmed;
+  final separator = trimmed.contains('?') ? '&' : '?';
+  return '$trimmed${separator}param=${size}y$size';
+}
+
+
+String _formatQQImageUrl(String? rawPic, String mid, {required bool isArtist}) {
+  if (rawPic != null && rawPic.trim().isNotEmpty) {
+    var pic = rawPic.trim().replaceFirst('http://', 'https://');
+    pic = pic.replaceAll(RegExp(r'\d+x\d+'), '800x800');
+    return pic;
+  }
+  final prefix = isArtist ? 'T001' : 'T002';
+  return 'https://y.gtimg.cn/music/photo_new/${prefix}R800x800M000$mid.jpg';
+}
+
 class MetadataCandidate {
   const MetadataCandidate(
       {required this.source,
@@ -89,7 +112,8 @@ class PlatformMetadataProvider implements MetadataProvider {
                   id: item['id'].toString(),
                   name: item['name']?.toString() ?? '',
                   kind: 'artist',
-                  imageUrl: (item['img1v1Url'] ?? item['picUrl'])?.toString(),
+                  imageUrl: formatNeteaseImageUrl(
+                      (item['img1v1Url'] ?? item['picUrl'])?.toString()),
                   evidence: true,
                 )
           ];
@@ -107,7 +131,8 @@ class PlatformMetadataProvider implements MetadataProvider {
                   name: item['name']?.toString() ?? '',
                   kind: 'album',
                   artist: item['artist']?['name']?.toString() ?? '',
-                  imageUrl: item['picUrl']?.toString(),
+                  imageUrl:
+                      formatNeteaseImageUrl(item['picUrl']?.toString()),
                   evidence: true,
                 )
           ];
@@ -117,23 +142,40 @@ class PlatformMetadataProvider implements MetadataProvider {
           final answer = await QQ.search(keyWord: query, type: 1, size: 10)
               .timeout(timeout);
           final body = answer.data['req']?['data']?['body'];
-          final List items = body?['item_singer'] ??
-              body?['singer_list'] ??
-              answer.data['data']?['singer']?['list'] ??
-              [];
+          final List items = (body?['item_singer'] ??
+                  body?['singer_list'] ??
+                  body?['singer'] ??
+                  answer.data['data']?['singer']?['list'] ??
+                  []) as List;
           return [
             for (final item in items)
-              if ((item['singer_mid'] ?? item['mid'] ?? item['singerMID']) !=
+              if ((item['singer_mid'] ??
+                      item['mid'] ??
+                      item['singerMID'] ??
+                      item['singermid']) !=
                   null)
                 MetadataCandidate(
                   source: ResultSource.qq,
-                  id: (item['singer_mid'] ?? item['mid'] ?? item['singerMID'])
+                  id: (item['singer_mid'] ??
+                          item['mid'] ??
+                          item['singerMID'] ??
+                          item['singermid'])
                       .toString(),
-                  name:
-                      (item['singer_name'] ?? item['name'])?.toString() ?? '',
+                  name: (item['singer_name'] ??
+                          item['name'] ??
+                          item['singerName'])
+                          ?.toString() ??
+                      '',
                   kind: 'artist',
-                  imageUrl:
-                      'https://y.qq.com/music/photo_new/T001R800x800M000${item['singer_mid'] ?? item['mid'] ?? item['singerMID']}.jpg',
+                  imageUrl: _formatQQImageUrl(
+                    item['singerPic']?.toString(),
+                    (item['singer_mid'] ??
+                            item['mid'] ??
+                            item['singerMID'] ??
+                            item['singermid'])
+                        .toString(),
+                    isArtist: true,
+                  ),
                   evidence: true,
                 )
           ];
@@ -141,25 +183,48 @@ class PlatformMetadataProvider implements MetadataProvider {
           final answer = await QQ.search(keyWord: query, type: 2, size: 10)
               .timeout(timeout);
           final body = answer.data['req']?['data']?['body'];
-          final List items = body?['item_album'] ??
-              body?['album_list'] ??
-              answer.data['data']?['album']?['list'] ??
-              [];
+          final List items = (body?['item_album'] ??
+                  body?['album_list'] ??
+                  body?['album'] ??
+                  answer.data['data']?['album']?['list'] ??
+                  []) as List;
           return [
             for (final item in items)
-              if ((item['album_mid'] ?? item['mid'] ?? item['albumMID']) !=
+              if ((item['album_mid'] ??
+                      item['mid'] ??
+                      item['albumMID'] ??
+                      item['albummid']) !=
                   null)
                 MetadataCandidate(
                   source: ResultSource.qq,
-                  id: (item['album_mid'] ?? item['mid'] ?? item['albumMID'])
+                  id: (item['album_mid'] ??
+                          item['mid'] ??
+                          item['albumMID'] ??
+                          item['albummid'])
                       .toString(),
-                  name: (item['album_name'] ?? item['name'])?.toString() ?? '',
-                  kind: 'album',
-                  artist: (item['singer_name'] ?? item['singer']?['name'])
+                  name: (item['album_name'] ??
+                          item['name'] ??
+                          item['albumName'])
                           ?.toString() ??
                       '',
-                  imageUrl:
-                      'https://y.qq.com/music/photo_new/T002R800x800M000${item['album_mid'] ?? item['mid'] ?? item['albumMID']}.jpg',
+                  kind: 'album',
+                  artist: (item['singer_name'] ??
+                          (item['singer'] is String
+                              ? item['singer']
+                              : item['singer']?['name']) ??
+                          (item['singer_list'] as List?)?.firstOrNull?['name'])
+                          ?.toString() ??
+                      '',
+                  imageUrl: _formatQQImageUrl(
+                    item['pic']?.toString(),
+                    (item['pmid'] ??
+                            item['album_mid'] ??
+                            item['mid'] ??
+                            item['albumMID'] ??
+                            item['albummid'])
+                        .toString(),
+                    isArtist: false,
+                  ),
                   evidence: true,
                 )
           ];
@@ -186,30 +251,58 @@ class PlatformMetadataProvider implements MetadataProvider {
         throw const FormatException('详情返回的实体身份不匹配');
       }
       name = entity['name']?.toString() ?? name;
-      image = (c.kind == 'artist'
+      final rawImage = (c.kind == 'artist'
               ? entity['img1v1Url'] ?? entity['picUrl']
               : entity['picUrl'])
           ?.toString();
+      image = formatNeteaseImageUrl(rawImage, size: 1024);
     } else if (source == ResultSource.qq) {
       if (c.kind == 'artist') {
         final answer = await QQ.singerInfo(singerMid: c.id).timeout(timeout);
+        final data = answer.data['detail']?['data'] ?? answer.data['data'];
         final List singers =
-            answer.data['detail']?['data']?['singer_list'] ?? [];
-        final matches = singers
-            .where((s) => s['basic_info']?['singer_mid']?.toString() == c.id);
+            (data?['singer_list'] ?? data?['singer'] ?? []) as List;
+        final matches = singers.where((s) =>
+            (s['basic_info']?['singer_mid'] ??
+                    s['singer_mid'] ??
+                    s['singerMID'])
+                ?.toString() ==
+            c.id);
         if (matches.isNotEmpty) {
-          final basic = matches.first['basic_info'];
-          name = basic['name']?.toString() ?? name;
+          final target = matches.first;
+          final basic = target['basic_info'] ?? target;
+          name = (basic['name'] ?? basic['singer_name'])?.toString() ?? name;
+          final picObj = target['pic'];
+          final picUrl = picObj is Map
+              ? (picObj['pic'] ?? picObj['big_white'] ?? picObj['big_black'])
+                  ?.toString()
+              : target['singerPic']?.toString();
+          if (picUrl != null && picUrl.isNotEmpty) {
+            image = _formatQQImageUrl(picUrl, c.id, isArtist: true);
+          }
         }
-        image = 'https://y.qq.com/music/photo_new/T001R800x800M000${c.id}.jpg';
+        image ??=
+            'https://y.gtimg.cn/music/photo_new/T001R800x800M000${c.id}.jpg';
       } else {
         final answer = await QQ.albumInfo(albumMid: c.id).timeout(timeout);
-        final Map? data = answer.data['albumInfo']?['data'];
-        final Map? basic = data?['basicInfo'];
-        if (basic != null && basic['albumMid']?.toString() == c.id) {
-          name = basic['albumName']?.toString() ?? name;
+        final Map? data =
+            answer.data['albumInfo']?['data'] ?? answer.data['data'];
+        final Map? basic =
+            (data?['basicInfo'] ?? data?['basic_info']) as Map?;
+        final pmid = (data?['pmid'] ?? basic?['pmid'] ?? c.id).toString();
+        if (basic != null) {
+          name = (basic['albumName'] ??
+                  basic['album_name'] ??
+                  basic['name'])
+                  ?.toString() ??
+              name;
         }
-        image = 'https://y.qq.com/music/photo_new/T002R800x800M000${c.id}.jpg';
+        final picUrl = (data?['pic'] ?? basic?['pic'])?.toString();
+        if (picUrl != null && picUrl.isNotEmpty) {
+          image = _formatQQImageUrl(picUrl, pmid, isArtist: false);
+        }
+        image ??=
+            'https://y.gtimg.cn/music/photo_new/T002R800x800M000$pmid.jpg';
       }
     } else if (source == ResultSource.kugou) {
       if (c.kind == 'artist') {

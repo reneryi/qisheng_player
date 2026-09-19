@@ -85,7 +85,7 @@ class _BatchArtworkMatchDialogState extends State<BatchArtworkMatchDialog> {
           _currentName = artist.name;
         });
 
-        if (_skipExisting && store.hasArtwork(artist.id)) {
+        if (_skipExisting && (store.hasArtwork(artist.id) || store.isReset(artist.id))) {
           setState(() => _skippedCount++);
           await Future.delayed(const Duration(milliseconds: 10));
           continue;
@@ -124,11 +124,12 @@ class _BatchArtworkMatchDialogState extends State<BatchArtworkMatchDialog> {
           _currentName = album.name;
         });
 
-        if (_skipExisting && store.hasArtwork(album.id)) {
+        if (_skipExisting && (store.hasArtwork(album.id) || store.isReset(album.id))) {
           setState(() => _skippedCount++);
           await Future.delayed(const Duration(milliseconds: 10));
           continue;
         }
+
 
         try {
           final result = await store.autoMatchEntity(

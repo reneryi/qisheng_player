@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+import 'package:qisheng_player/library/metadata_provider.dart';
 import 'package:qisheng_player/music_matcher.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:crypto/crypto.dart';
@@ -13,7 +14,7 @@ import 'package:flutter/widgets.dart';
 
 const Duration onlineCoverFailureTtl = Duration(days: 7);
 const Duration onlineCoverRequestTimeout = Duration(seconds: 15);
-const int onlineCoverMaxBytes = 12 * 1024 * 1024;
+const int onlineCoverMaxBytes = 32 * 1024 * 1024;
 
 @visibleForTesting
 String onlineCoverCacheKey(String path) {
@@ -292,7 +293,17 @@ class OnlineCoverStore {
     final lookupPath = targetPath ?? audio.mediaPath;
     HttpClient? client;
     try {
-      final uri = Uri.tryParse(url);
+      var targetUrl = url.trim();
+      if (targetUrl.contains('126.net')) {
+        targetUrl = formatNeteaseImageUrl(targetUrl, size: 1024);
+      }
+      if (targetUrl.startsWith('http://') &&
+          (targetUrl.contains('126.net') ||
+              targetUrl.contains('gtimg.cn') ||
+              targetUrl.contains('qq.com'))) {
+        targetUrl = 'https://${targetUrl.substring(7)}';
+      }
+      final uri = Uri.tryParse(targetUrl);
       if (uri == null || (uri.scheme != "http" && uri.scheme != "https")) {
         return null;
       }
@@ -305,14 +316,19 @@ class OnlineCoverStore {
         HttpHeaders.userAgentHeader,
         "QishengPlayer/${AppSettings.version}",
       );
+
+      req.followRedirects = true;
+      req.maxRedirects = 5;
       final resp = await req.close().timeout(onlineCoverRequestTimeout);
       if (resp.statusCode < 200 || resp.statusCode >= 300) return null;
       final contentType = resp.headers.contentType;
       if (!isSupportedOnlineCoverContentType(contentType)) return null;
-      if (resp.contentLength > onlineCoverMaxBytes) return null;
+      if (resp.contentLength > 0 && resp.contentLength > onlineCoverMaxBytes) return null;
 
-      final bytes = await readBoundedCoverBytes(resp);
+      final bytes = await readBoundedCoverBytes(resp,
+          maxBytes: onlineCoverMaxBytes, timeout: onlineCoverRequestTimeout);
       if (bytes.isEmpty) return null;
+
 
       final extension = detectCoverExtension(bytes);
       if (extension == null) {

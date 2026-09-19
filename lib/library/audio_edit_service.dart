@@ -106,7 +106,7 @@ class AudioEditService {
         cover = await ArtworkStore.download(url);
       }
       if (cover != null && cover.isNotEmpty) {
-        await ArtworkStore.validateImage(cover);
+        cover = await ArtworkStore.optimizeImageBytes(cover);
       }
       final support = (await getAppDataDir()).path;
       if (audio.isCueTrack) {

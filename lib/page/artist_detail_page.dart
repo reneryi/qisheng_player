@@ -81,7 +81,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
             id: artist.id,
             name: artist.name,
             kind: 'artist',
-            works: artist.works)
+            works: artist.works,
+            artist: artist)
+
       ],
       primaryPic: artist.picture,
       primaryPicHeroTag: artistArtworkHeroTag(artist),

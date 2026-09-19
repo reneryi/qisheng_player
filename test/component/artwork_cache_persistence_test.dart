@@ -7,7 +7,10 @@ import 'package:qisheng_player/component/album_grid_tile.dart';
 import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/component/artist_tile.dart';
 import 'package:qisheng_player/component/cover_fade_image.dart';
+import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/library/audio_library.dart';
+
+
 
 import '../test_helpers/media_test_harness.dart';
 
@@ -135,11 +138,31 @@ void main() {
     expect(album.cachedCover, equals(audio.cachedMediumCover));
   });
 
+  test('Artist reverts cleanly to song cover fallback when custom store artwork is reset', () async {
+    final artist = Artist(name: 'Reversion Artist');
+    final audio = TestAudio(
+      title: 'Track',
+      artist: 'Reversion Artist',
+      album: 'Some Album',
+      path: r'E:\Music\artist_rev_track.flac',
+    );
+    artist.works.add(audio);
+
+    // Initial state: fallback to audio's cover
+    expect(artist.cachedPicture, equals(audio.cachedMediumCover));
+    expect(await artist.picture, equals(audio.cachedMediumCover));
+
+    // When reset is called or store is empty, cachedPicture and picture still cleanly return audio cover
+    artist.invalidateCover();
+    expect(artist.cachedPicture, equals(audio.cachedMediumCover));
+    expect(await artist.picture, equals(audio.cachedMediumCover));
+  });
+
   testWidgets('ArtistTile renders avatar synchronously on frame 0 when cached',
       (tester) async {
     final artist = Artist(name: 'Cached Artist');
 
-    // Without cached artwork in store, renders placeholder on frame 0
+    // Without cached artwork in store and no works, renders placeholder on frame 0
     await tester.pumpWidget(
       MaterialApp(
         theme: buildTestTheme(),
@@ -150,6 +173,31 @@ void main() {
     );
 
     expect(find.byIcon(Symbols.person_rounded), findsOneWidget);
+  });
+
+  testWidgets('ArtistTile renders song cover on frame 0 when artist has works with cover',
+      (tester) async {
+    final artist = Artist(name: 'Covered Artist');
+    final audio = TestAudio(
+      title: 'Track',
+      artist: 'Covered Artist',
+      album: 'Album',
+      path: r'E:\Music\covered_track.flac',
+    );
+    artist.works.add(audio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTestTheme(),
+        home: Scaffold(
+          body: ArtistTile(artist: artist),
+        ),
+      ),
+    );
+
+    // Frame 0 renders the Image directly from song cover fallback
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Symbols.person_rounded), findsNothing);
   });
 
   test('Audio retains cached covers on instance independently of AudioCoverCache eviction', () async {
@@ -175,4 +223,37 @@ void main() {
     expect(audio.cachedCover, isNotNull);
     expect(audio.cachedMediumCover, isNotNull);
   });
+
+  testWidgets('ArtistTile reactively updates when ArtworkStore notifies',
+      (tester) async {
+    final artist = Artist(name: 'Reactive Artist');
+    final audio = TestAudio(
+      title: 'Track',
+      artist: 'Reactive Artist',
+      album: 'Album',
+      path: r'E:\Music\reactive_track.flac',
+    );
+
+    // Initial state: no works, no artwork in store -> placeholder
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTestTheme(),
+        home: Scaffold(
+          body: ArtistTile(artist: artist),
+        ),
+      ),
+    );
+    expect(find.byIcon(Symbols.person_rounded), findsOneWidget);
+
+    // Now artist has works with cover, and ArtworkStore triggers notification (e.g. reset/update)
+    artist.works.add(audio);
+    artist.invalidateCover();
+    ArtworkStore.instance.notifyListeners();
+    await tester.pump();
+
+    // ArtistTile reacts and updates its artwork
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Symbols.person_rounded), findsNothing);
+  });
 }
+
