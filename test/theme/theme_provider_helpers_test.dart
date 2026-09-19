@@ -171,4 +171,50 @@ void main() {
     expect(palette.primary, isNot(palette.secondary));
     expect(palette.secondary, isNot(palette.accent));
   });
+
+  group('pureNeutralGradient default diagonal gradient tests', () {
+    test('night dark gradient uses elegant 3-stop deep cyan diagonal palette', () {
+      final darkGradient = pureNeutralGradient(Brightness.dark);
+      expect(darkGradient, hasLength(3));
+      expect(darkGradient[0], const Color(0xFF072229)); // 左上：深邃苍青
+      expect(darkGradient[1], const Color(0xFF0C303A)); // 正中：微亮幽水青
+      expect(darkGradient[2], const Color(0xFF041418)); // 右下：沉稳墨青黑
+
+      // 验证全色阶色相均处于雅致的苍青/黛青色谱区间（190°~195°）
+      for (final color in darkGradient) {
+        final hsl = HSLColor.fromColor(color);
+        expect(hsl.hue, inInclusiveRange(190.0, 195.0));
+      }
+
+      // 验证对角流光渐变明度层次：正中呈现微透光感膨胀，右下提供坚实暗阶下潜
+      final l0 = HSLColor.fromColor(darkGradient[0]).lightness;
+      final l1 = HSLColor.fromColor(darkGradient[1]).lightness;
+      final l2 = HSLColor.fromColor(darkGradient[2]).lightness;
+      expect(l1, greaterThan(l0));
+      expect(l0, greaterThan(l2));
+      expect(l2, lessThan(0.08));
+    });
+
+    test('day light gradient uses soft, non-glaring matte warm paper white palette', () {
+      final lightGradient = pureNeutralGradient(Brightness.light);
+      expect(lightGradient, hasLength(3));
+      expect(lightGradient[0], const Color(0xFFF0F0EC)); // 左上：柔和暖云白
+      expect(lightGradient[1], const Color(0xFFE8E8E4)); // 正中：哑光柔和纸白
+      expect(lightGradient[2], const Color(0xFFDFDFD9)); // 右下：温润浅米灰
+
+      // 验证峰值通道亮度受控，彻底根除高能量冷蓝（B通道<=240，消除刺眼强光）
+      for (final color in lightGradient) {
+        final rgbB = (color.b * 255).round();
+        expect(rgbB, lessThanOrEqualTo(240));
+      }
+
+      // 验证 135° 对角阶梯递减平滑
+      final l0 = HSLColor.fromColor(lightGradient[0]).lightness;
+      final l1 = HSLColor.fromColor(lightGradient[1]).lightness;
+      final l2 = HSLColor.fromColor(lightGradient[2]).lightness;
+      expect(l0, greaterThan(l1));
+      expect(l1, greaterThan(l2));
+    });
+  });
 }
+

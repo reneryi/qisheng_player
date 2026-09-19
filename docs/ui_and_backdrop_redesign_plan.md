@@ -54,17 +54,17 @@
 * **夜间模式设计**：
   * **形态**：`135°` 对角流光渐变（从左上到右下）。
   * **色彩阶梯**：
-    * 左上 Top-Left: `Color(0xFF0A1324)`（深邃午夜蓝）
-    * 正中 Center: `Color(0xFF0F1D32)`（微亮沉静蓝灰）
-    * 右下 Bottom-Right: `Color(0xFF070D18)`（纯净玄黑）
-  * **作用**：打破单一纯色的死板，赋予暗黑界面如同夜空微光的呼吸感。
+    * 左上 Top-Left: `Color(0xFF072229)`（深邃苍青）
+    * 正中 Center: `Color(0xFF0C303A)`（微亮幽水青）
+    * 右下 Bottom-Right: `Color(0xFF041418)`（沉稳墨青黑）
+  * **作用**：打破单一纯色的死板与沉闷蓝灰，融入清雅深邃的高级青黛色系，赋予暗黑界面如同夜空碧波微澜的深邃呼吸感与现代 Hi-Fi 质感。
 * **日间模式设计**：
-  * **解决痛点**：彻底告别图二中高反光、刺眼的纯白与发虚的泛黄。
-  * **形态**：`135°` 哑光柔和对角渐变（Warm Matte Paper White）。
+  * **解决痛点**：彻底消除冷白尖峰（B通道<=240）与高反光刺眼感，告别发虚泛黄。
+  * **形态**：`135°` 柔和温润纸白对角渐变（Warm Matte Paper White）。
   * **色彩阶梯**：
-    * 左上 Top-Left: `Color(0xFFF6F8FA)`（极淡珍珠冷白）
-    * 正中 Center: `Color(0xFFF0F2F5)`（柔和哑光纸白）
-    * 右下 Bottom-Right: `Color(0xFFE8EBF0)`（极浅温润米灰）
+    * 左上 Top-Left: `Color(0xFFF0F0EC)`（柔和暖云白）
+    * 正中 Center: `Color(0xFFE8E8E4)`（哑光柔和纸白）
+    * 右下 Bottom-Right: `Color(0xFFDFDFD9)`（温润浅米灰）
   * **前景适配**：主文本使用高对比碳素黑 `Color(0xFF1B1F24)`，副文本使用 `Color(0xFF57606A)`，边缘锐利，彻底解决发虚、刺眼问题。
 
 ---

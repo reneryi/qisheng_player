@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 enum WindowBackdropMode {
-  /// 原生默认对角渐变背景（日间 135° 哑光柔和纸白，夜间 135° 深邃午夜蓝黑）
+  /// 原生默认对角渐变背景（日间 135° 柔和温润纸白，夜间 135° 深邃苍青流光）
   defaultGradient,
 
   /// Windows 11 原生增强型云母材质 (Mica Alt / Tabbed Window)

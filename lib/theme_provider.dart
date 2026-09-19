@@ -31,28 +31,16 @@ bool isNeutralColor(Color color) {
 }
 
 /// 依据主导颜色和明暗模式动态生成 135° 对角背景渐变
-/// 日间模式为哑光柔和纸白，夜间模式为午夜深蓝黑
+/// 日间模式为柔和温润纸白，夜间模式为深邃苍青黑
 List<Color> buildDynamicBackgroundGradient(
     Color dominantColor, Brightness brightness) {
   final hsl = HSLColor.fromColor(dominantColor);
   if (isNeutralColor(dominantColor)) {
-    if (brightness == Brightness.dark) {
-      return const [
-        Color(0xFF0A1324), // 深邃午夜蓝
-        Color(0xFF0F1D32), // 微亮静谧蓝灰
-        Color(0xFF070D18), // 纯净玄黑
-      ];
-    } else {
-      return const [
-        Color(0xFFF6F8FA), // 珍珠冷白
-        Color(0xFFF0F2F5), // 柔和哑光纸白
-        Color(0xFFE8EBF0), // 温润浅米灰
-      ];
-    }
+    return pureNeutralGradient(brightness);
   }
 
   if (brightness == Brightness.dark) {
-    // 暗色模式：午夜深蓝黑微浸润专辑主色调（极低明度，柔和沉静）
+    // 暗色模式：微浸润专辑主色调（极低明度，柔和沉静）
     final baseSat = hsl.saturation.clamp(0.06, 0.28);
     final top = hsl
         .withHue((hsl.hue - 10 + 360) % 360)
@@ -71,42 +59,42 @@ List<Color> buildDynamicBackgroundGradient(
 
     return [top, middle, bottom];
   } else {
-    // 明亮模式：主体为 135° 哑光柔和纸白，微量浸润专辑主色调（极低饱和度，极高明度）
+    // 明亮模式：主体为 135° 柔和温润纸白，微量浸润专辑主色调（极低饱和度，适度明度杜绝刺眼）
     final baseSat = hsl.saturation.clamp(0.03, 0.12);
     final top = hsl
         .withHue((hsl.hue - 8 + 360) % 360)
         .withSaturation(baseSat)
-        .withLightness(0.97)
+        .withLightness(0.94)
         .toColor();
     final middle = hsl
         .withSaturation(baseSat)
-        .withLightness(0.95)
+        .withLightness(0.91)
         .toColor();
     final bottom = hsl
         .withHue((hsl.hue + 8) % 360)
         .withSaturation(baseSat * 0.8)
-        .withLightness(0.92)
+        .withLightness(0.88)
         .toColor();
 
     return [top, middle, bottom];
   }
 }
 
-/// 返回文档规范中定义的纯净中性渐变（不受任何主题色影响）
-/// 夜间：深邃午夜蓝 → 微亮静谧蓝灰 → 纯净玄黑
-/// 日间：珍珠冷白 → 柔和哑光纸白 → 温润浅米灰
+/// 返回文档规范中定义的纯净中性默认对角渐变（不受任何主题色影响）
+/// 夜间：深邃苍青 (0xFF072229) → 微亮幽水青 (0xFF0C303A) → 沉稳墨青黑 (0xFF041418)
+/// 日间：柔和暖云白 (0xFFF0F0EC) → 哑光柔和纸白 (0xFFE8E8E4) → 温润浅米灰 (0xFFDFDFD9)
 List<Color> pureNeutralGradient(Brightness brightness) {
   if (brightness == Brightness.dark) {
     return const [
-      Color(0xFF0A1324), // 深邃午夜蓝
-      Color(0xFF0F1D32), // 微亮静谧蓝灰
-      Color(0xFF070D18), // 纯净玄黑
+      Color(0xFF072229), // 深邃苍青 (暮色苍青，左上角基调)
+      Color(0xFF0C303A), // 微亮幽水青 (碧潭微光，正中微透光感)
+      Color(0xFF041418), // 沉稳墨青黑 (玄夜墨黛，右下扎实暗阶)
     ];
   } else {
     return const [
-      Color(0xFFF6F8FA), // 珍珠冷白
-      Color(0xFFF0F2F5), // 柔和哑光纸白
-      Color(0xFFE8EBF0), // 温润浅米灰
+      Color(0xFFF0F0EC), // 柔和暖云白 (左上暖纸光晕，消除冷蓝刺眼高光)
+      Color(0xFFE8E8E4), // 哑光柔和纸白 (正中丝滑纸面，极致护眼)
+      Color(0xFFDFDFD9), // 温润浅米灰 (右下沉淀微阶，形成自然采光)
     ];
   }
 }

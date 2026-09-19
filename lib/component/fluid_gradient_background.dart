@@ -376,7 +376,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
           _brightnessController.value.clamp(0.0, 1.0),
         );
 
-        // 纯净中性对角渐变底色（日间哑光柔和白，夜间深邃暗蓝，随 darkness 350ms Oklab 平滑插值过渡）
+        // 纯净中性对角渐变底色（日间柔和温润纸白，夜间深邃苍青墨黛，随 darkness 350ms Oklab 平滑插值过渡）
         final neutralLight = pureNeutralGradient(Brightness.light);
         final neutralDark = pureNeutralGradient(Brightness.dark);
         final neutralGradient = _lerpGradient(
@@ -540,7 +540,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
           );
         }
 
-        // 4. 原生默认对角渐变 (Default 135° Gradient: 日间哑光柔和白 vs 夜间深邃暗蓝)
+        // 4. 原生默认对角渐变 (Default 135° Gradient: 日间柔和温润白 vs 夜间深邃苍青)
         return DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -611,7 +611,7 @@ class _MeshFlowPainter extends CustomPainter {
     // 底板色（随 baseGradient 平滑插值融化）
     final baseColor = baseGradient.isNotEmpty
         ? baseGradient.first
-        : (darkness > 0.5 ? const Color(0xFF0A1324) : const Color(0xFFF6F8FA));
+        : (darkness > 0.5 ? const Color(0xFF072229) : const Color(0xFFF0F0EC));
     _setColor(shader, 23, baseColor);
 
     // 5 个动态流体核心源锚点 (基于大尺度李萨如椭圆与对冲轨迹，8~14 秒周期)
