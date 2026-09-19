@@ -352,5 +352,160 @@ void main() {
       expect(listView.clipBehavior, Clip.hardEdge,
           reason: 'ListView must use Clip.hardEdge to prevent scrolled items from rendering over header text');
     });
+
+    testWidgets('UniPage: list view provides top headroom so hovered top-row item does not clip top border', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final song = TestAudio(
+        title: 'Song 1',
+        artist: 'Artist 1',
+        album: 'Album 1',
+        path: r'E:\Music\song1.flac',
+      );
+      final artist = Artist(name: 'Artist 1')..works.add(song);
+      AudioLibrary.instance.artistCollection['Artist 1'] = artist;
+
+      final preference = PagePreference(0, SortOrder.ascending, ContentView.list);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTestTheme(),
+          home: Scaffold(
+            body: UniPage<Artist>(
+              pref: preference,
+              title: '艺术家',
+              contentList: [artist],
+              contentBuilder: (context, item, index, controller) => ArtistTile(artist: item),
+              enableShufflePlay: false,
+              enableSortMethod: false,
+              enableSortOrder: false,
+              enableContentViewSwitch: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final viewportRect = tester.getRect(find.byType(ListView));
+      final initialRect = tester.getRect(find.byType(ArtistTile).first);
+      expect(initialRect.top - viewportRect.top, greaterThanOrEqualTo(10.0));
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer();
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(ArtistTile).first));
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final hoveredRect = tester.getRect(find.byType(ArtistTile).first);
+      expect(hoveredRect.top, greaterThan(viewportRect.top),
+          reason: 'Hovered item top edge must remain inside viewport bounds');
+      expect(hoveredRect.top - viewportRect.top, greaterThanOrEqualTo(6.0));
+    });
+
+    testWidgets('UniPage: table view provides top headroom so hovered top-row item does not clip top border', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final song = TestAudio(
+        title: 'Song 1',
+        artist: 'Artist 1',
+        album: 'Album 1',
+        path: r'E:\Music\song1.flac',
+      );
+      final artist = Artist(name: 'Artist 1')..works.add(song);
+      AudioLibrary.instance.artistCollection['Artist 1'] = artist;
+
+      final preference = PagePreference(0, SortOrder.ascending, ContentView.table);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTestTheme(),
+          home: Scaffold(
+            body: UniPage<Artist>(
+              pref: preference,
+              title: '艺术家',
+              contentList: [artist],
+              contentBuilder: (context, item, index, controller) => ArtistTile(artist: item),
+              enableShufflePlay: false,
+              enableSortMethod: false,
+              enableSortOrder: false,
+              enableContentViewSwitch: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final viewportRect = tester.getRect(find.byType(GridView));
+      final initialRect = tester.getRect(find.byType(ArtistTile).first);
+      expect(initialRect.top - viewportRect.top, greaterThanOrEqualTo(10.0));
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer();
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(ArtistTile).first));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final hoveredRect = tester.getRect(find.byType(ArtistTile).first);
+      expect(hoveredRect.top, greaterThan(viewportRect.top),
+          reason: 'Table item hovered top edge must remain inside viewport bounds');
+      expect(hoveredRect.top - viewportRect.top, greaterThanOrEqualTo(5.0));
+    });
+
+    testWidgets('UniPage: grid view provides top headroom so hovered top-row AlbumGridTile does not clip top border', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final album = Album(name: 'Album 1', albumArtist: 'Artist 1');
+      final song = TestAudio(
+        title: 'Song 1',
+        artist: 'Artist 1',
+        album: 'Album 1',
+        path: r'E:\Music\album_song1.flac',
+      );
+      album.works.add(song);
+      AudioLibrary.instance.albumCollection['Album 1'] = album;
+
+      final preference = PagePreference(0, SortOrder.ascending, ContentView.grid);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTestTheme(),
+          home: Scaffold(
+            body: UniPage<Album>(
+              pref: preference,
+              title: '专辑',
+              contentList: [album],
+              contentBuilder: (context, item, index, controller) => AlbumTile(album: item),
+              gridBuilder: (context, item, index, controller) => AlbumGridTile(album: item),
+              enableShufflePlay: false,
+              enableSortMethod: false,
+              enableSortOrder: false,
+              enableContentViewSwitch: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final viewportRect = tester.getRect(find.byType(GridView));
+      final initialRect = tester.getRect(find.byType(AlbumGridTile).first);
+      expect(initialRect.top - viewportRect.top, greaterThanOrEqualTo(10.0));
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer();
+      addTearDown(gesture.removePointer);
+      await gesture.moveTo(tester.getCenter(find.byType(AlbumGridTile).first));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final hoveredRect = tester.getRect(find.byType(AlbumGridTile).first);
+      expect(hoveredRect.top, greaterThan(viewportRect.top),
+          reason: 'AlbumGridTile hovered top edge must remain inside viewport bounds');
+      expect(hoveredRect.top - viewportRect.top, greaterThanOrEqualTo(2.0));
+    });
   });
 }

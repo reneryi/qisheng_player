@@ -207,6 +207,7 @@ class _SideNavAnimatedTableGrid extends StatelessWidget {
     final transition = SideNavTransitionScope.maybeOf(context);
     return GridView.builder(
       controller: controller,
+      clipBehavior: Clip.hardEdge,
       padding: padding,
       gridDelegate: SideNavAnimatedGridDelegate(
         expansionProgress: transition?.expansionProgress ?? 0,
@@ -242,6 +243,7 @@ class _SideNavAnimatedCoverGrid extends StatelessWidget {
     final transition = SideNavTransitionScope.maybeOf(context);
     return GridView.builder(
       controller: controller,
+      clipBehavior: Clip.hardEdge,
       padding: padding,
       gridDelegate: SideNavAnimatedGridDelegate(
         expansionProgress: transition?.expansionProgress ?? 0,
@@ -955,7 +957,7 @@ class _UniPageState<T> extends State<UniPage<T>>
     const rightPaneGap = 14.0;
     final rightPaneRight =
         (hasSideIndex || hasLocateButton) ? sideRailWidth + 18.0 : 10.0;
-    const listPadding = EdgeInsets.fromLTRB(6, 0, 16, 48);
+    const listPadding = EdgeInsets.fromLTRB(6, 10, 16, 48);
 
     final listBody = PageContentViewScope(
       contentView: currContentView,
