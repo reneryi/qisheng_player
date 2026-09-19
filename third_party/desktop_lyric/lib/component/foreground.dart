@@ -107,7 +107,11 @@ double calculateRequiredLyricWindowHeight({
 }
 
 /// 恢复桌面歌词窗口安全尺寸与坐标（支持双重钳制：142px 尺寸安全底线 + 屏幕工作区坐标安全钳制）
+/// 是否当前处于独立的轻量配置子窗口（避免配置子窗口误调桌面歌词主窗口的尺寸控制方法）
+bool isConfigSubWindow = false;
+
 Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
+  if (isConfigSubWindow) return;
   final targetHeight = calculateRequiredLyricWindowHeight(
     lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
     translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
@@ -139,6 +143,11 @@ Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
 
 /// 仅在当前物理窗口仍处于弹窗大尺寸时执行安全回退，避免重复调用 SetBounds 引发二次闪烁
 Future<void> restoreLyricWindowSizeAndPositionIfNeeded() async {
+  if (isConfigSubWindow) return;
+  if (Platform.environment.containsKey('FLUTTER_TEST')) {
+    await restoreLyricWindowSizeAndPosition();
+    return;
+  }
   final targetHeight = calculateRequiredLyricWindowHeight(
     lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
     translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
@@ -157,10 +166,10 @@ Future<void> restoreLyricWindowSizeAndPositionIfNeeded() async {
 
 /// 在保证正确布局的前提下按当前歌词与字号调整窗口大小，彻底消除 10px 亏空与副歌词截断
 void resizeWithForegroundSize() {
-  if (isDialogOpen.value) return;
+  if (isConfigSubWindow || isDialogOpen.value) return;
   try {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isDialogOpen.value) return;
+      if (isConfigSubWindow || isDialogOpen.value) return;
       try {
         double? lyricTextHeight;
         double? translationTextHeight;

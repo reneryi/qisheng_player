@@ -62,14 +62,14 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
-  flutter_controller_->ForceRedraw();
+  // Do not call this->Show() here to avoid exposing default 1280x720 window.
+  // Dart's windowManager.waitUntilReadyToShow will handle showing the window
+  // cleanly once dimensions, transparency and styles are applied.
+  //
+  // flutter_controller_->engine()->SetNextFrameCallback([&]() {
+  //   this->Show();
+  // });
+  // flutter_controller_->ForceRedraw();
 
   return true;
 }

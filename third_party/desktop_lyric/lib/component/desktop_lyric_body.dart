@@ -146,12 +146,7 @@ class DesktopLyricBodyState extends State<DesktopLyricBody> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18.0),
                   child: Center(
-                    child: AnimatedOpacity(
-                      opacity: dialogOpen ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
-                      child: DesktopLyricForeground(isHovering: effectiveHover),
-                    ),
+                    child: DesktopLyricForeground(isHovering: effectiveHover),
                   ),
                 ),
               ),

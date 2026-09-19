@@ -18,6 +18,7 @@ dependencies:
   screen_retriever: ^0.1.9
   json_annotation: ^4.9.0
   flex_color_picker: ^3.5.0
+  material_symbols_icons: ^4.2719.1
 
 dev_dependencies:
   flutter_test:
