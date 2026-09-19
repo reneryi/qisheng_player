@@ -66,31 +66,31 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // In normal mode: maximize button tooltip is '最大化'
-    expect(find.byTooltip('最大化'), findsOneWidget);
-    expect(find.byTooltip('还原'), findsNothing);
-    expect(find.byTooltip('全屏'), findsOneWidget);
+    // In normal mode: maximize button semantics is '最大化'
+    expect(find.bySemanticsLabel('最大化'), findsOneWidget);
+    expect(find.bySemanticsLabel('还原'), findsNothing);
+    expect(find.bySemanticsLabel('全屏'), findsOneWidget);
 
     // Switch to maximized mode via WindowControls.layoutMode notifier
     WindowControls.layoutMode.value = WindowLayoutMode.maximized;
     await tester.pumpAndSettle();
 
-    // In maximized mode: maximize button tooltip is '还原'
-    expect(find.byTooltip('还原'), findsOneWidget);
-    expect(find.byTooltip('最大化'), findsNothing);
+    // In maximized mode: maximize button semantics is '还原'
+    expect(find.bySemanticsLabel('还原'), findsOneWidget);
+    expect(find.bySemanticsLabel('最大化'), findsNothing);
 
     // Switch to fullscreen mode
     WindowControls.layoutMode.value = WindowLayoutMode.fullscreen;
     await tester.pumpAndSettle();
 
-    // In fullscreen mode: tooltip is '退出全屏' and '全屏模式下不可用'
-    expect(find.byTooltip('退出全屏'), findsOneWidget);
-    expect(find.byTooltip('全屏模式下不可用'), findsOneWidget);
+    // In fullscreen mode: semantics is '退出全屏' and '全屏模式下不可用'
+    expect(find.bySemanticsLabel('退出全屏'), findsOneWidget);
+    expect(find.bySemanticsLabel('全屏模式下不可用'), findsOneWidget);
 
     // Reset back to normal
     WindowControls.layoutMode.value = WindowLayoutMode.normal;
     await tester.pumpAndSettle();
-    expect(find.byTooltip('最大化'), findsOneWidget);
+    expect(find.bySemanticsLabel('最大化'), findsOneWidget);
   });
 
   testWidgets('WindowControls native channel calls handle layout and buttons', (tester) async {
