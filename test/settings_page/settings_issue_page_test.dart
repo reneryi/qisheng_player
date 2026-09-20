@@ -46,7 +46,7 @@ void main() {
       expect(find.byType(PageScaffold), findsOneWidget);
       expect(find.text('报告问题'), findsOneWidget);
       expect(
-        find.text('提交软件缺陷、崩溃异常或改进建议，帮助歧声播放器变得更好。'),
+        find.text('提交软件缺陷、崩溃异常或改进建议，帮助栖声播放器变得更好。'),
         findsOneWidget,
       );
 
@@ -69,7 +69,7 @@ void main() {
       expect(find.byKey(const ValueKey('clear-log-btn')), findsOneWidget);
 
       // 验证诊断日志中包含播放器版本信息
-      expect(find.textContaining('歧声播放器运行诊断日志'), findsOneWidget);
+      expect(find.textContaining('栖声播放器运行诊断日志'), findsOneWidget);
       expect(find.textContaining('v${AppSettings.version}'), findsOneWidget);
 
       // 6. 验证底部操作栏按钮
@@ -229,20 +229,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // 初始状态下存在诊断日志
-      expect(find.textContaining('歧声播放器运行诊断日志'), findsOneWidget);
+      expect(find.textContaining('栖声播放器运行诊断日志'), findsOneWidget);
 
       // 1. 测试清空日志
       await tester.tap(find.byKey(const ValueKey('clear-log-btn')));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('歧声播放器运行诊断日志'), findsNothing);
+      expect(find.textContaining('栖声播放器运行诊断日志'), findsNothing);
       expect(find.text('日志已清空'), findsOneWidget);
 
       // 2. 测试刷新日志
       await tester.tap(find.byKey(const ValueKey('refresh-log-btn')));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('歧声播放器运行诊断日志'), findsOneWidget);
+      expect(find.textContaining('栖声播放器运行诊断日志'), findsOneWidget);
       expect(find.text('日志已刷新'), findsOneWidget);
 
       // 3. 测试复制日志到剪贴板
@@ -252,7 +252,7 @@ void main() {
 
       expect(find.text('日志已复制到剪贴板'), findsOneWidget);
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-      expect(clipboardData?.text, contains('歧声播放器运行诊断日志'));
+      expect(clipboardData?.text, contains('栖声播放器运行诊断日志'));
       expect(clipboardData?.text, contains('v${AppSettings.version}'));
     },
   );
@@ -305,9 +305,9 @@ void main() {
       expect(uri.queryParameters['title'], '音频播放时偶发无声');
       final body = uri.queryParameters['body'] ?? '';
       expect(body, contains('重现步骤：播放 FLAC 格式音频，快进到 30 秒时无声音输出。'));
-      expect(body, contains('歧声播放器版本: ${AppSettings.version}'));
+      expect(body, contains('栖声播放器版本: ${AppSettings.version}'));
       expect(body, contains('运行日志'));
-      expect(body, contains('歧声播放器运行诊断日志'));
+      expect(body, contains('栖声播放器运行诊断日志'));
     },
   );
 

@@ -85,12 +85,12 @@ bool isQishengRelease(Release release) {
     return false;
   }
 
-  // 2. 匹配歧声专属标志 (标题、Tag 或资产包含 qisheng 或 歧声)
-  if (name.contains('qisheng') || name.contains('歧声')) return true;
-  if (tagName.contains('qisheng') || tagName.contains('歧声')) return true;
+  // 2. 匹配栖声专属标志 (标题、Tag 或资产包含 qisheng 或 栖声 或 歧声)
+  if (name.contains('qisheng') || name.contains('栖声') || name.contains('歧声')) return true;
+  if (tagName.contains('qisheng') || tagName.contains('栖声') || tagName.contains('歧声')) return true;
   if (assets.any((a) {
     final an = a.name?.toLowerCase() ?? '';
-    return an.contains('qisheng') || an.contains('歧声');
+    return an.contains('qisheng') || an.contains('栖声') || an.contains('歧声');
   })) {
     return true;
   }

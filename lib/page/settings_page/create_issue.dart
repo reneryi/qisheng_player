@@ -68,7 +68,7 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
 
   void _loadLogs() {
     final buffer = StringBuffer();
-    buffer.writeln('=== 歧声播放器运行诊断日志 ===');
+    buffer.writeln('=== 栖声播放器运行诊断日志 ===');
     buffer.writeln('版本: v${AppSettings.version}');
     buffer.writeln('系统: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
     buffer.writeln('Dart: ${Platform.version.split(' ').first}');
@@ -154,7 +154,7 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
       ..writeln(desc.isEmpty ? '（请在此详细描述遇到的问题与复现步骤）' : desc)
       ..writeln()
       ..writeln('## 运行环境')
-      ..writeln('- 歧声播放器版本: ${AppSettings.version}')
+      ..writeln('- 栖声播放器版本: ${AppSettings.version}')
       ..writeln('- 操作系统: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
       ..writeln('- Dart 运行时: ${Platform.version.split(' ').first}')
       ..writeln()
@@ -197,7 +197,7 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
       ..writeln(_descController.text.trim())
       ..writeln()
       ..writeln("## 运行环境")
-      ..writeln("- 歧声播放器版本: ${AppSettings.version}")
+      ..writeln("- 栖声播放器版本: ${AppSettings.version}")
       ..writeln("- 操作系统: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}")
       ..writeln()
       ..writeln("## 日志")
@@ -241,7 +241,7 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
 
     return PageScaffold(
       title: '报告问题',
-      subtitle: '提交软件缺陷、崩溃异常或改进建议，帮助歧声播放器变得更好。',
+      subtitle: '提交软件缺陷、崩溃异常或改进建议，帮助栖声播放器变得更好。',
       titleAction: CpIconButton(
         tooltip: '返回设置',
         icon: const Icon(Symbols.arrow_back_rounded),
