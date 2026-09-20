@@ -23,10 +23,16 @@ class SetLyricSourceBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamic lyricService;
+    try {
+      lyricService = PlayService.instance.lyricService;
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
     return ListenableBuilder(
-      listenable: PlayService.instance.lyricService,
+      listenable: lyricService,
       builder: (context, _) => FutureBuilder(
-        future: PlayService.instance.lyricService.currLyricFuture,
+        future: lyricService.currLyricFuture,
         builder: (context, snapshot) {
           const loadingWidget = IconButton(
             onPressed: null,

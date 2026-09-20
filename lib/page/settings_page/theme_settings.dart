@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/component/ui/modern_dialog.dart';
@@ -1890,6 +1891,30 @@ class ProgressBarTypeControl extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class NowPlayingAutoHideControlBarSwitch extends StatelessWidget {
+  const NowPlayingAutoHideControlBarSwitch({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final pref = AppPreference.instance.nowPlayingPagePref;
+    return ValueListenableBuilder<bool>(
+      valueListenable: pref.autoHideControlBarNotifier,
+      builder: (context, enabled, _) => SettingsTile(
+        description: "播放详情页播控栏自动隐藏",
+        hint: "开启后，闲置 5 秒自动平滑淡出隐藏播控栏；关闭后保持常驻不隐藏。",
+        action: Switch(
+          key: const ValueKey('settings-auto-hide-switch'),
+          value: enabled,
+          onChanged: (value) {
+            pref.autoHideControlBar = value;
+            unawaited(AppPreference.instance.save());
+          },
+        ),
+      ),
     );
   }
 }

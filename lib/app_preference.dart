@@ -70,14 +70,27 @@ class NowPlayingPagePreference {
   bool showTranslation;
   double lyricFontSize;
   double translationFontSize;
+  bool _autoHideControlBar;
+
+  final ValueNotifier<bool> autoHideControlBarNotifier;
+
+  bool get autoHideControlBar => _autoHideControlBar;
+  set autoHideControlBar(bool value) {
+    _autoHideControlBar = value;
+    if (autoHideControlBarNotifier.value != value) {
+      autoHideControlBarNotifier.value = value;
+    }
+  }
 
   NowPlayingPagePreference(
     this.nowPlayingViewMode,
     this.lyricTextAlign,
     this.showTranslation,
     this.lyricFontSize,
-    this.translationFontSize,
-  );
+    this.translationFontSize, [
+    bool autoHideControlBar = true,
+  ])  : _autoHideControlBar = autoHideControlBar,
+        autoHideControlBarNotifier = ValueNotifier<bool>(autoHideControlBar);
 
   Map toMap() => {
         "nowPlayingViewMode": nowPlayingViewMode.name,
@@ -85,16 +98,24 @@ class NowPlayingPagePreference {
         "showTranslation": showTranslation,
         "lyricFontSize": lyricFontSize,
         "translationFontSize": translationFontSize,
+        "autoHideControlBar": autoHideControlBar,
       };
 
   factory NowPlayingPagePreference.fromMap(Map map) {
+    final rawViewMode = map["nowPlayingViewMode"];
+    final rawTextAlign = map["lyricTextAlign"];
     return NowPlayingPagePreference(
-      NowPlayingViewMode.fromString(map["nowPlayingViewMode"]) ??
-          NowPlayingViewMode.withLyric,
-      LyricTextAlign.fromString(map["lyricTextAlign"]) ?? LyricTextAlign.left,
+      rawViewMode is String
+          ? NowPlayingViewMode.fromString(rawViewMode) ??
+              NowPlayingViewMode.withLyric
+          : NowPlayingViewMode.withLyric,
+      rawTextAlign is String
+          ? LyricTextAlign.fromString(rawTextAlign) ?? LyricTextAlign.left
+          : LyricTextAlign.left,
       map["showTranslation"] ?? true,
-      map["lyricFontSize"] ?? 22.0,
-      map["translationFontSize"] ?? 18.0,
+      (map["lyricFontSize"] as num?)?.toDouble() ?? 22.0,
+      (map["translationFontSize"] as num?)?.toDouble() ?? 18.0,
+      map["autoHideControlBar"] ?? true,
     );
   }
 }
@@ -481,7 +502,8 @@ class AppPreference {
         ..lyricTextAlign = loadedNowPlayingPref.lyricTextAlign
         ..showTranslation = loadedNowPlayingPref.showTranslation
         ..lyricFontSize = loadedNowPlayingPref.lyricFontSize
-        ..translationFontSize = loadedNowPlayingPref.translationFontSize;
+        ..translationFontSize = loadedNowPlayingPref.translationFontSize
+        ..autoHideControlBar = loadedNowPlayingPref.autoHideControlBar;
 
       instance.hotkeyPref = HotkeyPreference.fromMap(
         prefMap["hotkeyPref"] ?? {},

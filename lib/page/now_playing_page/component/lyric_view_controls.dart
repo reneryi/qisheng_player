@@ -85,7 +85,9 @@ class LyricViewController extends ChangeNotifier {
     showTranslation = !showTranslation;
     nowPlayingPagePref.showTranslation = showTranslation;
     notifyListeners();
-    PlayService.instance.lyricService.refreshCurrentLyricLine();
+    try {
+      PlayService.instance.lyricService.refreshCurrentLyricLine();
+    } catch (_) {}
     unawaited(AppPreference.instance.save());
   }
 }
@@ -119,7 +121,9 @@ class LyricViewControls extends StatelessWidget {
                 SizedBox(width: 8.0),
                 _DecreaseFontSizeBtn(),
               ],
-            )
+            ),
+            SizedBox(height: 8.0),
+            _AutoHideControlBarBtn(),
           ],
         ),
       ),
@@ -215,6 +219,40 @@ class _DecreaseFontSizeBtn extends StatelessWidget {
         color: scheme.onSecondaryContainer,
         icon: const Icon(Symbols.text_decrease),
       ),
+    );
+  }
+}
+
+class _AutoHideControlBarBtn extends StatelessWidget {
+  const _AutoHideControlBarBtn();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final pref = AppPreference.instance.nowPlayingPagePref;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: pref.autoHideControlBarNotifier,
+      builder: (context, autoHide, _) {
+        return ModernTooltip(
+          message: autoHide ? "常驻播控栏" : "自动隐藏播控栏",
+          direction: ModernTooltipDirection.left,
+          child: IconButton(
+            key: const ValueKey('now-playing-auto-hide-btn'),
+            enableFeedback: false,
+            onPressed: () {
+              pref.autoHideControlBar = !autoHide;
+              unawaited(AppPreference.instance.save());
+            },
+            color: scheme.onSecondaryContainer,
+            icon: Icon(
+              autoHide
+                  ? Symbols.visibility_off_rounded
+                  : Symbols.visibility_rounded,
+            ),
+          ),
+        );
+      },
     );
   }
 }

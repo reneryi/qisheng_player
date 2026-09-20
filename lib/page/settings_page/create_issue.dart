@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:github/github.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:qisheng_player/app_paths.dart' as app_paths;
@@ -11,7 +10,6 @@ import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/component/settings_tile.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/page/page_scaffold.dart';
-import 'package:qisheng_player/page/settings_page/cpfeedback_key.dart';
 import 'package:qisheng_player/src/rust/api/utils.dart';
 import 'package:qisheng_player/utils.dart';
 
@@ -49,7 +47,6 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
   final _descController = TextEditingController();
   final _logController = TextEditingController();
   final _scrollController = ScrollController();
-  bool _submitting = false;
 
   @override
   void initState() {
@@ -142,11 +139,14 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
     final desc = _descController.text.trim();
     final log = _logController.text.trim();
 
-    final String safeLog;
-    if (log.length > 3000) {
-      safeLog = '...（前略，已截取最新日志）...\n${log.substring(log.length - 3000)}';
+    // 精简日志至安全长度（最多保留最新 500 字符），防止超长 URI 导致 Windows 命令行截断或浏览器崩溃
+    final String logSnippet;
+    if (log.length > 500) {
+      logSnippet = '...（前略，完整诊断报告请使用页面“复制完整诊断报告”按钮粘贴）...\n${log.substring(log.length - 500)}';
+    } else if (log.isNotEmpty) {
+      logSnippet = log;
     } else {
-      safeLog = log;
+      logSnippet = '（无日志，可点击“复制完整诊断报告”粘贴详细诊断信息）';
     }
 
     final body = StringBuffer()
@@ -160,8 +160,10 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
       ..writeln()
       ..writeln('## 运行日志')
       ..writeln('```text')
-      ..writeln(safeLog.isEmpty ? '（无日志）' : safeLog)
-      ..writeln('```');
+      ..writeln(logSnippet)
+      ..writeln('```')
+      ..writeln()
+      ..writeln('> 提示：可在播放器“报告问题”页面点击“复制完整诊断报告”获取完整日志并在下方粘贴。');
 
     final uri = Uri.https(
       'github.com',
@@ -175,66 +177,6 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
     _launchUri(uri.toString());
   }
 
-  Future<void> _createIssueInApp() async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      showTextOnSnackBar("请输入问题标题");
-      return;
-    }
-
-    if (CPFEEDBACK_KEY.trim().isEmpty) {
-      showTextOnSnackBar("应用内反馈 Token 未配置，请点击“在 GitHub 网页提交”");
-      return;
-    }
-
-    setState(() => _submitting = true);
-
-    final cpfeedback = GitHub(
-      auth: const Authentication.withToken(CPFEEDBACK_KEY),
-    );
-    final issueBodyBuilder = StringBuffer()
-      ..writeln("## 描述")
-      ..writeln(_descController.text.trim())
-      ..writeln()
-      ..writeln("## 运行环境")
-      ..writeln("- 栖声播放器版本: ${AppSettings.version}")
-      ..writeln("- 操作系统: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}")
-      ..writeln()
-      ..writeln("## 日志")
-      ..writeln("```text")
-      ..writeln(_logController.text.trim())
-      ..writeln("```");
-
-    final issue = IssueRequest(
-      title: title,
-      body: issueBodyBuilder.toString(),
-    );
-
-    try {
-      await cpfeedback.issues.create(
-        RepositorySlug(
-          AppSettings.releaseRepoOwner,
-          AppSettings.releaseRepoName,
-        ),
-        issue,
-      );
-
-      if (mounted) {
-        showTextOnSnackBar("创建成功");
-      }
-    } catch (err, trace) {
-      LOGGER.e(err, stackTrace: trace);
-      if (mounted) {
-        showTextOnSnackBar("创建失败: $err");
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
-      cpfeedback.dispose();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -242,7 +184,7 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
     return PageScaffold(
       title: '报告问题',
       subtitle: '提交软件缺陷、崩溃异常或改进建议，帮助栖声播放器变得更好。',
-      titleAction: CpIconButton(
+      titleLeading: CpIconButton(
         tooltip: '返回设置',
         icon: const Icon(Symbols.arrow_back_rounded),
         onPressed: () => _handleBack(context),
@@ -472,62 +414,38 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
     );
   }
 
+
   Widget _buildActionBar(BuildContext context, ColorScheme scheme) {
-    return CpSurface(
-      tone: CpSurfaceTone.card,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          OutlinedButton.icon(
-            key: const ValueKey('back-to-settings-btn'),
-            onPressed: () => _handleBack(context),
-            icon: const Icon(Symbols.arrow_back_rounded, size: 18),
-            label: const Text('返回设置'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        FilledButton.icon(
+          key: const ValueKey('submit-github-btn'),
+          onPressed: _openInBrowser,
+          icon: const Icon(Symbols.open_in_new_rounded, size: 18),
+          label: const Text('在 GitHub 网页提交'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilledButton.tonalIcon(
-                key: const ValueKey('submit-github-btn'),
-                onPressed: _openInBrowser,
-                icon: const Icon(Symbols.open_in_new_rounded, size: 18),
-                label: const Text('在 GitHub 网页提交'),
-                style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              FilledButton.icon(
-                key: const ValueKey('submit-inapp-btn'),
-                onPressed: _submitting ? null : _createIssueInApp,
-                icon: const Icon(Symbols.send_rounded, size: 18),
-                label: Text(_submitting ? '正在提交...' : '应用内提交'),
-                style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ],
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('copy-diagnostics-btn'),
+          onPressed: _copyLogs,
+          icon: const Icon(Symbols.content_copy_rounded, size: 18),
+          label: const Text('复制完整诊断报告'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -242,9 +242,10 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           AppSection(
             title: '底栏播控与进度条',
-            description: '控制底栏音频进度条的视觉呈现形态、微交互与动态光效。',
+            description: '控制底栏音频进度条样式与播放详情页播控栏自动隐藏。',
             children: [
               ProgressBarTypeControl(),
+              NowPlayingAutoHideControlBarSwitch(),
             ],
           ),
         ];

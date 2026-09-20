@@ -6,6 +6,7 @@ class PageScaffold extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.titleLeading,
     this.titleAction,
     this.primaryAction,
     this.secondaryActions = const [],
@@ -14,6 +15,7 @@ class PageScaffold extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? titleLeading;
   final Widget? titleAction;
   final Widget? primaryAction;
   final List<Widget> secondaryActions;
@@ -27,6 +29,7 @@ class PageScaffold extends StatelessWidget {
           ScreenType.small => _SmallHeader(
               title: title,
               subtitle: subtitle,
+              titleLeading: titleLeading,
               titleAction: titleAction,
               primaryAction: primaryAction,
               secondaryActions: secondaryActions,
@@ -34,6 +37,7 @@ class PageScaffold extends StatelessWidget {
           ScreenType.medium || ScreenType.large => _WideHeader(
               title: title,
               subtitle: subtitle,
+              titleLeading: titleLeading,
               titleAction: titleAction,
               primaryAction: primaryAction,
               secondaryActions: secondaryActions,
@@ -80,6 +84,7 @@ class _SmallHeader extends StatelessWidget {
   const _SmallHeader({
     required this.title,
     required this.subtitle,
+    this.titleLeading,
     required this.titleAction,
     required this.primaryAction,
     required this.secondaryActions,
@@ -87,6 +92,7 @@ class _SmallHeader extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? titleLeading;
   final Widget? titleAction;
   final Widget? primaryAction;
   final List<Widget> secondaryActions;
@@ -104,6 +110,7 @@ class _SmallHeader extends StatelessWidget {
         _TitleBlock(
           title: title,
           subtitle: subtitle,
+          titleLeading: titleLeading,
           titleAction: titleAction,
         ),
         if (actions.isNotEmpty) ...[
@@ -122,6 +129,7 @@ class _WideHeader extends StatelessWidget {
   const _WideHeader({
     required this.title,
     required this.subtitle,
+    this.titleLeading,
     required this.titleAction,
     required this.primaryAction,
     required this.secondaryActions,
@@ -129,6 +137,7 @@ class _WideHeader extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? titleLeading;
   final Widget? titleAction;
   final Widget? primaryAction;
   final List<Widget> secondaryActions;
@@ -145,6 +154,7 @@ class _WideHeader extends StatelessWidget {
         final titleBlock = _TitleBlock(
           title: title,
           subtitle: subtitle,
+          titleLeading: titleLeading,
           titleAction: titleAction,
         );
 
@@ -205,11 +215,13 @@ class _TitleBlock extends StatelessWidget {
   const _TitleBlock({
     required this.title,
     required this.subtitle,
+    this.titleLeading,
     required this.titleAction,
   });
 
   final String title;
   final String? subtitle;
+  final Widget? titleLeading;
   final Widget? titleAction;
 
   @override
@@ -222,6 +234,10 @@ class _TitleBlock extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (titleLeading != null) ...[
+              titleLeading!,
+              const SizedBox(width: 10),
+            ],
             Flexible(
               child: Text(
                 title,

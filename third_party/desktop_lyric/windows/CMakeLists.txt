@@ -55,6 +55,38 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# Resolve real plugin paths from .flutter-plugins-dependencies in case Windows
+# ProcessRedirectionTrustPolicy blocks traversal of .plugin_symlinks (ERROR_UNTRUSTED_MOUNT_POINT / 0x800701C0).
+set(FLUTTER_PLUGINS_DEP_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../.flutter-plugins-dependencies")
+if(EXISTS "${FLUTTER_PLUGINS_DEP_FILE}")
+  file(READ "${FLUTTER_PLUGINS_DEP_FILE}" _PLUGINS_JSON)
+  string(JSON _WINDOWS_PLUGINS_LEN ERROR_VARIABLE _JSON_ERR LENGTH "${_PLUGINS_JSON}" "plugins" "windows")
+  if(NOT _JSON_ERR AND _WINDOWS_PLUGINS_LEN GREATER 0)
+    math(EXPR _STOP "${_WINDOWS_PLUGINS_LEN} - 1")
+    foreach(_IDX RANGE 0 ${_STOP})
+      string(JSON _P_NAME GET "${_PLUGINS_JSON}" "plugins" "windows" ${_IDX} "name")
+      string(JSON _P_PATH GET "${_PLUGINS_JSON}" "plugins" "windows" ${_IDX} "path")
+      file(TO_CMAKE_PATH "${_P_PATH}windows" _NORMALIZED_P_PATH)
+      if(EXISTS "${_NORMALIZED_P_PATH}/CMakeLists.txt")
+        set(FLUTTER_PLUGIN_REAL_DIR_${_P_NAME} "${_NORMALIZED_P_PATH}")
+      endif()
+    endforeach()
+  endif()
+endif()
+
+macro(add_subdirectory dir)
+  set(_ADD_SUBDIR_TARGET "${dir}")
+  if("${_ADD_SUBDIR_TARGET}" MATCHES "flutter/ephemeral/\\.plugin_symlinks/([^/]+)/windows")
+    set(_PLUGIN_NAME "${CMAKE_MATCH_1}")
+    if(DEFINED FLUTTER_PLUGIN_REAL_DIR_${_PLUGIN_NAME})
+      if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${dir}")
+        set(_ADD_SUBDIR_TARGET "${FLUTTER_PLUGIN_REAL_DIR_${_PLUGIN_NAME}}")
+      endif()
+    endif()
+  endif()
+  _add_subdirectory("${_ADD_SUBDIR_TARGET}" ${ARGN})
+endmacro()
+
 include(flutter/generated_plugins.cmake)
 
 

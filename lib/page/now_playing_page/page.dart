@@ -210,16 +210,43 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
 
   Timer? _hideTimer;
   Animation<double>? _routeAnimation;
+  bool _routeAnimationInitialized = false;
   bool _entranceCompleted = false;
   bool _visible = false;
+  late final VoidCallback _autoHidePrefListener;
 
   @override
   void initState() {
     super.initState();
+    _autoHidePrefListener = _handleAutoHidePrefChange;
+    AppPreference.instance.nowPlayingPagePref.autoHideControlBarNotifier
+        .addListener(_autoHidePrefListener);
+  }
+
+  void _handleAutoHidePrefChange() {
+    if (!mounted) return;
+    final autoHide =
+        AppPreference.instance.nowPlayingPagePref.autoHideControlBar;
+    if (!autoHide) {
+      _hideTimer?.cancel();
+      if (!_visible) {
+        setState(() => _visible = true);
+      }
+    } else {
+      if (_entranceCompleted) {
+        _showAndKeepAlive();
+      }
+    }
   }
 
   void _scheduleHide() {
     _hideTimer?.cancel();
+    if (!AppPreference.instance.nowPlayingPagePref.autoHideControlBar) {
+      if (!_visible) {
+        setState(() => _visible = true);
+      }
+      return;
+    }
     _hideTimer = Timer(_hideDelay, () {
       if (!mounted) return;
       setState(() => _visible = false);
@@ -259,19 +286,29 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final nextAnimation = NowPlayingRouteTransitionScope.maybeOf(context);
-    if (!identical(nextAnimation, _routeAnimation)) {
+    if (!_routeAnimationInitialized ||
+        !identical(nextAnimation, _routeAnimation)) {
+      _routeAnimationInitialized = true;
       _routeAnimation?.removeListener(_handleRouteAnimationTick);
       _routeAnimation = nextAnimation;
       _routeAnimation?.addListener(_handleRouteAnimationTick);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _handleRouteAnimationTick();
-      });
+      if (_routeAnimation == null) {
+        _entranceCompleted = true;
+        _visible = true;
+        _scheduleHide();
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _handleRouteAnimationTick();
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    AppPreference.instance.nowPlayingPagePref.autoHideControlBarNotifier
+        .removeListener(_autoHidePrefListener);
     _hideTimer?.cancel();
     _routeAnimation?.removeListener(_handleRouteAnimationTick);
     super.dispose();
@@ -310,6 +347,7 @@ class _AutoHideBottomPlayerBarState extends State<_AutoHideBottomPlayerBar> {
                       ? const Offset(0, 0.24)
                       : Offset.zero,
                   child: AnimatedOpacity(
+                    key: const ValueKey('auto-hide-bottom-player-bar-opacity'),
                     duration: motion.controlTransitionDuration,
                     curve: motion.fast,
                     opacity: _visible ? 1.0 : 0.0,

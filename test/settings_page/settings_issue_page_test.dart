@@ -50,12 +50,17 @@ void main() {
         findsOneWidget,
       );
 
-      // 2. 验证顶部返回按钮与图标
-      expect(find.byTooltip('返回设置'), findsOneWidget);
-      expect(find.byIcon(Symbols.arrow_back_rounded), findsAtLeast(1));
+      // 2. 验证顶部返回按钮位于标题左侧
+      final backBtnFinder = find.byTooltip('返回设置');
+      final titleFinder = find.text('报告问题');
+      expect(backBtnFinder, findsOneWidget);
+      expect(titleFinder, findsOneWidget);
+      final backBtnRect = tester.getRect(backBtnFinder);
+      final titleRect = tester.getRect(titleFinder);
+      expect(backBtnRect.right, lessThanOrEqualTo(titleRect.left));
 
-      // 3. 验证 CpSurface 磨砂卡片层级
-      expect(find.byType(CpSurface), findsAtLeast(3));
+      // 3. 验证 CpSurface 磨砂卡片层级（底部操作栏已平铺无冗余卡片）
+      expect(find.byType(CpSurface), findsAtLeast(2));
 
       // 4. 验证问题信息卡片内容与输入框
       expect(find.text('问题信息'), findsOneWidget);
@@ -72,12 +77,16 @@ void main() {
       expect(find.textContaining('栖声播放器运行诊断日志'), findsOneWidget);
       expect(find.textContaining('v${AppSettings.version}'), findsOneWidget);
 
-      // 6. 验证底部操作栏按钮
-      expect(find.byKey(const ValueKey('back-to-settings-btn')), findsOneWidget);
+      // 验证 Fork Issue 提示已移除
+      expect(find.textContaining('Fork 仓库'), findsNothing);
+
+      // 6. 验证底部操作栏按钮：已移除“返回设置”和“应用内提交”，平铺清爽操作按钮
+      expect(find.byKey(const ValueKey('back-to-settings-btn')), findsNothing);
+      expect(find.byKey(const ValueKey('submit-inapp-btn')), findsNothing);
       expect(find.byKey(const ValueKey('submit-github-btn')), findsOneWidget);
-      expect(find.byKey(const ValueKey('submit-inapp-btn')), findsOneWidget);
+      expect(find.byKey(const ValueKey('copy-diagnostics-btn')), findsOneWidget);
       expect(find.text('在 GitHub 网页提交'), findsOneWidget);
-      expect(find.text('应用内提交'), findsOneWidget);
+      expect(find.text('复制完整诊断报告'), findsOneWidget);
     },
   );
 
@@ -143,56 +152,47 @@ void main() {
   );
 
   testWidgets(
-    'SettingsIssuePage footer back button pops the page back to settings route',
+    'SettingsIssuePage footer "复制完整诊断报告" button copies full report to clipboard',
     (tester) async {
       tester.view.physicalSize = const Size(1280, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      final router = GoRouter(
-        initialLocation: app_paths.SETTINGS_PAGE,
-        routes: [
-          GoRoute(
-            path: app_paths.SETTINGS_PAGE,
-            builder: (context, state) => Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  key: const ValueKey('goto-issue-btn'),
-                  onPressed: () => context.push(app_paths.SETTINGS_ISSUE_PAGE),
-                  child: const Text('进入问题反馈页'),
-                ),
-              ),
-            ),
-          ),
-          GoRoute(
-            path: app_paths.SETTINGS_ISSUE_PAGE,
-            builder: (context, state) => const Scaffold(
-              body: SettingsIssuePage(),
-            ),
-          ),
-        ],
+      String? mockClipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) async {
+          if (methodCall.method == 'Clipboard.setData') {
+            mockClipboardText =
+                (methodCall.arguments as Map?)?['text'] as String?;
+            return null;
+          } else if (methodCall.method == 'Clipboard.getData') {
+            return <String, dynamic>{'text': mockClipboardText};
+          }
+          return null;
+        },
       );
 
       await tester.pumpWidget(
-        MaterialApp.router(
+        MaterialApp(
           scaffoldMessengerKey: SCAFFOLD_MESSAGER,
           theme: _buildTheme(),
-          routerConfig: router,
+          home: const Scaffold(
+            body: SettingsIssuePage(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('goto-issue-btn')));
-      await tester.pumpAndSettle();
-      expect(find.byType(SettingsIssuePage), findsOneWidget);
-
-      // 点击底部操作栏的“返回设置”按钮
-      await tester.tap(find.byKey(const ValueKey('back-to-settings-btn')));
+      // 点击底部的“复制完整诊断报告”按钮
+      await tester.tap(find.byKey(const ValueKey('copy-diagnostics-btn')));
+      await tester.pump(const Duration(milliseconds: 50));
       await tester.pumpAndSettle();
 
-      // 验证已平滑退出
-      expect(find.byType(SettingsIssuePage), findsNothing);
-      expect(find.byKey(const ValueKey('goto-issue-btn')), findsOneWidget);
+      expect(find.text('日志已复制到剪贴板'), findsOneWidget);
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      expect(clipboardData?.text, contains('栖声播放器运行诊断日志'));
+      expect(clipboardData?.text, contains('v${AppSettings.version}'));
     },
   );
 
@@ -312,41 +312,46 @@ void main() {
   );
 
   testWidgets(
-    'SettingsIssuePage in-app submit validates empty title and notifies if token unconfigured',
+    'SettingsIssuePage "在 GitHub 网页提交" safely bounds URL length even with extensive logs',
     (tester) async {
       tester.view.physicalSize = const Size(1280, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
+      String? launchedUri;
+
       await tester.pumpWidget(
         MaterialApp(
           scaffoldMessengerKey: SCAFFOLD_MESSAGER,
           theme: _buildTheme(),
-          home: const Scaffold(
-            body: SettingsIssuePage(),
+          home: Scaffold(
+            body: SettingsIssuePage(
+              onLaunchUrl: ({required String uri}) async {
+                launchedUri = uri;
+                return true;
+              },
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      // 1. 标题为空时点击提交
-      await tester.tap(find.byKey(const ValueKey('submit-inapp-btn')));
+      final logFinder = find.widgetWithText(TextField, '暂无运行日志');
+      // 输入超过 5000 字符的冗长堆栈日志
+      final longLog = 'EXTENSIVE_STACK_TRACE_LINE\n' * 200;
+      await tester.enterText(logFinder, longLog);
       await tester.pumpAndSettle();
 
-      expect(find.text('请输入问题标题'), findsOneWidget);
-
-      // 2. 填入标题后点击提交（默认未配置 token）
-      final titleFinder = find.widgetWithText(TextField, '问题标题');
-      await tester.enterText(titleFinder, '某些界面缩放异常');
+      await tester.tap(find.byKey(const ValueKey('submit-github-btn')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('submit-inapp-btn')));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('应用内反馈 Token 未配置，请点击“在 GitHub 网页提交”'),
-        findsOneWidget,
-      );
+      expect(launchedUri, isNotNull);
+      // Windows 命令行限制为 8191 字符，精简后 URI 需远低于此安全阈值
+      expect(launchedUri!.length, lessThan(2500));
+      final uri = Uri.parse(launchedUri!);
+      expect(uri.queryParameters['body'],
+          contains('前略，完整诊断报告请使用页面“复制完整诊断报告”按钮粘贴'));
+      expect(find.byKey(const ValueKey('submit-inapp-btn')), findsNothing);
     },
   );
 
