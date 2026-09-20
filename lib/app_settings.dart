@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:github/github.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:qisheng_player/window_controls.dart';
 import 'package:window_manager/window_manager.dart';
 
 enum WindowBackdropMode {
@@ -585,18 +586,35 @@ class AppSettings {
       return;
     }
     try {
-      bool isMaximized = false;
-      bool isFullScreen = false;
+      bool isMaximized = _instance.isWindowMaximized ||
+          WindowControls.layoutMode.value == WindowLayoutMode.maximized;
+      bool isFullScreen =
+          WindowControls.layoutMode.value == WindowLayoutMode.fullscreen;
       if (!Platform.environment.containsKey('FLUTTER_TEST')) {
         try {
-          isMaximized = await windowManager
-              .isMaximized()
-              .timeout(const Duration(milliseconds: 300), onTimeout: () => false);
-          isFullScreen = await windowManager
-              .isFullScreen()
-              .timeout(const Duration(milliseconds: 300), onTimeout: () => false);
+          if (Platform.isWindows) {
+            isMaximized = await WindowControls.isMaximized().timeout(
+              const Duration(milliseconds: 300),
+              onTimeout: () =>
+                  _instance.isWindowMaximized ||
+                  WindowControls.layoutMode.value == WindowLayoutMode.maximized,
+            );
+            isFullScreen = await WindowControls.isFullScreen().timeout(
+              const Duration(milliseconds: 300),
+              onTimeout: () =>
+                  WindowControls.layoutMode.value == WindowLayoutMode.fullscreen,
+            );
+          } else {
+            isMaximized = await windowManager
+                .isMaximized()
+                .timeout(const Duration(milliseconds: 300), onTimeout: () => isMaximized);
+            isFullScreen = await windowManager
+                .isFullScreen()
+                .timeout(const Duration(milliseconds: 300), onTimeout: () => isFullScreen);
+          }
         } catch (_) {}
       }
+      _instance.isWindowMaximized = isMaximized;
       final settingsMap = {
         "Version": version,
         "ThemeMode": themeMode == ThemeMode.dark,
@@ -652,6 +670,9 @@ class AppSettings {
   }
 
   void scheduleSaveSettings() {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
     _saveDebounce?.cancel();
     _saveDebounce = Timer(
       const Duration(milliseconds: 500),

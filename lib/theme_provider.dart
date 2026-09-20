@@ -491,26 +491,44 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(_syncDesktopLyricTheme(sendThemeMode: true));
   }
 
-  void applyThemeFromAudio(Audio audio) {
+  Future<void> applyThemeFromAudio(Audio audio, {bool wait = false}) async {
     if (!AppSettings.instance.dynamicTheme) {
       final requestId = ++_dynamicThemeRequestId;
       final cacheKey = _paletteCacheKey(audio);
       final cached = _paletteCache[cacheKey];
       if (cached != null) {
         _dynamicAlbumPalette = cached;
+        AppPreference.instance.lastDynamicAlbumPalette = cached;
+        unawaited(AppPreference.instance.save());
+        notifyListeners();
       } else {
-        unawaited(_extractAlbumPalette(audio).then((palette) {
+        final future = _extractAlbumPalette(audio).then((palette) {
           if (requestId != _dynamicThemeRequestId) return;
           if (palette != null) {
             _cachePalette(cacheKey, palette);
             _dynamicAlbumPalette = palette;
+            AppPreference.instance.lastDynamicAlbumPalette = palette;
+            unawaited(AppPreference.instance.save());
+            notifyListeners();
           }
-        }));
+        });
+        if (wait) {
+          await future.timeout(
+            const Duration(milliseconds: 1500),
+            onTimeout: () {},
+          );
+        }
       }
       return;
     }
     final requestId = ++_dynamicThemeRequestId;
-    unawaited(_applyDynamicTheme(audio, requestId));
+    final future = _applyDynamicTheme(audio, requestId);
+    if (wait) {
+      await future.timeout(
+        const Duration(milliseconds: 1500),
+        onTimeout: () {},
+      );
+    }
   }
 
   void changeFontFamily(String? fontFamily) {
@@ -635,11 +653,20 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  void _applyAlbumPalette(AlbumPalette palette) {
+  void _applyAlbumPalette(AlbumPalette palette, {bool persist = true}) {
     _dynamicAlbumPalette = palette;
     _dynamicDominantColor = palette.primary;
     _lightAccentColor = _resolveAccentColor(palette.accent, Brightness.light);
     _darkAccentColor = _resolveAccentColor(palette.accent, Brightness.dark);
+    AppPreference.instance.lastDynamicAlbumPalette = palette;
+    if (persist) {
+      unawaited(AppPreference.instance.save());
+    }
+  }
+
+  void restorePersistedAlbumPalette(AlbumPalette palette) {
+    _applyAlbumPalette(palette, persist: false);
+    notifyListeners();
   }
 
   @visibleForTesting
@@ -647,7 +674,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (palette == null) {
       _resetDynamicTheme();
     } else {
-      _applyAlbumPalette(palette);
+      _applyAlbumPalette(palette, persist: false);
       notifyListeners();
     }
   }

@@ -98,6 +98,20 @@ std::wstring Utf8ToWide(const std::string& value) {
   return wide;
 }
 
+void SafeCopyTrayTip(wchar_t* dest, size_t dest_size, std::wstring tip) {
+  if (dest == nullptr || dest_size == 0) {
+    return;
+  }
+  if (tip.length() >= dest_size) {
+    size_t max_chars = dest_size - 1;
+    if (max_chars > 0 && IS_HIGH_SURROGATE(tip[max_chars - 1])) {
+      max_chars--;
+    }
+    tip = tip.substr(0, max_chars);
+  }
+  lstrcpynW(dest, tip.c_str(), static_cast<int>(dest_size));
+}
+
 std::wstring NormalizeWindowsPath(std::wstring value) {
   std::replace(value.begin(), value.end(), L'/', L'\\');
   std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch) {
@@ -133,7 +147,8 @@ bool WasWindowMaximized(HWND hwnd) {
   WINDOWPLACEMENT placement = {};
   placement.length = sizeof(WINDOWPLACEMENT);
   if (GetWindowPlacement(hwnd, &placement) != FALSE) {
-    if (placement.showCmd == SW_SHOWMAXIMIZED) {
+    if (placement.showCmd == SW_SHOWMAXIMIZED ||
+        ((placement.flags & WPF_RESTORETOMAXIMIZED) != 0)) {
       return true;
     }
   }
@@ -580,6 +595,8 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {
   taskbar_button_created_message_ =
       RegisterWindowMessage(L"TaskbarButtonCreated");
+  taskbar_created_message_ =
+      RegisterWindowMessage(L"TaskbarCreated");
   activate_window_message_ =
       RegisterWindowMessage(L"QishengPlayerActivateMainWindow");
 }
@@ -603,7 +620,6 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
-  AddTrayIcon();
   media_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -797,9 +813,12 @@ bool FlutterWindow::OnCreate() {
         }
 
         if (method_call.method_name() == "is_maximized") {
-          const bool is_max = !is_fullscreen_ &&
-                              !IsEffectivelyFullscreen(GetHandle()) &&
-                              (IsZoomed(GetHandle()) != FALSE);
+          const bool is_hidden_in_tray = !IsWindowVisible(GetHandle());
+          const bool is_max = is_hidden_in_tray
+                                  ? was_maximized_before_tray_
+                                  : (!is_fullscreen_ &&
+                                     !IsEffectivelyFullscreen(GetHandle()) &&
+                                     (IsZoomed(GetHandle()) != FALSE));
           result->Success(flutter::EncodableValue(is_max));
           return;
         }
@@ -818,7 +837,11 @@ bool FlutterWindow::OnCreate() {
 
         if (method_call.method_name() == "get_window_layout_mode") {
           std::string mode = "normal";
-          if (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())) {
+          if (!IsWindowVisible(GetHandle())) {
+            if (was_maximized_before_tray_) {
+              mode = "maximized";
+            }
+          } else if (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())) {
             mode = "fullscreen";
           } else if (IsZoomed(GetHandle())) {
             mode = "maximized";
@@ -854,8 +877,102 @@ bool FlutterWindow::OnCreate() {
           return;
         }
 
+        if (method_call.method_name() == "minimize_to_tray" ||
+            method_call.method_name() == "close") {
+          MinimizeToTray();
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "hide_window") {
+          ShowWindow(GetHandle(), SW_HIDE);
+          RemoveTrayIcon();
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "set_initial_window_state") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          if (map != nullptr) {
+            const auto it = map->find(flutter::EncodableValue("isMaximized"));
+            if (it != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it->second)) {
+                initial_show_maximized_ = *val;
+              }
+            }
+          }
+          result->Success();
+          return;
+        }
+
+        if (method_call.method_name() == "update_tray_menu_state") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          if (map != nullptr) {
+            const auto it_playing =
+                map->find(flutter::EncodableValue("isPlaying"));
+            if (it_playing != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_playing->second)) {
+                is_playing_ = *val;
+              }
+            }
+            const auto it_dark =
+                map->find(flutter::EncodableValue("isDarkMode"));
+            if (it_dark != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_dark->second)) {
+                is_dark_mode_ = *val;
+              }
+            }
+            const auto it_lyric =
+                map->find(flutter::EncodableValue("isDesktopLyricEnabled"));
+            if (it_lyric != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_lyric->second)) {
+                is_desktop_lyric_enabled_ = *val;
+              }
+            }
+            const auto it_title =
+                map->find(flutter::EncodableValue("title"));
+            if (it_title != map->end()) {
+              if (const auto* val = std::get_if<std::string>(&it_title->second)) {
+                track_title_ = Utf8ToWide(*val);
+                std::replace(track_title_.begin(), track_title_.end(), L'\r', L' ');
+                std::replace(track_title_.begin(), track_title_.end(), L'\n', L' ');
+              }
+            }
+            const auto it_artist =
+                map->find(flutter::EncodableValue("artist"));
+            if (it_artist != map->end()) {
+              if (const auto* val = std::get_if<std::string>(&it_artist->second)) {
+                track_artist_ = Utf8ToWide(*val);
+                std::replace(track_artist_.begin(), track_artist_.end(), L'\r', L' ');
+                std::replace(track_artist_.begin(), track_artist_.end(), L'\n', L' ');
+              }
+            }
+            SetupTaskbarButtons();
+            if (tray_icon_added_) {
+              std::wstring tip = track_title_.empty()
+                                     ? L"\u6816\u58F0"
+                                     : (L"\u6816\u58F0 - " + track_title_);
+              SafeCopyTrayTip(tray_icon_data_.szTip,
+                              ARRAYSIZE(tray_icon_data_.szTip), tip);
+              Shell_NotifyIcon(NIM_MODIFY, &tray_icon_data_);
+            }
+          }
+          result->Success();
+          return;
+        }
+
         if (method_call.method_name() == "exit_app") {
-          ExitApplication();
+          ShowWindow(GetHandle(), SW_HIDE);
+          RemoveTrayIcon();
+          TerminateDesktopLyricProcesses();
+          allow_close_ = true;
+          PostQuitMessage(0);
           result->Success();
           return;
         }
@@ -864,7 +981,12 @@ bool FlutterWindow::OnCreate() {
       });
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (initial_show_maximized_) {
+      ShowWindow(GetHandle(), SW_MAXIMIZE);
+      was_maximized_before_tray_ = true;
+    } else {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -902,18 +1024,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               LPARAM const lparam) noexcept {
   if (activate_window_message_ != 0 && message == activate_window_message_) {
     allow_close_ = false;
-    if (!IsWindowVisible(GetHandle())) {
+    if (!IsWindowVisible(GetHandle()) || IsIconic(GetHandle())) {
       RestoreFromTray();
       return 0;
     }
 
-    if (IsIconic(GetHandle())) {
-      ShowWindow(GetHandle(), SW_RESTORE);
-    } else {
-      ShowWindow(GetHandle(), SW_SHOW);
-    }
     SetForegroundWindow(GetHandle());
-    was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
     return 0;
   }
 
@@ -921,6 +1037,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       message == taskbar_button_created_message_) {
     thumb_buttons_added_ = false;
     SetupTaskbarButtons();
+    return 0;
+  }
+
+  if (taskbar_created_message_ != 0 &&
+      message == taskbar_created_message_) {
+    if (tray_icon_added_ || !IsWindowVisible(GetHandle()) || IsIconic(GetHandle())) {
+      tray_icon_added_ = false;
+      AddTrayIcon();
+    }
     return 0;
   }
 
@@ -1104,6 +1229,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       return 0;
     }
     case WM_SIZE:
+      if (wparam == SIZE_MINIMIZED) {
+        was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
+        AddTrayIcon();
+        if (media_control_channel_) {
+          media_control_channel_->InvokeMethod("window_minimized_to_tray", nullptr);
+        }
+      } else if (wparam == SIZE_RESTORED || wparam == SIZE_MAXIMIZED) {
+        if (IsWindowVisible(hwnd)) {
+          RemoveTrayIcon();
+        }
+      }
       ApplyRoundedWindowAppearance();
       NotifyWindowLayoutChanged();
       break;
@@ -1200,8 +1336,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         return 0;
       }
       switch (LOWORD(wparam)) {
-        case kCommandRestore:
-          RestoreFromTray();
+        case kCommandToggleVisibility:
+          if (IsWindowVisible(GetHandle()) && !IsIconic(GetHandle())) {
+            MinimizeToTray();
+          } else {
+            RestoreFromTray();
+          }
+          return 0;
+        case kCommandToggleThemeMode:
+          if (media_control_channel_) {
+            media_control_channel_->InvokeMethod("toggle_theme_mode", nullptr);
+          }
+          return 0;
+        case kCommandToggleDesktopLyric:
+          if (media_control_channel_) {
+            media_control_channel_->InvokeMethod("toggle_desktop_lyric", nullptr);
+          }
           return 0;
         case kCommandExit:
           ExitApplication();
@@ -1246,8 +1396,10 @@ void FlutterWindow::AddTrayIcon() {
   tray_icon_data_.uCallbackMessage = kTrayCallbackMessage;
   tray_icon_data_.hIcon =
       LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
-  lstrcpynW(tray_icon_data_.szTip, L"\u6816\u58F0",
-            ARRAYSIZE(tray_icon_data_.szTip));
+  std::wstring tip = track_title_.empty()
+                         ? L"\u6816\u58F0"
+                         : (L"\u6816\u58F0 - " + track_title_);
+  SafeCopyTrayTip(tray_icon_data_.szTip, ARRAYSIZE(tray_icon_data_.szTip), tip);
 
   if (Shell_NotifyIcon(NIM_ADD, &tray_icon_data_)) {
     tray_icon_data_.uVersion = NOTIFYICON_VERSION_4;
@@ -1269,14 +1421,18 @@ void FlutterWindow::MinimizeToTray() {
   if (is_fullscreen_) {
     ExitFullscreen();
   }
+  was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
   AddTrayIcon();
   thumb_buttons_added_ = false;
-  was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
   ShowWindow(GetHandle(), SW_HIDE);
+  if (media_control_channel_) {
+    media_control_channel_->InvokeMethod("window_minimized_to_tray", nullptr);
+  }
 }
 
 void FlutterWindow::RestoreFromTray() {
   allow_close_ = false;
+  RemoveTrayIcon();
   const bool restore_maximized = was_maximized_before_tray_;
   ShowWindow(
       GetHandle(),
@@ -1290,12 +1446,15 @@ void FlutterWindow::RestoreFromTray() {
 }
 
 void FlutterWindow::ExitApplication() {
+  ShowWindow(GetHandle(), SW_HIDE);
+  RemoveTrayIcon();
   TerminateDesktopLyricProcesses();
   allow_close_ = true;
   if (media_control_channel_) {
     media_control_channel_->InvokeMethod("exit_app", nullptr);
+  } else {
+    PostQuitMessage(0);
   }
-  PostMessage(GetHandle(), WM_CLOSE, 0, 0);
 }
 
 int FlutterWindow::GetIntArg(const flutter::EncodableMap* map, const char* key,
@@ -1531,10 +1690,14 @@ void FlutterWindow::Minimize() {
 
 void FlutterWindow::NotifyWindowLayoutChanged() {
   if (media_control_channel_) {
+    const bool is_hidden_or_iconic =
+        !IsWindowVisible(GetHandle()) || (IsIconic(GetHandle()) != FALSE);
     const bool is_effective_fullscreen =
-        is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
-    const bool is_effective_maximized =
-        !is_effective_fullscreen && (IsZoomed(GetHandle()) != FALSE);
+        !is_hidden_or_iconic &&
+        (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle()));
+    const bool is_effective_maximized = is_hidden_or_iconic
+        ? was_maximized_before_tray_
+        : (!is_effective_fullscreen && (IsZoomed(GetHandle()) != FALSE));
     std::string mode = "normal";
     if (is_effective_fullscreen) {
       mode = "fullscreen";
@@ -1655,13 +1818,59 @@ void FlutterWindow::ShowTrayMenu() {
     return;
   }
 
-  AppendMenuW(menu, MF_STRING, kCommandRestore, L"\u6253\u5F00");
+  // 1. 当前播放信息展示（置顶不可点击文本项）
+  const bool has_title =
+      !track_title_.empty() &&
+      track_title_.find_first_not_of(L" \t\r\n") != std::wstring::npos;
+  std::wstring display_info;
+  if (!has_title) {
+    display_info = L"\u6682\u65E0\u64AD\u653E\u66F2\u76EE";  // "暂无播放曲目"
+  } else {
+    display_info = track_title_;
+    if (!track_artist_.empty() &&
+        track_artist_.find_first_not_of(L" \t\r\n") != std::wstring::npos) {
+      display_info += L" - " + track_artist_;
+    }
+  }
+  if (display_info.length() > 45) {
+    size_t cut_len = 42;
+    if (cut_len > 0 && IS_HIGH_SURROGATE(display_info[cut_len - 1])) {
+      cut_len--;
+    }
+    display_info = display_info.substr(0, cut_len) + L"...";
+  }
+  AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED, kCommandTrackInfo,
+              display_info.c_str());
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, kCommandPrevious, L"\u4E0A\u4E00\u9996");
-  AppendMenuW(menu, MF_STRING, kCommandPlayPause, L"\u64AD\u653E/\u6682\u505C");
-  AppendMenuW(menu, MF_STRING, kCommandNext, L"\u4E0B\u4E00\u9996");
+
+  // 2. 主界面显隐
+  const bool is_window_shown =
+      IsWindowVisible(GetHandle()) && !IsIconic(GetHandle());
+  AppendMenuW(menu, MF_STRING, kCommandToggleVisibility,
+              is_window_shown ? L"\u6700\u5C0F\u5316\u5230\u6258\u76D8"   // "最小化到托盘"
+                              : L"\u663E\u793A\u4E3B\u754C\u9762");  // "显示主界面"
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, kCommandExit, L"\u9000\u51FA");
+
+  // 3. 播放控制
+  AppendMenuW(menu, MF_STRING, kCommandPlayPause,
+              is_playing_ ? L"\u6682\u505C"   // "暂停"
+                          : L"\u64AD\u653E");  // "播放"
+  AppendMenuW(menu, MF_STRING, kCommandPrevious, L"\u4E0A\u4E00\u9996");  // "上一首"
+  AppendMenuW(menu, MF_STRING, kCommandNext, L"\u4E0B\u4E00\u9996");      // "下一首"
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+  // 4. 个性化与交互切换
+  AppendMenuW(menu, MF_STRING, kCommandToggleThemeMode,
+              is_dark_mode_ ? L"\u5207\u6362\u81F3\u6D45\u8272\u6A21\u5F0F"   // "切换至浅色模式"
+                            : L"\u5207\u6362\u81F3\u6DF1\u8272\u6A21\u5F0F");  // "切换至深色模式"
+  AppendMenuW(menu, MF_STRING, kCommandToggleDesktopLyric,
+              is_desktop_lyric_enabled_
+                  ? L"\u5173\u95ED\u684C\u9762\u6B4C\u8BCD"   // "关闭桌面歌词"
+                  : L"\u5F00\u542F\u684C\u9762\u6B4C\u8BCD");  // "开启桌面歌词"
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+  // 5. 安全退出
+  AppendMenuW(menu, MF_STRING, kCommandExit, L"\u9000\u51FA");  // "退出"
 
   POINT cursor_point;
   GetCursorPos(&cursor_point);

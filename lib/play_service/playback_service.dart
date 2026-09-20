@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/play_service/audio_spectrum.dart';
@@ -1232,7 +1233,15 @@ class PlaybackService extends PlaybackController {
       }
       notifyListeners();
       try {
-        ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+        if (AppSettings.instance.dynamicTheme ||
+            AppSettings.instance.windowBackdropMode ==
+                WindowBackdropMode.meshFlow ||
+            AppSettings.instance.windowBackdropMode ==
+                WindowBackdropMode.prismaticGlass) {
+          await ThemeProvider.instance.applyThemeFromAudio(nowPlaying!, wait: true);
+        } else {
+          ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+        }
       } catch (_) {}
 
       _smtc.updateState(state: SMTCState.paused);

@@ -21,16 +21,17 @@ import 'package:window_manager/window_manager.dart';
 
 Future<void> initWindow() async {
   await windowManager.ensureInitialized();
+  final isMax = AppSettings.instance.isWindowMaximized;
   WindowOptions windowOptions = WindowOptions(
     minimumSize: AppSettings.minimumWindowSize,
-    size: AppSettings.instance.windowSize,
-    center: true,
+    size: isMax ? null : AppSettings.instance.windowSize,
+    center: !isMax,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle: TitleBarStyle.hidden,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    if (AppSettings.instance.isWindowMaximized) {
+    if (isMax) {
       if (Platform.isWindows) {
         await WindowControls.maximize();
       } else {
@@ -136,6 +137,14 @@ Future<void> main() async {
   ThemeProvider.instance.applyThemeMode(startupSettings.themeMode);
   if (File("$supportPath\\app_preference.json").existsSync()) {
     await AppPreference.read();
+  }
+  final savedPalette = AppPreference.instance.lastDynamicAlbumPalette;
+  if (savedPalette != null &&
+      (startupSettings.dynamicTheme ||
+          startupSettings.windowBackdropMode == WindowBackdropMode.meshFlow ||
+          startupSettings.windowBackdropMode ==
+              WindowBackdropMode.prismaticGlass)) {
+    ThemeProvider.instance.restorePersistedAlbumPalette(savedPalette);
   }
   var welcome = !File("$supportPath\\index.json").existsSync();
   if (!welcome) {

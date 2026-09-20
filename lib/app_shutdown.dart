@@ -26,6 +26,7 @@ class AppShutdownCoordinator {
         await playService.close();
       },
       persistState: [
+        AppPreference.instance.save,
         AppSettings.instance.saveSettings,
         PlayCountStore.instance.save,
         savePlaylists,

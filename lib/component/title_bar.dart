@@ -552,8 +552,8 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         ),
         _WindowButton(
           semanticsLabel: '退出',
-          // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
-          onPressed: () => unawaited(WindowControls.exitApp()),
+          // 点击关闭按钮时最小化到系统托盘，不中断播放
+          onPressed: () => unawaited(WindowControls.close()),
           icon: Symbols.close_rounded,
           color: scheme.error,
         ),

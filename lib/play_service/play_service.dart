@@ -12,9 +12,11 @@ class PlayService {
 
   PlaybackService get playbackService =>
       _playbackService ??= PlaybackService(this);
+  PlaybackService? get existingPlaybackService => _playbackService;
   LyricService get lyricService => _lyricService ??= LyricService(this);
   DesktopLyricService get desktopLyricService =>
       _desktopLyricService ??= DesktopLyricService(this);
+  DesktopLyricService? get existingDesktopLyricService => _desktopLyricService;
 
   PlayService._();
 

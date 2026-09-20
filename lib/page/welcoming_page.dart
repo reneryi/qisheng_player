@@ -260,8 +260,8 @@ class _WindowControlls extends StatelessWidget {
             ),
             IconButton(
               tooltip: "退出",
-              // 点击退出按钮时触发统一退出流程（包含数据持久化、托盘销毁与进程彻底关闭）
-              onPressed: () => unawaited(WindowControls.exitApp()),
+              // 点击关闭按钮时最小化到系统托盘，不中断播放
+              onPressed: () => unawaited(WindowControls.close()),
               icon: const Icon(Symbols.close),
             ),
           ],

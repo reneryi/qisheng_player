@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/material.dart' show Brightness, ThemeMode;
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_shutdown.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
+import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -104,6 +106,23 @@ class WindowControls {
   static double get shellGap =>
       layoutMode.value == WindowLayoutMode.maximized ? 20 : 10;
 
+  static void _updateLayoutMode(WindowLayoutMode next) {
+    if (layoutMode.value != next) {
+      layoutMode.value = next;
+    }
+    if (next == WindowLayoutMode.maximized) {
+      if (!AppSettings.instance.isWindowMaximized) {
+        AppSettings.instance.isWindowMaximized = true;
+        AppSettings.instance.scheduleSaveSettings();
+      }
+    } else if (next == WindowLayoutMode.normal) {
+      if (AppSettings.instance.isWindowMaximized) {
+        AppSettings.instance.isWindowMaximized = false;
+        AppSettings.instance.scheduleSaveSettings();
+      }
+    }
+  }
+
   static Future<void> syncWindowLayoutMode() async {
     try {
       if (Platform.isWindows) {
@@ -114,7 +133,7 @@ class WindowControls {
           'maximized' => WindowLayoutMode.maximized,
           _ => WindowLayoutMode.normal,
         };
-        if (layoutMode.value != next) layoutMode.value = next;
+        _updateLayoutMode(next);
         return;
       }
       final fullscreen = await windowManager.isFullScreen();
@@ -124,7 +143,7 @@ class WindowControls {
           : maximized
               ? WindowLayoutMode.maximized
               : WindowLayoutMode.normal;
-      if (layoutMode.value != next) layoutMode.value = next;
+      _updateLayoutMode(next);
     } catch (_) {}
   }
 
@@ -238,6 +257,20 @@ class WindowControls {
       await windowManager.minimize();
     } catch (_) {}
   }
+
+  static Future<void> close() async {
+    isWindowVisible.value = false;
+    unawaited(syncTrayMenuState());
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("minimize_to_tray");
+        return;
+      }
+      await windowManager.hide();
+    } catch (_) {}
+  }
+
+  static Future<void> minimizeToTray() => close();
 
   static Future<void> setMaximizeButtonRect({
     required double left,
@@ -420,9 +453,33 @@ class WindowControls {
   }
 
   static void _resyncPlaybackSnapshot({required String reason}) {
-    final playbackService = PlayService.instance.playbackService;
+    final playbackService =
+        PlayService.existingInstance?.existingPlaybackService;
+    if (playbackService == null) return;
     playbackService.resyncPlaybackSnapshot();
     unawaited(_syncPlayingState(playbackService.playerState));
+  }
+
+  static Future<void> syncTrayMenuState() async {
+    if (!Platform.isWindows) return;
+    try {
+      final playService = PlayService.existingInstance;
+      final playbackService = playService?.existingPlaybackService;
+      final nowPlaying = playbackService?.nowPlaying;
+      final isPlaying = playbackService?.playerState == PlayerState.playing;
+      final isDarkMode =
+          ThemeProvider.instance.effectiveBrightness == Brightness.dark;
+      final isDesktopLyricRunning =
+          playService?.existingDesktopLyricService?.isRunning ?? false;
+
+      await _channel.invokeMethod("update_tray_menu_state", {
+        "title": nowPlaying?.displayTitle.trim() ?? "",
+        "artist": nowPlaying?.displayArtist.trim() ?? "",
+        "isPlaying": isPlaying,
+        "isDarkMode": isDarkMode,
+        "isDesktopLyricEnabled": isDesktopLyricRunning,
+      });
+    } catch (_) {}
   }
 
   static bool _isExiting = false;
@@ -435,6 +492,14 @@ class WindowControls {
     _isExiting = true;
 
     try {
+      // 立即通过原生通道与 windowManager 隐藏窗口与托盘，消除视觉冻结
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("hide_window");
+      }
+      await windowManager.hide();
+    } catch (_) {}
+
+    try {
       // 执行应用状态与播放器资源持久化与释放（限时 5 秒兜底，允许播放器释放后完整完成状态持久化）
       await appShutdownCoordinator
           .shutdown()
@@ -444,13 +509,15 @@ class WindowControls {
     }
 
     try {
-      // 销毁窗口
-      await windowManager.destroy();
+      // 通知原生平台清理托盘图标并退出消息循环
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("exit_app");
+      }
     } catch (_) {}
 
     try {
-      // 通知原生平台清理托盘图标并退出消息循环
-      await _channel.invokeMethod("exit_app");
+      // 销毁窗口
+      await windowManager.destroy();
     } catch (_) {}
 
     // 保证 Dart 进程完全终止
@@ -472,22 +539,57 @@ class WindowControls {
     windowManager.addListener(_windowListener);
     await windowManager.setPreventClose(true);
     unawaited(syncWindowLayoutMode());
+    if (Platform.isWindows && AppSettings.instance.isWindowMaximized) {
+      try {
+        await _channel.invokeMethod("set_initial_window_state", {
+          "isMaximized": true,
+        });
+      } catch (_) {}
+    }
     final initialBackdropResult =
         await setWindowBackdropMode(AppSettings.instance.windowBackdropMode);
     unawaited(_syncPlayingState(playbackService.playerState));
     playbackService.playerStateStream.listen((state) {
       unawaited(_syncPlayingState(state));
+      unawaited(syncTrayMenuState());
     });
+    playbackService.addListener(() {
+      unawaited(syncTrayMenuState());
+    });
+    ThemeProvider.instance.addListener(() {
+      unawaited(syncTrayMenuState());
+    });
+    PlayService.instance.desktopLyricService.addListener(() {
+      unawaited(syncTrayMenuState());
+    });
+    unawaited(syncTrayMenuState());
 
-    _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case "previous":
-          playbackService.lastAudio();
-          return;
-        case "next":
-          playbackService.nextAudio();
-          return;
-        case "play_pause":
+    ensureMethodChannelHandler();
+    return initialBackdropResult;
+  }
+
+  static bool _handlerInitialized = false;
+
+  @visibleForTesting
+  static void ensureMethodChannelHandler() {
+    if (_handlerInitialized) return;
+    _handlerInitialized = true;
+    _channel.setMethodCallHandler(handleMethodCall);
+  }
+
+  @visibleForTesting
+  static Future<dynamic> handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case "previous":
+        PlayService.existingInstance?.existingPlaybackService?.lastAudio();
+        return;
+      case "next":
+        PlayService.existingInstance?.existingPlaybackService?.nextAudio();
+        return;
+      case "play_pause":
+        final playbackService =
+            PlayService.existingInstance?.existingPlaybackService;
+        if (playbackService != null) {
           if (playbackService.playerState == PlayerState.playing) {
             playbackService.pause();
           } else if (playbackService.playerState == PlayerState.completed) {
@@ -495,41 +597,66 @@ class WindowControls {
           } else {
             playbackService.start();
           }
-          return;
-        case "window_restored_from_tray":
-          isWindowVisible.value = true;
-          resyncPlaybackAfterWindowActivated(reason: 'tray restore');
-          return;
-        case "window_minimized_to_tray":
-          isWindowVisible.value = false;
-          return;
-        case "on_window_layout_changed":
-          if (call.arguments is Map) {
-            final map = call.arguments as Map;
-            final modeStr = map['mode'] as String?;
-            final next = switch (modeStr) {
-              'fullscreen' => WindowLayoutMode.fullscreen,
-              'maximized' => WindowLayoutMode.maximized,
-              _ => WindowLayoutMode.normal,
-            };
-            if (layoutMode.value != next) {
-              layoutMode.value = next;
+        }
+        return;
+      case "toggle_theme_mode":
+        final isDark =
+            ThemeProvider.instance.effectiveBrightness == Brightness.dark;
+        final nextMode = isDark ? ThemeMode.light : ThemeMode.dark;
+        AppSettings.instance.themeMode = nextMode;
+        AppSettings.instance.useSystemThemeMode = false;
+        ThemeProvider.instance.applyThemeMode(nextMode);
+        await AppSettings.instance.saveSettings();
+        await syncTrayMenuState();
+        return;
+      case "toggle_desktop_lyric":
+        final service =
+            PlayService.existingInstance?.existingDesktopLyricService ??
+                PlayService.existingInstance?.desktopLyricService;
+        if (service != null) {
+          try {
+            final proc = await service.desktopLyric;
+            if (proc == null) {
+              await service.startDesktopLyric();
+            } else {
+              await service.stopDesktopLyric();
             }
-          }
-          return;
-        case "exit_app":
-          unawaited(exitApp());
-          return;
-      }
-    });
-    return initialBackdropResult;
+          } catch (_) {}
+        }
+        await syncTrayMenuState();
+        return;
+      case "window_restored_from_tray":
+        isWindowVisible.value = true;
+        resyncPlaybackAfterWindowActivated(reason: 'tray restore');
+        unawaited(syncTrayMenuState());
+        return;
+      case "window_minimized_to_tray":
+        isWindowVisible.value = false;
+        unawaited(syncTrayMenuState());
+        return;
+      case "on_window_layout_changed":
+        if (call.arguments is Map) {
+          final map = call.arguments as Map;
+          final modeStr = map['mode'] as String?;
+          final next = switch (modeStr) {
+            'fullscreen' => WindowLayoutMode.fullscreen,
+            'maximized' => WindowLayoutMode.maximized,
+            _ => WindowLayoutMode.normal,
+          };
+          _updateLayoutMode(next);
+        }
+        return;
+      case "exit_app":
+        unawaited(exitApp());
+        return;
+    }
   }
 }
 
 class _PlaybackWindowListener with WindowListener {
   @override
   void onWindowClose() {
-    unawaited(WindowControls.exitApp());
+    unawaited(WindowControls.close());
   }
 
   @override
@@ -546,6 +673,7 @@ class _PlaybackWindowListener with WindowListener {
   @override
   void onWindowMinimize() {
     WindowControls.isWindowVisible.value = false;
+    unawaited(WindowControls.syncTrayMenuState());
   }
 
   @override
@@ -553,13 +681,20 @@ class _PlaybackWindowListener with WindowListener {
     WindowControls.isWindowVisible.value = true;
     unawaited(WindowControls.syncWindowLayoutMode());
     WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window restore');
+    unawaited(WindowControls.syncTrayMenuState());
   }
 
   @override
-  void onWindowMaximize() => unawaited(WindowControls.syncWindowLayoutMode());
+  void onWindowMaximize() {
+    WindowControls._updateLayoutMode(WindowLayoutMode.maximized);
+    unawaited(WindowControls.syncWindowLayoutMode());
+  }
 
   @override
-  void onWindowUnmaximize() => unawaited(WindowControls.syncWindowLayoutMode());
+  void onWindowUnmaximize() {
+    WindowControls._updateLayoutMode(WindowLayoutMode.normal);
+    unawaited(WindowControls.syncWindowLayoutMode());
+  }
 
   @override
   void onWindowEnterFullScreen() =>

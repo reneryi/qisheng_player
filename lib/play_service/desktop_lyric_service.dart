@@ -41,6 +41,7 @@ abstract class DesktopLyricController extends ChangeNotifier {
   void sendPlayerStateMessage(bool isPlaying);
   void sendNowPlayingMessage(Audio nowPlaying);
   void sendLyricLineMessage(LyricLine line);
+  bool get isRunning => false;
   void sendPlayerFontChangedMessage(String? fontFamily) {}
 }
 
@@ -95,6 +96,9 @@ class DesktopLyricService extends DesktopLyricController {
   bool isLocked = false;
 
   bool get isStarting => _isStarting;
+
+  @override
+  bool get isRunning => _desktopLyricPid != null;
 
   void _saveDesktopLyricPreference({
     bool? enabled,

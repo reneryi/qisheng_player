@@ -27,6 +27,70 @@ class AlbumPalette {
   /// 高光点缀色 (Highlight Glow)
   final Color highlight;
 
+  /// 调色板 5 种主色彩的不可变列表，顺序对应 [primary], [secondary], [accent], [muted], [highlight]
+  List<Color> get colors => [primary, secondary, accent, muted, highlight];
+
+  Map<String, int> toMap() => {
+        'primary': primary.toARGB32(),
+        'secondary': secondary.toARGB32(),
+        'accent': accent.toARGB32(),
+        'muted': muted.toARGB32(),
+        'highlight': highlight.toARGB32(),
+      };
+
+  static AlbumPalette? fromMap(Map? map) {
+    if (map == null || map.isEmpty) return null;
+    try {
+      Color? parseColor(dynamic val) {
+        if (val is num) {
+          final intVal = val.toInt() & 0xFFFFFFFF;
+          final withAlpha =
+              (intVal & 0xFF000000) == 0 ? (intVal | 0xFF000000) : intVal;
+          return Color(withAlpha);
+        }
+        if (val is String) {
+          String s = val.trim();
+          if (s.isEmpty) return null;
+          if (s.startsWith('#')) s = s.substring(1);
+          if (s.startsWith('0x') || s.startsWith('0X')) s = s.substring(2);
+          final parsed = int.tryParse(s, radix: 16) ?? int.tryParse(s);
+          if (parsed != null) {
+            final intVal = parsed & 0xFFFFFFFF;
+            final withAlpha =
+                (intVal & 0xFF000000) == 0 ? (intVal | 0xFF000000) : intVal;
+            return Color(withAlpha);
+          }
+        }
+        return null;
+      }
+
+      dynamic getVal(String key) {
+        if (map.containsKey(key)) return map[key];
+        final lower = key.toLowerCase();
+        if (map.containsKey(lower)) return map[lower];
+        final capitalized = key[0].toUpperCase() + key.substring(1);
+        if (map.containsKey(capitalized)) return map[capitalized];
+        return null;
+      }
+
+      final primary = parseColor(getVal('primary'));
+      if (primary == null) return null;
+      final secondary = parseColor(getVal('secondary')) ?? primary;
+      final accent = parseColor(getVal('accent')) ?? primary;
+      final muted = parseColor(getVal('muted')) ?? primary;
+      final highlight = parseColor(getVal('highlight')) ?? primary;
+      return AlbumPalette(
+        primary: primary,
+        secondary: secondary,
+        accent: accent,
+        muted: muted,
+        highlight: highlight,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 判断颜色是否为中性色（黑、白、灰、极低饱和度）
   static bool isNeutral(Color color) {
     final hsl = HSLColor.fromColor(color);
@@ -204,8 +268,6 @@ class AlbumPalette {
       highlight: highlight,
     );
   }
-
-  List<Color> get colors => [primary, secondary, accent, muted, highlight];
 
   @override
   bool operator ==(Object other) {

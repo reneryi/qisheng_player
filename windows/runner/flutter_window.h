@@ -39,11 +39,14 @@ class FlutterWindow : public Win32Window {
   static constexpr UINT kTrayCallbackMessage = WM_APP + 101;
   static constexpr UINT kRefreshThumbButtonsMessage = WM_APP + 102;
 
-  static constexpr UINT kCommandRestore = 20001;
+  static constexpr UINT kCommandTrackInfo = 20000;
+  static constexpr UINT kCommandToggleVisibility = 20001;
   static constexpr UINT kCommandExit = 20002;
   static constexpr UINT kCommandPrevious = 20003;
   static constexpr UINT kCommandPlayPause = 20004;
   static constexpr UINT kCommandNext = 20005;
+  static constexpr UINT kCommandToggleThemeMode = 20006;
+  static constexpr UINT kCommandToggleDesktopLyric = 20007;
 
   static constexpr UINT kThumbButtonPrevious = 20101;
   static constexpr UINT kThumbButtonPlayPause = 20102;
@@ -90,6 +93,7 @@ class FlutterWindow : public Win32Window {
   // The project to run.
   flutter::DartProject project_;
   UINT taskbar_button_created_message_ = 0;
+  UINT taskbar_created_message_ = 0;
   UINT activate_window_message_ = 0;
 
   // The Flutter instance hosted by this window.
@@ -100,6 +104,11 @@ class FlutterWindow : public Win32Window {
   bool tray_icon_added_ = false;
   bool allow_close_ = false;
   bool is_playing_ = false;
+  bool is_dark_mode_ = false;
+  bool is_desktop_lyric_enabled_ = false;
+  bool initial_show_maximized_ = false;
+  std::wstring track_title_;
+  std::wstring track_artist_;
   bool thumb_buttons_added_ = false;
   bool was_maximized_before_tray_ = false;
   bool is_fullscreen_ = false;

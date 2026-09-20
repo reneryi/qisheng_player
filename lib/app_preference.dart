@@ -6,6 +6,7 @@ import 'package:qisheng_player/page/now_playing_page/component/lyric_view_contro
 import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
+import 'package:qisheng_player/theme/album_palette.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -363,6 +364,8 @@ class AppPreference {
 
   var hotkeyPref = HotkeyPreference.defaults();
 
+  AlbumPalette? lastDynamicAlbumPalette;
+
   Future<void> save() => _saveCoordinator.save();
 
   Future<void> _saveOnce() async {
@@ -387,6 +390,8 @@ class AppPreference {
         "desktopLyricPref": desktopLyricPref.toMap(),
         "nowPlayingPagePref": nowPlayingPagePref.toMap(),
         "hotkeyPref": hotkeyPref.toMap(),
+        if (lastDynamicAlbumPalette != null)
+          "lastDynamicAlbumPalette": lastDynamicAlbumPalette!.toMap(),
       };
 
       final prefJson = json.encode(prefMap);
@@ -481,6 +486,14 @@ class AppPreference {
       instance.hotkeyPref = HotkeyPreference.fromMap(
         prefMap["hotkeyPref"] ?? {},
       );
+
+      final loadedPaletteMap = prefMap["lastDynamicAlbumPalette"];
+      if (loadedPaletteMap is Map) {
+        try {
+          instance.lastDynamicAlbumPalette =
+              AlbumPalette.fromMap(loadedPaletteMap);
+        } catch (_) {}
+      }
       bool needNormalizeMuteHotkey = false;
       final muteBinding = instance.hotkeyPref.bindings["mute"];
       if (muteBinding != null &&

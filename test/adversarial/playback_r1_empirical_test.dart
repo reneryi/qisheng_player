@@ -87,10 +87,16 @@ class FakePlayService implements PlayService {
   PlaybackService get playbackService => _playbackService!;
 
   @override
+  PlaybackService? get existingPlaybackService => _playbackService;
+
+  @override
   LyricService get lyricService => _lyricService;
 
   @override
   DesktopLyricService get desktopLyricService => _desktopLyricService;
+
+  @override
+  DesktopLyricService? get existingDesktopLyricService => _desktopLyricService;
 
   @override
   Future<void> close() async {}
