@@ -52,38 +52,38 @@ Widget _buildAppRouteTransition(
   // 入场采用优雅舒展的流体减速贝塞尔曲线，初段响应敏捷，后段极其柔和缓停
   final curvedAnim = CurvedAnimation(
     parent: animation,
-    curve: const Cubic(0.08, 0.92, 0.16, 1.0),
+    curve: const Cubic(0.12, 0.96, 0.20, 1.0),
     reverseCurve: Curves.easeInCubic,
   );
-  // 入场透明度平滑渐显，在中后段（76%）即达到饱和，确保视觉清透自然无闪烁
+  // 入场透明度平滑渐显，使用 easeOutCubic 覆盖全过程，确保平滑通透
   final contentReveal = CurvedAnimation(
     parent: animation,
-    curve: const Interval(0.0, 0.76, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.76, curve: Curves.easeInCubic),
+    curve: const Interval(0.0, 0.85, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 0.85, curve: Curves.easeInCubic),
   );
   final secondaryCurvedAnim = CurvedAnimation(
     parent: secondaryAnimation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
-  // 退场内容在前 40% 周期内柔和融化消失，彻底避免新旧两页网格在半透明状态下重叠混杂
+  // 退场内容平滑淡出，覆盖到 65% 周期，平稳过渡到新页面，杜绝突兀融化与画面空洞
   final outgoingContent = CurvedAnimation(
     parent: secondaryAnimation,
-    curve: const Interval(0.0, 0.40, curve: Curves.easeInCubic),
-    reverseCurve: const Interval(0.0, 0.40, curve: Curves.easeOutCubic),
+    curve: const Interval(0.0, 0.65, curve: Curves.easeInOutCubic),
+    reverseCurve: const Interval(0.0, 0.65, curve: Curves.easeInOutCubic),
   );
   final transitionedChild = provideNowPlayingScope
       ? NowPlayingRouteTransitionScope(animation: curvedAnim, child: child)
       : child;
 
-  // 新页面入场：纵向微距柔和浮升 (18px -> 0) + 空间呼吸微缩放 (0.988 -> 1.0) + 柔光渐显
+  // 新页面入场：微距平滑浮升 (12px -> 0) + 空间呼吸微缩放 (0.992 -> 1.0) + 柔光渐显
   final incomingVisual = SlideTransition(
     position: Tween<Offset>(
-      begin: const Offset(0.0, 0.022),
+      begin: const Offset(0.0, 0.014),
       end: Offset.zero,
     ).animate(curvedAnim),
     child: ScaleTransition(
-      scale: Tween<double>(begin: 0.988, end: 1.0).animate(curvedAnim),
+      scale: Tween<double>(begin: 0.992, end: 1.0).animate(curvedAnim),
       child: FadeTransition(
         opacity: Tween<double>(begin: 0.0, end: 1.0).animate(contentReveal),
         child: transitionedChild,
@@ -132,9 +132,9 @@ Widget _buildAppRouteTransition(
             // 彻底消除与固定左侧栏的生硬横向拉扯与页面重叠粘连
             final outgoingOpacity = (1.0 - outgoingProgress).clamp(0.0, 1.0);
             return Transform.translate(
-              offset: Offset(0.0, -8.0 * outgoingProgress),
+              offset: Offset(0.0, -6.0 * outgoingProgress),
               child: Transform.scale(
-                scale: (1.0 - 0.008 * outgoingProgress).clamp(0.99, 1.0),
+                scale: (1.0 - 0.006 * outgoingProgress).clamp(0.994, 1.0),
                 child: Opacity(
                   opacity: outgoingOpacity,
                   child: child,
@@ -160,8 +160,8 @@ Widget _buildNowPlayingRouteTransition(
   // 采用现代三次贝塞尔曲线，入场柔和减速，退场顺畅滑走
   final slideAnim = CurvedAnimation(
     parent: animation,
-    curve: const Cubic(0.2, 0.9, 0.2, 1.0),
-    reverseCurve: const Cubic(0.2, 0.0, 0.3, 1.0),
+    curve: const Cubic(0.12, 0.96, 0.20, 1.0),
+    reverseCurve: const Cubic(0.16, 0.92, 0.24, 1.0),
   );
 
   // 包裹 NowPlayingRouteTransitionScope，以便详情页子组件获取动画状态
@@ -190,13 +190,13 @@ Widget _buildDetailRouteTransition(
 ) {
   final curvedAnim = CurvedAnimation(
     parent: animation,
-    curve: Curves.easeOutCubic,
+    curve: const Cubic(0.12, 0.96, 0.20, 1.0),
     reverseCurve: Curves.easeInCubic,
   );
   final secondaryCurvedAnim = CurvedAnimation(
     parent: secondaryAnimation,
-    curve: const Interval(0.0, 0.72, curve: Curves.easeOutCubic),
-    reverseCurve: const Interval(0.0, 0.72, curve: Curves.easeInCubic),
+    curve: const Interval(0.0, 0.70, curve: Curves.easeOutCubic),
+    reverseCurve: const Interval(0.0, 0.70, curve: Curves.easeInCubic),
   );
 
   final outgoingChild = FadeTransition(
@@ -205,7 +205,7 @@ Widget _buildDetailRouteTransition(
     child: SlideTransition(
       position: Tween<Offset>(
         begin: Offset.zero,
-        end: const Offset(-0.018, 0.0),
+        end: const Offset(-0.015, 0.0),
       ).animate(secondaryCurvedAnim),
       child: child,
     ),
@@ -213,14 +213,13 @@ Widget _buildDetailRouteTransition(
 
   return SlideTransition(
     position: Tween<Offset>(
-      begin: const Offset(0.035, 0.0),
+      begin: const Offset(0.028, 0.0),
       end: Offset.zero,
     ).animate(curvedAnim),
     child: FadeTransition(
       key: const ValueKey('detail-route-incoming-opacity'),
-      // 先以少量可见度覆盖旧页面，再平滑完成显现，避免首帧空洞或
-      // 半透明 surface 把旧列表直接“印”到新页面上。
-      opacity: Tween<double>(begin: 0.12, end: 1.0).animate(curvedAnim),
+      // 从 0.0 平滑显现，消除首帧硬跳闪烁
+      opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnim),
       child: outgoingChild,
     ),
   );
@@ -235,8 +234,8 @@ class DetailTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 400),
-          reverseTransitionDuration: const Duration(milliseconds: 320),
+          transitionDuration: const Duration(milliseconds: 360),
+          reverseTransitionDuration: const Duration(milliseconds: 280),
         );
 
   static Widget _transitionsBuilder(
@@ -263,7 +262,7 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 360),
+          transitionDuration: const Duration(milliseconds: 320),
           reverseTransitionDuration: const Duration(milliseconds: 260),
         );
 
@@ -291,8 +290,8 @@ class NowPlayingTransitionPage<T> extends CustomTransitionPage<T> {
     super.key,
   }) : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 520),
-          reverseTransitionDuration: const Duration(milliseconds: 450),
+          transitionDuration: const Duration(milliseconds: 460),
+          reverseTransitionDuration: const Duration(milliseconds: 380),
           opaque: false, // 允许底层呈现平滑淡出与 Hero 连续飞跃
           barrierColor: Colors.transparent, // 杜绝模态层级黑色遮罩，确保背景纯净通透
         );
@@ -438,6 +437,7 @@ class Entry extends StatelessWidget {
 
   late final GoRouter config = GoRouter(
     navigatorKey: ROUTER_KEY,
+    observers: [AppNavigationState.instance.routeObserver],
     initialLocation: welcome ? app_paths.WELCOMING_PAGE : _startLocation(),
     routes: [
       ShellRoute(

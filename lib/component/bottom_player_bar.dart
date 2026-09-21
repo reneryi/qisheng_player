@@ -1871,7 +1871,7 @@ class _QueueEntryButton extends StatelessWidget {
       barrierColor: isDark
           ? Colors.black.withValues(alpha: 0.35)
           : Colors.black.withValues(alpha: 0.18),
-      transitionDuration: const Duration(milliseconds: 320),
+      transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (context, anim1, anim2) {
         final scheme = Theme.of(context).colorScheme;
         const blurSigma = 24.0;
@@ -1990,8 +1990,8 @@ class _QueueEntryButton extends StatelessWidget {
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
-          curve: const Cubic(0.16, 1.0, 0.3, 1.0),
-          reverseCurve: const Cubic(0.2, 0.0, 0.0, 1.0),
+          curve: const Cubic(0.12, 0.96, 0.20, 1.0),
+          reverseCurve: const Cubic(0.16, 0.92, 0.24, 1.0),
         );
         return SlideTransition(
           position: Tween<Offset>(

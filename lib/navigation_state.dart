@@ -21,10 +21,61 @@ class AppNavigationEntry {
   final Object? extra;
 }
 
+class AppNavigationRouteObserver extends NavigatorObserver {
+  final List<Route<dynamic>> _modalRoutes = [];
+
+  bool get hasActiveModal => _modalRoutes.isNotEmpty;
+
+  Route<dynamic>? get topModalRoute =>
+      _modalRoutes.isEmpty ? null : _modalRoutes.last;
+
+  @visibleForTesting
+  void clearModalsForTesting() {
+    _modalRoutes.clear();
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route is PopupRoute) {
+      _modalRoutes.add(route);
+    }
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    if (route is PopupRoute) {
+      _modalRoutes.remove(route);
+    }
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    if (route is PopupRoute) {
+      _modalRoutes.remove(route);
+    }
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (oldRoute is PopupRoute) {
+      _modalRoutes.remove(oldRoute);
+    }
+    if (newRoute is PopupRoute) {
+      _modalRoutes.add(newRoute);
+    }
+  }
+}
+
 class AppNavigationState extends ChangeNotifier {
   AppNavigationState._();
 
   static final AppNavigationState instance = AppNavigationState._();
+
+  final AppNavigationRouteObserver routeObserver = AppNavigationRouteObserver();
 
   // 侧边栏及 Shell 页面对应的路由次序列表，用于判断侧边栏切换时的滑动方向
   static const List<String> _shellPagesOrder = [
@@ -75,6 +126,10 @@ class AppNavigationState extends ChangeNotifier {
     }
 
     if (!_shouldTrackLocation(location)) {
+      return;
+    }
+
+    if (nowPlayingPageActive && _isShellLocation(location)) {
       return;
     }
 
@@ -161,7 +216,7 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   void openNowPlaying(BuildContext context) {
-    if (currentEntry.location == app_paths.NOW_PLAYING_PAGE) return;
+    if (nowPlayingPageActive) return;
     // 在跳转前主动将状态置为 true，使底层首帧就能感知并准备缩放
     setNowPlayingPageActive(true);
     context.push(app_paths.NOW_PLAYING_PAGE);
@@ -196,6 +251,18 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   bool navigateBack(BuildContext context, {String? fallback}) {
+    if (routeObserver.hasActiveModal) {
+      final modal = routeObserver.topModalRoute;
+      if (modal != null && modal.navigator != null && modal.isCurrent) {
+        modal.navigator!.pop();
+      } else if (context.canPop()) {
+        context.pop();
+      } else if (modal?.navigator != null) {
+        modal!.navigator!.pop();
+      }
+      return true;
+    }
+
     if (currentEntry.location == app_paths.NOW_PLAYING_PAGE) {
       return closeNowPlaying(context, fallback: fallback);
     }
@@ -217,6 +284,16 @@ class AppNavigationState extends ChangeNotifier {
   }
 
   bool navigateForward(BuildContext context) {
+    if (routeObserver.hasActiveModal) return false;
+    if (!canGoForward) return false;
+
+    final nextEntry = _history[_historyIndex + 1];
+    if (nextEntry.location == app_paths.NOW_PLAYING_PAGE) {
+      moveHistoryForwardEntry();
+      openNowPlaying(context);
+      return true;
+    }
+
     final target = moveHistoryForwardEntry();
     if (target == null) return false;
     context.go(target.location, extra: target.extra);
@@ -231,6 +308,8 @@ class AppNavigationState extends ChangeNotifier {
       ..add(AppNavigationEntry(initial));
     _historyIndex = 0;
     _pendingHistoryLocation = null;
+    _nowPlayingPageActive = false;
+    routeObserver.clearModalsForTesting();
     notifyListeners();
   }
 

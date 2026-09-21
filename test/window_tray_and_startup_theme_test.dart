@@ -410,5 +410,65 @@ void main() {
         null,
       );
     });
+
+    test('setInitialLayoutMode updates layoutMode accurately without delay', () {
+      WindowControls.layoutMode.value = WindowLayoutMode.normal;
+      WindowControls.setInitialLayoutMode(true);
+      expect(WindowControls.layoutMode.value, equals(WindowLayoutMode.maximized));
+
+      WindowControls.setInitialLayoutMode(false);
+      expect(WindowControls.layoutMode.value, equals(WindowLayoutMode.normal));
+    });
+
+    test('showWindow sends show_window method call with maximize true/false on Windows', () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('qisheng_player/window_controls'),
+        (MethodCall call) async {
+          calls.add(call);
+          return null;
+        },
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        (MethodCall call) async {
+          return null;
+        },
+      );
+
+      await WindowControls.showWindow(maximize: true);
+      expect(WindowControls.isWindowVisible.value, isTrue);
+      expect(
+        calls.any((c) =>
+            c.method == 'show_window' &&
+            c.arguments is Map &&
+            (c.arguments as Map)['maximize'] == true),
+        isTrue,
+      );
+
+      calls.clear();
+      await WindowControls.showWindow(maximize: false);
+      expect(WindowControls.isWindowVisible.value, isTrue);
+      expect(
+        calls.any((c) =>
+            c.method == 'show_window' &&
+            c.arguments is Map &&
+            (c.arguments as Map)['maximize'] == false),
+        isTrue,
+      );
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('qisheng_player/window_controls'),
+        null,
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      );
+    });
   });
 }

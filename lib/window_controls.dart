@@ -103,6 +103,14 @@ class WindowControls {
   static final ValueNotifier<WindowLayoutMode> layoutMode =
       ValueNotifier(WindowLayoutMode.normal);
 
+  static void setInitialLayoutMode(bool isMaximized) {
+    final next =
+        isMaximized ? WindowLayoutMode.maximized : WindowLayoutMode.normal;
+    if (layoutMode.value != next) {
+      layoutMode.value = next;
+    }
+  }
+
   static double get shellGap =>
       layoutMode.value == WindowLayoutMode.maximized ? 20 : 10;
 
@@ -271,6 +279,26 @@ class WindowControls {
   }
 
   static Future<void> minimizeToTray() => close();
+
+  static Future<void> showWindow({bool maximize = false}) async {
+    isWindowVisible.value = true;
+    try {
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("show_window", {
+          "maximize": maximize,
+        });
+        await windowManager.focus();
+        unawaited(syncTrayMenuState());
+        return;
+      }
+      if (maximize) {
+        await windowManager.maximize();
+      }
+      await windowManager.show();
+      await windowManager.focus();
+      unawaited(syncTrayMenuState());
+    } catch (_) {}
+  }
 
   static Future<void> setMaximizeButtonRect({
     required double left,
@@ -661,7 +689,9 @@ class _PlaybackWindowListener with WindowListener {
 
   @override
   void onWindowResize() {
-    unawaited(WindowControls.syncWindowLayoutMode());
+    if (!Platform.isWindows) {
+      unawaited(WindowControls.syncWindowLayoutMode());
+    }
     AppSettings.instance.scheduleSaveSettings();
   }
 
@@ -679,7 +709,9 @@ class _PlaybackWindowListener with WindowListener {
   @override
   void onWindowRestore() {
     WindowControls.isWindowVisible.value = true;
-    unawaited(WindowControls.syncWindowLayoutMode());
+    if (!Platform.isWindows) {
+      unawaited(WindowControls.syncWindowLayoutMode());
+    }
     WindowControls.resyncPlaybackAfterWindowActivated(reason: 'window restore');
     unawaited(WindowControls.syncTrayMenuState());
   }
@@ -687,20 +719,24 @@ class _PlaybackWindowListener with WindowListener {
   @override
   void onWindowMaximize() {
     WindowControls._updateLayoutMode(WindowLayoutMode.maximized);
-    unawaited(WindowControls.syncWindowLayoutMode());
   }
 
   @override
   void onWindowUnmaximize() {
     WindowControls._updateLayoutMode(WindowLayoutMode.normal);
-    unawaited(WindowControls.syncWindowLayoutMode());
   }
 
   @override
-  void onWindowEnterFullScreen() =>
+  void onWindowEnterFullScreen() {
+    if (!Platform.isWindows) {
       unawaited(WindowControls.syncWindowLayoutMode());
+    }
+  }
 
   @override
-  void onWindowLeaveFullScreen() =>
+  void onWindowLeaveFullScreen() {
+    if (!Platform.isWindows) {
       unawaited(WindowControls.syncWindowLayoutMode());
+    }
+  }
 }

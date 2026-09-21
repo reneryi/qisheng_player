@@ -891,6 +891,33 @@ bool FlutterWindow::OnCreate() {
           return;
         }
 
+        if (method_call.method_name() == "show_window") {
+          const auto* map = method_call.arguments() == nullptr
+                                ? nullptr
+                                : std::get_if<flutter::EncodableMap>(
+                                      method_call.arguments());
+          bool maximize = false;
+          if (map != nullptr) {
+            const auto it = map->find(flutter::EncodableValue("maximize"));
+            if (it != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it->second)) {
+                maximize = *val;
+              }
+            }
+          }
+
+          if (maximize) {
+            ShowWindow(GetHandle(), SW_MAXIMIZE);
+            was_maximized_before_tray_ = true;
+          } else {
+            this->Show();
+          }
+          ApplyRoundedWindowAppearance();
+          NotifyWindowLayoutChanged();
+          result->Success();
+          return;
+        }
+
         if (method_call.method_name() == "set_initial_window_state") {
           const auto* map = method_call.arguments() == nullptr
                                 ? nullptr
@@ -980,14 +1007,9 @@ bool FlutterWindow::OnCreate() {
         result->NotImplemented();
       });
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    if (initial_show_maximized_) {
-      ShowWindow(GetHandle(), SW_MAXIMIZE);
-      was_maximized_before_tray_ = true;
-    } else {
-      this->Show();
-    }
-  });
+  // Keep the native window hidden initially. The window will be smoothly shown
+  // via WindowControls.showWindow() once the first Flutter frame has been rasterized
+  // and the final window layout (maximized/normal) is completely established.
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the

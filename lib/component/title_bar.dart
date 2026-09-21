@@ -381,6 +381,8 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
   bool _isMaximized = false;
   bool _isProcessing = false;
   final GlobalKey _maximizeButtonKey = GlobalKey();
+  Rect? _lastReportedRect;
+  double? _lastReportedDpr;
 
   @override
   void initState() {
@@ -410,6 +412,19 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
       final offset = renderBox.localToGlobal(Offset.zero);
       final size = renderBox.size;
       final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+      final currentRect =
+          Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height);
+      if (_lastReportedRect != null &&
+          _lastReportedDpr != null &&
+          (_lastReportedDpr! - dpr).abs() < 0.001 &&
+          (_lastReportedRect!.left - currentRect.left).abs() < 0.5 &&
+          (_lastReportedRect!.top - currentRect.top).abs() < 0.5 &&
+          (_lastReportedRect!.width - currentRect.width).abs() < 0.5 &&
+          (_lastReportedRect!.height - currentRect.height).abs() < 0.5) {
+        return;
+      }
+      _lastReportedRect = currentRect;
+      _lastReportedDpr = dpr;
       unawaited(WindowControls.setMaximizeButtonRect(
         left: offset.dx,
         top: offset.dy,
@@ -418,13 +433,17 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         devicePixelRatio: dpr,
       ));
     } else {
-      unawaited(WindowControls.setMaximizeButtonRect(
-        left: 0,
-        top: 0,
-        width: 0,
-        height: 0,
-        devicePixelRatio: 1.0,
-      ));
+      if (_lastReportedRect != Rect.zero) {
+        _lastReportedRect = Rect.zero;
+        _lastReportedDpr = 1.0;
+        unawaited(WindowControls.setMaximizeButtonRect(
+          left: 0,
+          top: 0,
+          width: 0,
+          height: 0,
+          devicePixelRatio: 1.0,
+        ));
+      }
     }
   }
 

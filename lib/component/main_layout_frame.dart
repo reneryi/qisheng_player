@@ -65,7 +65,9 @@ class MainLayoutFrame extends StatelessWidget {
                   children: [
                     titleBar,
                     Expanded(
-                      child: Padding(
+                      child: AnimatedPadding(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
                         padding: EdgeInsets.only(bottom: dockInset),
                         child: Align(
                           alignment: Alignment.topCenter,

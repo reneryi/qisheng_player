@@ -22,25 +22,12 @@ import 'package:window_manager/window_manager.dart';
 Future<void> initWindow() async {
   await windowManager.ensureInitialized();
   final isMax = AppSettings.instance.isWindowMaximized;
-  WindowOptions windowOptions = WindowOptions(
-    minimumSize: AppSettings.minimumWindowSize,
-    size: isMax ? null : AppSettings.instance.windowSize,
-    center: !isMax,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.hidden,
-  );
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    if (isMax) {
-      if (Platform.isWindows) {
-        await WindowControls.maximize();
-      } else {
-        await windowManager.maximize();
-      }
-    }
-    await windowManager.show();
-    await windowManager.focus();
-  });
+  await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+  await windowManager.setMinimumSize(AppSettings.minimumWindowSize);
+  if (!isMax) {
+    await windowManager.setSize(AppSettings.instance.windowSize);
+    await windowManager.setAlignment(Alignment.center);
+  }
 }
 
 Future<void> loadPrefFont() async {
@@ -98,6 +85,8 @@ Future<void> main() async {
   PaintingBinding.instance.imageCache.maximumSizeBytes = 250 * 1024 * 1024;
 
   await RustLib.init();
+  final appDataDir = await getAppDataDir();
+  final supportPath = appDataDir.path;
 
   initRustLogger().listen((msg) {
     LOGGER.i("[rs]: $msg");
@@ -105,39 +94,43 @@ Future<void> main() async {
 
   await migrateAppData();
 
-  final supportPath = (await getAppDataDir()).path;
-  try {
-    for (final warning
-        in await recoverAudioMetadata(supportPath: supportPath)) {
-      LOGGER.w('标签编辑恢复：$warning');
+  unawaited(() async {
+    try {
+      final warnings = await recoverAudioMetadata(supportPath: supportPath);
+      for (final warning in warnings) {
+        LOGGER.w('标签编辑恢复：$warning');
+      }
+    } catch (error, stackTrace) {
+      LOGGER.e('标签编辑恢复失败', error: error, stackTrace: stackTrace);
     }
-  } catch (error, stackTrace) {
-    // Recovery errors must remain visible, but should not prevent the user from
-    // starting the player and repairing the library from the UI.
-    LOGGER.e('标签编辑恢复失败', error: error, stackTrace: stackTrace);
-  }
-  if (File("$supportPath\\settings.json").existsSync()) {
-    await AppSettings.readFromJson();
-    await loadPrefFont();
-  } else {
-    if (AppSettings.instance.useSystemTheme) {
-      AppSettings.instance.defaultTheme = AppSettings.getWindowsTheme();
+  }());
+
+  final settingsFile = File("$supportPath\\settings.json");
+  final prefFile = File("$supportPath\\app_preference.json");
+  await Future.wait([
+    if (settingsFile.existsSync()) AppSettings.readFromJson(),
+    if (prefFile.existsSync()) AppPreference.read(),
+  ]);
+
+  final startupSettings = AppSettings.instance;
+  WindowControls.setInitialLayoutMode(startupSettings.isWindowMaximized);
+
+  if (!settingsFile.existsSync()) {
+    if (startupSettings.useSystemTheme) {
+      startupSettings.defaultTheme = AppSettings.getWindowsTheme();
     } else {
-      AppSettings.instance.defaultTheme = AppSettings.instance.customTheme;
+      startupSettings.defaultTheme = startupSettings.customTheme;
     }
-    if (AppSettings.instance.useSystemThemeMode) {
-      AppSettings.instance.themeMode = ThemeMode.system;
+    if (startupSettings.useSystemThemeMode) {
+      startupSettings.themeMode = ThemeMode.system;
     }
   }
 
-  final startupSettings = AppSettings.instance;
   ThemeProvider.instance.applyTheme(
     seedColor: Color(startupSettings.defaultTheme),
   );
   ThemeProvider.instance.applyThemeMode(startupSettings.themeMode);
-  if (File("$supportPath\\app_preference.json").existsSync()) {
-    await AppPreference.read();
-  }
+
   final savedPalette = AppPreference.instance.lastDynamicAlbumPalette;
   if (savedPalette != null &&
       (startupSettings.dynamicTheme ||
@@ -146,6 +139,11 @@ Future<void> main() async {
               WindowBackdropMode.prismaticGlass)) {
     ThemeProvider.instance.restorePersistedAlbumPalette(savedPalette);
   }
+
+  if (settingsFile.existsSync()) {
+    unawaited(loadPrefFont());
+  }
+
   var welcome = !File("$supportPath\\index.json").existsSync();
   if (!welcome) {
     final status = await _loadLibraryState();
@@ -161,9 +159,16 @@ Future<void> main() async {
     initialBackdropResult,
   );
   await initWindow();
-  await HotkeysHelper.init();
 
   runApp(Entry(welcome: welcome));
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await WindowControls.showWindow(
+      maximize: startupSettings.isWindowMaximized,
+    );
+    unawaited(HotkeysHelper.init());
+  });
+
   if (!welcome) {
     unawaited(_runStartupIndexUpdateSilently(supportPath));
   }
