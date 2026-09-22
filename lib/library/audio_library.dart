@@ -254,10 +254,10 @@ class AudioLibrary {
       }
 
       final splitPattern = AppSettings.instance.artistSplitPattern;
-      final result = await compute(
-        _parseIndexInIsolate,
-        IndexParsePayload(indexPath, splitPattern),
-      );
+      final payload = IndexParsePayload(indexPath, splitPattern);
+      final result = kDebugMode
+          ? _parseIndexInIsolate(payload)
+          : await compute(_parseIndexInIsolate, payload);
 
       if (result.isEmpty) {
         return AudioLibraryLoadStatus.empty;

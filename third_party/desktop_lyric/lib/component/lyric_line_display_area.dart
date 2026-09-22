@@ -32,11 +32,17 @@ class LyricLineDisplayArea extends StatelessWidget {
           maxLines: 1,
         );
 
+        final hasTranslation = textDisplayController.showTranslation &&
+            lyricLine.translation != null &&
+            lyricLine.translation!.trim().isNotEmpty;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             contentText,
-            if (lyricLine.translation != null)
+            if (hasTranslation) ...[
+              const SizedBox(height: 4.0),
               Text(
                 key: TRANSLATION_TEXT_KEY,
                 lyricLine.translation!,
@@ -49,6 +55,7 @@ class LyricLineDisplayArea extends StatelessWidget {
                 ),
                 maxLines: 1,
               ),
+            ],
           ],
         );
       },

@@ -33,13 +33,13 @@ void main() {
         return true;
       }
       if (call.method == 'getSize') {
-        return <String, dynamic>{'width': 800.0, 'height': 134.0};
+        return <String, dynamic>{'width': 800.0, 'height': 180.0};
       }
       return null;
     });
 
     TEXT_DISPLAY_CONTROLLER.lyricFontSize = 22.0;
-    TEXT_DISPLAY_CONTROLLER.translationFontSize = 18.0;
+    TEXT_DISPLAY_CONTROLLER.translationFontSize = 22.0;
     TEXT_DISPLAY_CONTROLLER.followPlayerFont = true;
     TEXT_DISPLAY_CONTROLLER.hasSpecifiedColor = false;
     isDialogOpen.value = false;
@@ -79,7 +79,7 @@ void main() {
         darkTheme: ThemeData.dark(),
         home: const SizedBox(
           width: 800,
-          height: 134,
+          height: 180,
           child: DesktopLyricBody(),
         ),
       ),
@@ -168,10 +168,10 @@ void main() {
     });
 
     testWidgets(
-        'Extreme large font sizes inside locked 800x134 window do not throw overflow exception',
+        'Extreme large font sizes inside locked 800x180 window do not throw overflow exception',
         (tester) async {
       TEXT_DISPLAY_CONTROLLER.lyricFontSize = 38.0;
-      TEXT_DISPLAY_CONTROLLER.translationFontSize = 30.0;
+      TEXT_DISPLAY_CONTROLLER.translationFontSize = 38.0;
 
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();

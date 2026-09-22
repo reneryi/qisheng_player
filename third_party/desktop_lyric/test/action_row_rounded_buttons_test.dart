@@ -45,7 +45,7 @@ void main() {
   }
 
   group('ActionRow Rounded & Solid Aesthetic Tests', () {
-    testWidgets('all 9 buttons render with rounded Material Symbols', (tester) async {
+    testWidgets('all 10 buttons render with rounded Material Symbols', (tester) async {
       await tester.pumpWidget(buildSubject(isDarkMode: true));
       await tester.pumpAndSettle();
 
@@ -56,6 +56,7 @@ void main() {
       expect(find.byIcon(Symbols.play_arrow_rounded), findsOneWidget);
       expect(find.byIcon(Symbols.skip_next_rounded), findsOneWidget);
       expect(find.byIcon(Symbols.palette_rounded), findsOneWidget);
+      expect(find.byIcon(Symbols.translate_rounded), findsOneWidget);
       expect(find.byIcon(Symbols.close_rounded), findsOneWidget);
       expect(find.byIcon(Symbols.lock_rounded), findsOneWidget);
     });
@@ -82,6 +83,7 @@ void main() {
       expect(find.byTooltip('缩小字号'), findsOneWidget);
       expect(find.byTooltip('歌词字体'), findsOneWidget);
       expect(find.byTooltip('歌词颜色'), findsOneWidget);
+      expect(find.byTooltip('隐藏翻译'), findsOneWidget);
       expect(find.byTooltip('关闭歌词'), findsOneWidget);
       expect(find.byTooltip('锁定歌词'), findsOneWidget);
     });
@@ -146,19 +148,62 @@ void main() {
       await gesture.removePointer();
     });
 
-    testWidgets('font increase and decrease buttons trigger TextDisplayController font size updates', (tester) async {
+    testWidgets('font increase and decrease buttons keep lyric and translation font sizes strictly unified', (tester) async {
       await tester.pumpWidget(buildSubject(isDarkMode: true));
       await tester.pumpAndSettle();
 
-      final initialSize = TEXT_DISPLAY_CONTROLLER.lyricFontSize;
+      TEXT_DISPLAY_CONTROLLER.lyricFontSize = 22.0;
+      TEXT_DISPLAY_CONTROLLER.translationFontSize = 22.0;
 
       await tester.tap(find.byIcon(Symbols.text_increase_rounded));
       await tester.pump();
-      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, initialSize + 1);
+      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, 23.0);
+      expect(TEXT_DISPLAY_CONTROLLER.translationFontSize, 23.0);
 
       await tester.tap(find.byIcon(Symbols.text_decrease_rounded));
       await tester.pump();
-      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, initialSize);
+      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, 22.0);
+      expect(TEXT_DISPLAY_CONTROLLER.translationFontSize, 22.0);
+
+      // Verify lower boundary (14.0)
+      TEXT_DISPLAY_CONTROLLER.lyricFontSize = 14.0;
+      TEXT_DISPLAY_CONTROLLER.translationFontSize = 14.0;
+      await tester.tap(find.byIcon(Symbols.text_decrease_rounded));
+      await tester.pump();
+      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, 14.0);
+      expect(TEXT_DISPLAY_CONTROLLER.translationFontSize, 14.0);
+
+      // Verify upper boundary (kMaxLyricFontSize = 56.0)
+      TEXT_DISPLAY_CONTROLLER.lyricFontSize = TextDisplayController.kMaxLyricFontSize;
+      TEXT_DISPLAY_CONTROLLER.translationFontSize = TextDisplayController.kMaxLyricFontSize;
+      await tester.tap(find.byIcon(Symbols.text_increase_rounded));
+      await tester.pump();
+      expect(TEXT_DISPLAY_CONTROLLER.lyricFontSize, TextDisplayController.kMaxLyricFontSize);
+      expect(TEXT_DISPLAY_CONTROLLER.translationFontSize, TextDisplayController.kMaxLyricFontSize);
+    });
+
+    testWidgets('translation toggle button switches showTranslation state', (tester) async {
+      await tester.pumpWidget(buildSubject(isDarkMode: true));
+      await tester.pumpAndSettle();
+
+      TEXT_DISPLAY_CONTROLLER.showTranslation = true;
+      await tester.pumpAndSettle();
+
+      final translateBtn = find.byIcon(Symbols.translate_rounded);
+      expect(translateBtn, findsOneWidget);
+      expect(find.byTooltip('隐藏翻译'), findsOneWidget);
+
+      await tester.tap(translateBtn);
+      await tester.pumpAndSettle();
+
+      expect(TEXT_DISPLAY_CONTROLLER.showTranslation, isFalse);
+      expect(find.byTooltip('显示翻译'), findsOneWidget);
+
+      await tester.tap(translateBtn);
+      await tester.pumpAndSettle();
+
+      expect(TEXT_DISPLAY_CONTROLLER.showTranslation, isTrue);
+      expect(find.byTooltip('隐藏翻译'), findsOneWidget);
     });
   });
 }

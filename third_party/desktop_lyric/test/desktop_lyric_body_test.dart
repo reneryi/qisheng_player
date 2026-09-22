@@ -27,7 +27,7 @@ void main() {
         darkTheme: ThemeData.dark(),
         home: const SizedBox(
           width: 800,
-          height: 134,
+          height: 180,
           child: DesktopLyricBody(),
         ),
       ),

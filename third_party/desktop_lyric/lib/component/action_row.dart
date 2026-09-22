@@ -480,6 +480,8 @@ class DesktopLyricActionButton extends StatefulWidget {
   final String? tooltip;
   final BorderRadius? borderRadius;
   final bool isDestructive;
+  final bool isActive;
+  final Color? activeColor;
 
   const DesktopLyricActionButton({
     super.key,
@@ -490,6 +492,8 @@ class DesktopLyricActionButton extends StatefulWidget {
     this.tooltip,
     this.borderRadius,
     this.isDestructive = false,
+    this.isActive = false,
+    this.activeColor,
   });
 
   @override
@@ -611,6 +615,24 @@ class _DesktopLyricActionButtonState extends State<DesktopLyricActionButton>
               : const Color(0xFFD32F2F);
           effectiveIconColor =
               Color.lerp(widget.iconColor, hoveredIconColor, hoverT)!;
+        } else if (widget.isActive) {
+          final activeThemeColor = widget.activeColor ?? widget.iconColor;
+          final unhoveredBg = activeThemeColor.withValues(
+            alpha: widget.isDark ? 0.22 : 0.12,
+          );
+          final hoveredBg = activeThemeColor.withValues(
+            alpha: widget.isDark ? 0.32 : 0.20,
+          );
+          baseBg = Color.lerp(unhoveredBg, hoveredBg, hoverT)!;
+
+          final unhoveredBorder = activeThemeColor.withValues(
+            alpha: widget.isDark ? 0.40 : 0.30,
+          );
+          final hoveredBorder = activeThemeColor.withValues(
+            alpha: widget.isDark ? 0.58 : 0.45,
+          );
+          borderColor = Color.lerp(unhoveredBorder, hoveredBorder, hoverT)!;
+          effectiveIconColor = activeThemeColor;
         } else {
           final unhoveredBg = widget.isDark
               ? Colors.white.withValues(alpha: 0.07)
@@ -838,7 +860,7 @@ class ActionRow extends StatelessWidget {
                     },
                   ),
                   const SizedBox(width: 14.0),
-                  // 3. 辅助控制簇 (调色盘、关闭)
+                  // 3. 辅助控制簇 (调色盘、显示/隐藏翻译、关闭)
                   DesktopLyricActionButton(
                     icon: Symbols.palette_rounded,
                     iconColor: iconColor,
@@ -847,6 +869,23 @@ class ActionRow extends StatelessWidget {
                     onPressed: () => DesktopLyricConfigLauncher.open(
                       context,
                       LyricConfigType.color,
+                    ),
+                  ),
+                  const SizedBox(width: 6.0),
+                  Consumer<TextDisplayController>(
+                    builder: (context, controller, _) =>
+                        DesktopLyricActionButton(
+                      icon: Symbols.translate_rounded,
+                      iconColor: controller.showTranslation
+                          ? primaryColor
+                          : iconColor.withValues(alpha: 0.45),
+                      isDark: isDark,
+                      isActive: controller.showTranslation,
+                      activeColor: primaryColor,
+                      tooltip: controller.showTranslation
+                          ? "隐藏翻译"
+                          : "显示翻译",
+                      onPressed: controller.toggleShowTranslation,
                     ),
                   ),
                   const SizedBox(width: 6.0),

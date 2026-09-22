@@ -46,7 +46,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(0, 0);
   Win32Window::Size size = is_config_window ? Win32Window::Size(720, 640)
-                                            : Win32Window::Size(800, 134);
+                                            : Win32Window::Size(800, 180);
   const wchar_t* title =
       is_config_window ? L"desktop_lyric_config" : L"desktop_lyric";
   if (!window.Create(title, origin, size)) {

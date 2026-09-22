@@ -77,6 +77,7 @@ class DesktopLyricConfigLauncher {
           : null,
       'lyricFontSize': TEXT_DISPLAY_CONTROLLER.lyricFontSize,
       'translationFontSize': TEXT_DISPLAY_CONTROLLER.translationFontSize,
+      'showTranslation': TEXT_DISPLAY_CONTROLLER.showTranslation,
       'lyricFontFamily': TEXT_DISPLAY_CONTROLLER.preferenceLyricFontFamily,
       'followPlayerFont': TEXT_DISPLAY_CONTROLLER.followPlayerFont,
       'playerFontFamily':

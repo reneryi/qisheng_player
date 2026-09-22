@@ -9,32 +9,52 @@ class NowPlayingInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textDisplayController = context.watch<TextDisplayController>();
     final theme = context.watch<ThemeChangedMessage>();
-
-    final textColor = textDisplayController.hasSpecifiedColor
-        ? textDisplayController.specifiedColor
-        : Color(theme.primary);
+    final (textColor, fontFamily) = context.select<TextDisplayController, (Color, String?)>(
+      (c) => (
+        c.hasSpecifiedColor ? c.specifiedColor : Color(theme.primary),
+        c.lyricFontFamily,
+      ),
+    );
     final textStyle = TextStyle(
       color: textColor,
-      fontFamily: textDisplayController.lyricFontFamily,
+      fontFamily: fontFamily,
     );
 
-    return ValueListenableBuilder(
-      valueListenable: DesktopLyricController.instance.nowPlaying,
-      builder: (context, nowPlaying, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(nowPlaying.title, style: textStyle),
-            Text(
-              "${nowPlaying.artist} - ${nowPlaying.album}",
-              style: textStyle,
-            ),
-          ],
-        );
-      },
+    return SizedBox(
+      height: 44.0,
+      child: Center(
+        child: ValueListenableBuilder(
+          valueListenable: DesktopLyricController.instance.nowPlaying,
+          builder: (context, nowPlaying, _) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  nowPlaying.title,
+                  style: textStyle.copyWith(
+                    fontSize: 13.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2.0),
+                Text(
+                  "${nowPlaying.artist} - ${nowPlaying.album}",
+                  style: textStyle.copyWith(
+                    fontSize: 11.5,
+                    color: textColor.withValues(alpha: 0.72),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

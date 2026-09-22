@@ -597,8 +597,13 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
       RegisterWindowMessage(L"TaskbarButtonCreated");
   taskbar_created_message_ =
       RegisterWindowMessage(L"TaskbarCreated");
+#if defined(_DEBUG)
+  activate_window_message_ =
+      RegisterWindowMessage(L"QishengPlayerDebugActivateMainWindow");
+#else
   activate_window_message_ =
       RegisterWindowMessage(L"QishengPlayerActivateMainWindow");
+#endif
 }
 
 FlutterWindow::~FlutterWindow() {}
@@ -914,6 +919,8 @@ bool FlutterWindow::OnCreate() {
           }
           ApplyRoundedWindowAppearance();
           NotifyWindowLayoutChanged();
+          SetForegroundWindow(GetHandle());
+          BringWindowToTop(GetHandle());
           result->Success();
           return;
         }
@@ -1333,11 +1340,16 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       }
       return 0;
     case WM_CLOSE:
+#if defined(_DEBUG)
+      ExitApplication();
+      return 0;
+#else
       if (!allow_close_) {
         MinimizeToTray();
         return 0;
       }
       break;
+#endif
     case kTrayCallbackMessage:
       switch (LOWORD(lparam)) {
         case NIN_SELECT:

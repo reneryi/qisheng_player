@@ -223,6 +223,15 @@ class DesktopLyricService extends DesktopLyricController {
         valid.add(candidate);
       }
     }
+    if (repoRoot != null && valid.length > 1) {
+      try {
+        valid.sort((a, b) {
+          final aTime = File(a).lastModifiedSync();
+          final bTime = File(b).lastModifiedSync();
+          return bTime.compareTo(aTime);
+        });
+      } catch (_) {}
+    }
     if (valid.isEmpty) {
       LOGGER.i(
         "[desktop lyric] no bundled executable found. checked: ${checked.join(' ; ')}",
@@ -837,18 +846,15 @@ class DesktopLyricService extends DesktopLyricController {
   }
 
   void sendLyricLineMessage(LyricLine line) {
-    final showTranslation =
-        AppPreference.instance.nowPlayingPagePref.showTranslation;
     if (line is SyncLyricLine) {
       sendMessage(msg.LyricLineChangedMessage(
         line.content,
         line.length,
-        showTranslation ? line.translation : null,
+        line.translation,
       ));
     } else if (line is LrcLine) {
       final parsed = LyricLineParser.parse(line.content);
-      final translation =
-          showTranslation && !parsed.isCredit ? parsed.translation : null;
+      final translation = !parsed.isCredit ? parsed.translation : null;
       sendMessage(msg.LyricLineChangedMessage(
         parsed.primary,
         line.length,

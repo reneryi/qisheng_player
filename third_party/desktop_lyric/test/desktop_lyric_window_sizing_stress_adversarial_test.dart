@@ -23,7 +23,7 @@ void main() {
 
   void resetMockWindowState({
     double width = 800.0,
-    double height = 142.0,
+    double height = 180.0,
     Offset pos = const Offset(200.0, 300.0),
   }) {
     currentWindowWidth = width;
@@ -102,7 +102,7 @@ void main() {
 
     // Reset controllers
     TEXT_DISPLAY_CONTROLLER.lyricFontSize = 22.0;
-    TEXT_DISPLAY_CONTROLLER.translationFontSize = 18.0;
+    TEXT_DISPLAY_CONTROLLER.translationFontSize = 22.0;
     TEXT_DISPLAY_CONTROLLER.followPlayerFont = true;
     TEXT_DISPLAY_CONTROLLER.hasSpecifiedColor = false;
     isDialogOpen.value = false;
@@ -136,7 +136,7 @@ void main() {
   }
 
   group('Dimension 1: 120+ Iterations of Rapid Dialog Toggling (Font & Color Dialogs) & Height Invariant Stress', () {
-    testWidgets('120 consecutive rapid dialog open/close cycles never decay height below 142px safety baseline',
+    testWidgets('120 consecutive rapid dialog open/close cycles never decay height below 180px safety baseline',
         (tester) async {
       setupDesktopViewport(tester);
 
@@ -194,7 +194,7 @@ void main() {
         // Rigorous Invariant Checks After Each Cycle
         expect(isDialogOpen.value, isFalse,
             reason: 'isDialogOpen state machine failed to reset on iteration $i');
-        expect(currentWindowHeight, greaterThanOrEqualTo(142.0),
+        expect(currentWindowHeight, greaterThanOrEqualTo(180.0),
             reason: 'Iteration $i degraded window height below safety baseline: $currentWindowHeight px');
         expect(currentWindowWidth, equals(800.0),
             reason: 'Iteration $i corrupted window width: $currentWindowWidth px');
@@ -205,7 +205,7 @@ void main() {
       // Assert No Progressive Degradation Across All 120 Iterations
       final double baselineHeight = finalHeights.first;
       for (int i = 0; i < finalHeights.length; i++) {
-        expect(finalHeights[i], greaterThanOrEqualTo(142.0));
+        expect(finalHeights[i], greaterThanOrEqualTo(180.0));
         expect(finalHeights[i], equals(baselineHeight),
             reason: 'Height degraded from $baselineHeight to ${finalHeights[i]} at iteration $i');
       }
@@ -246,8 +246,8 @@ void main() {
         );
 
         // 1. Minimum baseline invariant
-        expect(calculatedHeight, greaterThanOrEqualTo(142.0),
-            reason: 'Height $calculatedHeight below 142px for font sizes ($lfs, $tfs)');
+        expect(calculatedHeight, greaterThanOrEqualTo(180.0),
+            reason: 'Height $calculatedHeight below 180px for font sizes ($lfs, $tfs)');
 
         // 2. Monotonic growth invariant: larger fonts must never yield smaller window height
         expect(calculatedHeight, greaterThanOrEqualTo(previousHeight),
@@ -303,21 +303,21 @@ void main() {
         measuredLyricHeight: null,
         measuredTranslationHeight: null,
       );
-      expect(h1, greaterThanOrEqualTo(142.0));
+      expect(h1, greaterThanOrEqualTo(180.0));
 
       // Zero measured height
       final h2 = calculateRequiredLyricWindowHeight(
         measuredLyricHeight: 0.0,
         measuredTranslationHeight: 0.0,
       );
-      expect(h2, greaterThanOrEqualTo(142.0));
+      expect(h2, greaterThanOrEqualTo(180.0));
 
       // Negative measured height
       final h3 = calculateRequiredLyricWindowHeight(
         measuredLyricHeight: -100.0,
         measuredTranslationHeight: -50.0,
       );
-      expect(h3, greaterThanOrEqualTo(142.0));
+      expect(h3, greaterThanOrEqualTo(180.0));
 
       // Huge rendered height expands window adaptively
       final h4 = calculateRequiredLyricWindowHeight(
@@ -341,9 +341,9 @@ void main() {
       expect(find.byKey(LYRIC_TEXT_KEY), findsOneWidget);
       expect(find.byKey(TRANSLATION_TEXT_KEY), findsNothing);
 
-      // Window height must still reserve full safety clearance (>= 142.0)
+      // Window height must still reserve full safety clearance (>= 180.0)
       final double noTransHeight = calculateRequiredLyricWindowHeight();
-      expect(noTransHeight, greaterThanOrEqualTo(142.0));
+      expect(noTransHeight, greaterThanOrEqualTo(180.0));
 
       // Now dynamic translation arrives
       DesktopLyricController.instance.lyricLine.value =
@@ -354,7 +354,7 @@ void main() {
       expect(find.byKey(TRANSLATION_TEXT_KEY), findsOneWidget);
 
       final double withTransHeight = calculateRequiredLyricWindowHeight();
-      expect(withTransHeight, greaterThanOrEqualTo(142.0));
+      expect(withTransHeight, greaterThanOrEqualTo(180.0));
       expect(withTransHeight, equals(noTransHeight),
           reason: 'Height should already have reserved translation space, preventing jarring resize jumps');
 
@@ -420,7 +420,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(isDialogOpen.value, isFalse);
-      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, greaterThanOrEqualTo(180.0));
       expect(currentWindowWidth, equals(800.0));
       expect(tester.takeException(), isNull);
     });
@@ -449,7 +449,7 @@ void main() {
       expect(tester.binding.hasScheduledFrame, isFalse);
       expect(tester.binding.transientCallbackCount, equals(0));
       expect(isDialogOpen.value, isFalse);
-      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, greaterThanOrEqualTo(180.0));
     });
   });
 
@@ -479,7 +479,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       // At 50ms into 220ms exit transition:
-      // Dialog MUST still exist in tree and window MUST NOT have shrunk to 142px!
+      // Dialog MUST still exist in tree and window MUST NOT have shrunk to 180px!
       expect(find.byType(LyricFontSelectorDialog), findsOneWidget);
       expect(isDialogOpen.value, isTrue,
           reason: 'isDialogOpen must remain true during exit animation to prevent premature lyric flash');
@@ -496,7 +496,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LyricFontSelectorDialog), findsNothing);
       expect(isDialogOpen.value, isFalse);
-      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, greaterThanOrEqualTo(180.0));
       expect(currentWindowHeight, lessThan(200.0));
     });
 
@@ -535,7 +535,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(DesktopLyricColorDialog), findsNothing);
       expect(isDialogOpen.value, isFalse);
-      expect(currentWindowHeight, greaterThanOrEqualTo(142.0));
+      expect(currentWindowHeight, greaterThanOrEqualTo(180.0));
       expect(currentWindowHeight, lessThan(200.0));
     });
   });

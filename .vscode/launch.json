@@ -6,7 +6,10 @@
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
-      "deviceId": "windows"
+      "deviceId": "windows",
+      "env": {
+        "NO_PROXY": "localhost,127.0.0.1,::1"
+      }
     },
     {
       "name": "qisheng_player (attach)",

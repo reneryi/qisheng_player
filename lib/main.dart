@@ -162,11 +162,25 @@ Future<void> main() async {
 
   runApp(Entry(welcome: welcome));
 
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
+  var windowShown = false;
+  Future<void> showWindowSafely() async {
+    if (windowShown) return;
+    windowShown = true;
     await WindowControls.showWindow(
       maximize: startupSettings.isWindowMaximized,
     );
     unawaited(HotkeysHelper.init());
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await showWindowSafely();
+  });
+
+  // 超时防御保底：若因调试器接入、首帧管线延迟等原因未及时收到回调，确保 600ms 内强制显示窗口
+  Future.delayed(const Duration(milliseconds: 600), () async {
+    if (!windowShown) {
+      await showWindowSafely();
+    }
   });
 
   if (!welcome) {

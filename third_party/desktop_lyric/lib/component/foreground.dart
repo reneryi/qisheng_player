@@ -35,8 +35,8 @@ const double kFixedLayoutOverhead = 86.0;
 /// 阴影与字符降笔区 (descenders & text shadows) 渲染余量（8.0px）
 const double kLyricShadowAndBleedBuffer = 8.0;
 
-/// 桌面歌词绝对安全高度基线下限（142.0px）
-const double kMinSafetyLyricWindowHeight = 142.0;
+/// 桌面歌词绝对安全高度基线下限（180.0px）
+const double kMinSafetyLyricWindowHeight = 180.0;
 
 /// 精确核算桌面歌词完全展示两行歌词（主歌词+翻译/副歌词）所需的窗口物理高度
 ///
@@ -122,7 +122,7 @@ Future<void> restoreLyricWindowSizeAndPosition({Offset? preferredPos}) async {
     if (preferredPos != null) {
       final safePos = await calculateSafeWindowPosition(
         originPos: preferredPos,
-        originSize: const Size(800.0, 134.0),
+        originSize: const Size(800.0, 180.0),
         targetWidth: 800.0,
         targetHeight: targetHeight,
       );
@@ -164,7 +164,7 @@ Future<void> restoreLyricWindowSizeAndPositionIfNeeded() async {
   }
 }
 
-/// 歌词主窗口尺寸已遵循 GEMINI.md 与 bd2139d 架构规范锁定（800x134），根除动态拉伸导致的 DWM 背景擦除闪白与交换链重置。
+/// 歌词主窗口尺寸已遵循规范锁定（800x180），根除动态拉伸导致的 DWM 背景擦除闪白与交换链重置。
 /// 歌词展示区域由 FittedBox(fit: BoxFit.scaleDown) 在锁定窗口高度下弹性自适应排版，彻底消除溢出与副歌词截断。
 void resizeWithForegroundSize() {
   if (isConfigSubWindow || isDialogOpen.value) return;
@@ -173,7 +173,15 @@ void resizeWithForegroundSize() {
 
 class TextDisplayController extends ChangeNotifier {
   double lyricFontSize = 22.0;
-  double translationFontSize = 18.0;
+  double translationFontSize = 22.0;
+
+  /// 控制是否显示翻译/副歌词行
+  bool showTranslation = true;
+
+  void toggleShowTranslation() {
+    showTranslation = !showTranslation;
+    notifyListeners();
+  }
 
   bool _fontFamilyInitialized = false;
 
@@ -218,6 +226,7 @@ class TextDisplayController extends ChangeNotifier {
     bool followPlayer = true,
     bool hasSpecifiedColor = false,
     Color? specifiedColor,
+    bool showTranslation = true,
   }) {
     followPlayerFont = followPlayer;
     final normalizedSaved = savedFont?.trim();
@@ -227,6 +236,7 @@ class TextDisplayController extends ChangeNotifier {
     if (specifiedColor != null) {
       this.specifiedColor = specifiedColor;
     }
+    this.showTranslation = showTranslation;
     _fontFamilyInitialized = true;
     notifyListeners();
     resizeWithForegroundSize();
@@ -267,16 +277,23 @@ class TextDisplayController extends ChangeNotifier {
     }
   }
 
-  /// 每次增加 1
+  /// 最大字号上限（防止连续加大在 FittedBox 缩放死区积压，确保缩小按键能即时响应）
+  static const double kMaxLyricFontSize = 56.0;
+
+  /// 每次增加 1（主歌词与翻译字号严格统一）
   void increaseLyricFontSize() {
+    if (lyricFontSize >= kMaxLyricFontSize ||
+        translationFontSize >= kMaxLyricFontSize) {
+      return;
+    }
     lyricFontSize += 1;
     translationFontSize += 1;
     notifyListeners();
   }
 
-  /// 每次减少 1，最小 14
+  /// 每次减少 1，最小 14（主歌词与翻译字号严格统一）
   void decreaseLyricFontSize() {
-    if (translationFontSize <= 14) return;
+    if (lyricFontSize <= 14 || translationFontSize <= 14) return;
 
     lyricFontSize -= 1;
     translationFontSize -= 1;
@@ -364,7 +381,7 @@ class DesktopLyricForeground extends StatelessWidget {
                   : const RepaintBoundary(child: NowPlayingInfo()),
             ),
             const SizedBox(height: 8),
-            const Expanded(child: LyricLineView()),
+            const Expanded(child: RepaintBoundary(child: LyricLineView())),
           ],
         ),
       ),

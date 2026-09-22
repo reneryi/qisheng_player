@@ -61,7 +61,7 @@ void main(List<String> args) async {
   DesktopLyricController.initWithArgs(args);
 
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(800, 134),
+    size: Size(800, 180),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: true,
@@ -129,6 +129,10 @@ void _runConfigApp(Map<String, dynamic> payload) {
   if (payload['translationFontSize'] != null) {
     TEXT_DISPLAY_CONTROLLER.translationFontSize =
         (payload['translationFontSize'] as num).toDouble();
+  }
+  if (payload['showTranslation'] != null) {
+    TEXT_DISPLAY_CONTROLLER.showTranslation =
+        payload['showTranslation'] as bool;
   }
 
   final configType = payload['configType'] as String? ?? 'font';

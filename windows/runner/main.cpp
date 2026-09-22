@@ -33,7 +33,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-  HANDLE single_instance_mutex =
+  HANDLE single_instance_mutex = nullptr;
+#if !defined(_DEBUG)
+  single_instance_mutex =
       CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   const DWORD single_instance_error = GetLastError();
   if (single_instance_mutex != nullptr &&
@@ -50,6 +52,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::CoUninitialize();
     return EXIT_SUCCESS;
   }
+#endif
 
   flutter::DartProject project(L"data");
   project.set_ui_thread_policy(flutter::UIThreadPolicy::RunOnSeparateThread);

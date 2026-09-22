@@ -15,8 +15,10 @@ class _LyricLineViewState extends State<LyricLineView> {
   /// 停留 300ms 后开始滚动，提前 300ms 滚动到底
   final waitFor = const Duration(milliseconds: 300);
   final scrollController = ScrollController();
+  Timer? _scrollTimer;
 
   void _onLyricLineChanged() {
+    _scrollTimer?.cancel();
     final line = DesktopLyricController.instance.lyricLine.value;
 
     /// 减去启动延时和滚动结束停留时间
@@ -29,7 +31,7 @@ class _LyricLineViewState extends State<LyricLineView> {
       if (scrollController.position.maxScrollExtent > 0) {
         if (lastTime.isNegative) return;
 
-        Future.delayed(waitFor, () {
+        _scrollTimer = Timer(waitFor, () {
           if (!mounted || !scrollController.hasClients) return;
 
           scrollController.animateTo(
@@ -50,6 +52,7 @@ class _LyricLineViewState extends State<LyricLineView> {
 
   @override
   void dispose() {
+    _scrollTimer?.cancel();
     DesktopLyricController.instance.lyricLine.removeListener(_onLyricLineChanged);
     scrollController.dispose();
     super.dispose();
