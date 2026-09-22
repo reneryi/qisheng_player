@@ -519,36 +519,39 @@ class WindowControls {
     if (_isExiting) return;
     _isExiting = true;
 
+    // 1. 立即暂停音频播放，杜绝退出时音频残留
     try {
-      // 立即通过原生通道与 windowManager 隐藏窗口与托盘，消除视觉冻结
-      if (Platform.isWindows) {
-        await _channel.invokeMethod("hide_window");
-      }
-      await windowManager.hide();
+      PlayService.existingInstance?.existingPlaybackService?.pause();
     } catch (_) {}
 
+    // 2. 立即通过原生通道或 windowManager 隐藏窗口与托盘，消除视觉冻结
     try {
-      // 执行应用状态与播放器资源持久化与释放（限时 5 秒兜底，允许播放器释放后完整完成状态持久化）
+      if (Platform.isWindows) {
+        await _channel.invokeMethod("hide_window");
+      } else {
+        await windowManager.hide();
+      }
+    } catch (_) {}
+
+    // 3. 执行应用状态与播放器资源持久化与释放（限时 3 秒兜底）
+    try {
       await appShutdownCoordinator
           .shutdown()
-          .timeout(const Duration(milliseconds: 5000));
+          .timeout(const Duration(milliseconds: 3000));
     } catch (err, trace) {
       LOGGER.e('[exitApp] 应用退出释放异常: $err', stackTrace: trace);
     }
 
+    // 4. 通知原生平台清理托盘图标并退出消息循环
     try {
-      // 通知原生平台清理托盘图标并退出消息循环
       if (Platform.isWindows) {
         await _channel.invokeMethod("exit_app");
       }
     } catch (_) {}
 
-    try {
-      // 销毁窗口
-      await windowManager.destroy();
-    } catch (_) {}
-
-    // 保证 Dart 进程完全终止
+    // 5. 保证 Dart 进程完全终止
+    // 注意：严禁在已发送 exit_app (PostQuitMessage) 之后调用 windowManager.destroy()，
+    // 因为原生主线程消息泵已经退出，跨线程调用 destroy 会导致死锁或挂起触发系统忙转圈
     exit(0);
   }
 

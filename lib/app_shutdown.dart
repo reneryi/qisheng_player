@@ -19,11 +19,9 @@ class AppShutdownCoordinator {
     return AppShutdownCoordinator(
       closePlayer: () async {
         final playService = PlayService.existingInstance;
-        if (playService == null) {
-          await AppPreference.instance.save();
-          return;
+        if (playService != null) {
+          await playService.close();
         }
-        await playService.close();
       },
       persistState: [
         AppPreference.instance.save,

@@ -72,6 +72,7 @@ class FlutterWindow : public Win32Window {
   DWORD ResolveDesktopLyricPid(
       const flutter::EncodableValue* arguments) const;
   void TerminateDesktopLyricProcesses() const;
+  void SilenceAudioOutput() const;
   HWND FindDesktopLyricWindowByPid(DWORD pid) const;
   HWND FindDesktopLyricWindowFromArgs(
       const flutter::EncodableValue* arguments) const;

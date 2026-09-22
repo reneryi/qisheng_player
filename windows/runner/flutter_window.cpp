@@ -1002,10 +1002,12 @@ bool FlutterWindow::OnCreate() {
         }
 
         if (method_call.method_name() == "exit_app") {
+          SilenceAudioOutput();
           ShowWindow(GetHandle(), SW_HIDE);
           RemoveTrayIcon();
           TerminateDesktopLyricProcesses();
           allow_close_ = true;
+          SetCursor(LoadCursor(nullptr, IDC_ARROW));
           PostQuitMessage(0);
           result->Success();
           return;
@@ -1332,6 +1334,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_ENDSESSION:
       if (wparam == TRUE) {
         allow_close_ = true;
+        SilenceAudioOutput();
         TerminateDesktopLyricProcesses();
         RemoveTrayIcon();
         if (media_control_channel_) {
@@ -1480,10 +1483,12 @@ void FlutterWindow::RestoreFromTray() {
 }
 
 void FlutterWindow::ExitApplication() {
+  SilenceAudioOutput();
   ShowWindow(GetHandle(), SW_HIDE);
   RemoveTrayIcon();
   TerminateDesktopLyricProcesses();
   allow_close_ = true;
+  SetCursor(LoadCursor(nullptr, IDC_ARROW));
   if (media_control_channel_) {
     media_control_channel_->InvokeMethod("exit_app", nullptr);
   } else {
@@ -1844,6 +1849,60 @@ void FlutterWindow::TerminateDesktopLyricProcesses() const {
   }
 
   CloseHandle(process);
+}
+
+void FlutterWindow::SilenceAudioOutput() const {
+  // 1. 优先尝试停止并静音 BASS 主音频输出
+  HMODULE hBass = GetModuleHandleW(L"bass.dll");
+  if (hBass != nullptr) {
+    // 立即通过全局音量配置强制静音，无论通道与线程差异，实现瞬时硬件消音
+    typedef BOOL(WINAPI *BASS_SetConfig_t)(DWORD, DWORD);
+    auto pBASS_SetConfig =
+        reinterpret_cast<BASS_SetConfig_t>(GetProcAddress(hBass, "BASS_SetConfig"));
+    if (pBASS_SetConfig != nullptr) {
+      pBASS_SetConfig(5 /* BASS_CONFIG_GVOL_STREAM */, 0);
+      pBASS_SetConfig(6 /* BASS_CONFIG_GVOL_MUSIC */, 0);
+      pBASS_SetConfig(7 /* BASS_CONFIG_GVOL_SAMPLE */, 0);
+    }
+    typedef BOOL(WINAPI *BASS_SetVolume_t)(float);
+    auto pBASS_SetVolume =
+        reinterpret_cast<BASS_SetVolume_t>(GetProcAddress(hBass, "BASS_SetVolume"));
+    if (pBASS_SetVolume != nullptr) {
+      pBASS_SetVolume(0.0f);
+    }
+
+    typedef BOOL(WINAPI *BASS_Pause_t)();
+    auto pBASS_Pause =
+        reinterpret_cast<BASS_Pause_t>(GetProcAddress(hBass, "BASS_Pause"));
+    if (pBASS_Pause != nullptr) {
+      pBASS_Pause();
+    }
+    typedef BOOL(WINAPI *BASS_Stop_t)();
+    auto pBASS_Stop =
+        reinterpret_cast<BASS_Stop_t>(GetProcAddress(hBass, "BASS_Stop"));
+    if (pBASS_Stop != nullptr) {
+      pBASS_Stop();
+    }
+  }
+
+  // 2. 尝试停止并静音 BASS WASAPI 独占模式输出
+  HMODULE hBassWasapi = GetModuleHandleW(L"basswasapi.dll");
+  if (hBassWasapi != nullptr) {
+    typedef BOOL(WINAPI *BASS_WASAPI_SetVolume_t)(DWORD, float);
+    auto pBASS_WASAPI_SetVolume = reinterpret_cast<BASS_WASAPI_SetVolume_t>(
+        GetProcAddress(hBassWasapi, "BASS_WASAPI_SetVolume"));
+    if (pBASS_WASAPI_SetVolume != nullptr) {
+      pBASS_WASAPI_SetVolume(0 /* BASS_WASAPI_VOL_DEVICE */, 0.0f);
+    }
+
+    typedef BOOL(WINAPI *BASS_WASAPI_Stop_t)(BOOL);
+    auto pBASS_WASAPI_Stop = reinterpret_cast<BASS_WASAPI_Stop_t>(
+        GetProcAddress(hBassWasapi, "BASS_WASAPI_Stop"));
+    if (pBASS_WASAPI_Stop != nullptr) {
+      // 传入 TRUE 立即排空清空设备硬件缓冲区，杜绝残留缓存发声
+      pBASS_WASAPI_Stop(TRUE);
+    }
+  }
 }
 
 void FlutterWindow::ShowTrayMenu() {

@@ -1271,7 +1271,7 @@ class PlaybackService extends PlaybackController {
 
   Future<void> _close() async {
     _volumeSaveDebounce?.cancel();
-    _rememberPlaybackSession(save: true);
+    _rememberPlaybackSession(save: false);
     _audioSpectrum.dispose();
     _wasapiExclusive.dispose();
     _enableVolumeLeveling.dispose();

@@ -470,11 +470,13 @@ class DesktopLyricService extends DesktopLyricController {
     await stderrSubscription?.cancel();
   }
 
-  Future<void> _setDesktopLyricClosed() async {
+  Future<void> _setDesktopLyricClosed({bool notify = true}) async {
     await _cleanupDesktopLyricProcess();
     _isStarting = false;
     isLocked = false;
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void restoreFromPreferenceIfNeeded() {
@@ -784,8 +786,11 @@ class DesktopLyricService extends DesktopLyricController {
     bool persistPreference = true,
   }) async {
     try {
+      _stopPositionSyncTimer();
       final value = await desktopLyric;
-      await _syncDesktopLyricWindowPosition(forceSave: true);
+      if (persistPreference && _desktopLyricPid != null) {
+        await _syncDesktopLyricWindowPosition(forceSave: true);
+      }
       try {
         value?.kill();
       } catch (_) {}
@@ -796,7 +801,7 @@ class DesktopLyricService extends DesktopLyricController {
           persist: persistPreference,
         );
       }
-      await _setDesktopLyricClosed();
+      await _setDesktopLyricClosed(notify: persistPreference);
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }

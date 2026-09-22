@@ -1,6 +1,5 @@
 import 'package:qisheng_player/play_service/desktop_lyric_service.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
-import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/utils.dart';
 
@@ -35,23 +34,25 @@ class PlayService {
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
-    // 退出前优先快照当前播放状态并落盘，防止后续硬件或子进程释放耗时导致最新状态丢失
+    // 1. 立即暂停播放并快照当前会话，确保彻底静音与会话保全
     try {
+      _playbackService?.pause();
       _playbackService?.rememberPlaybackSession();
-      await AppPreference.instance.save();
     } catch (err, trace) {
       LOGGER.e('[shutdown] 播放状态预存失败: $err', stackTrace: trace);
     }
 
-    await _closeSafely('歌词服务', () async => _lyricService?.close());
-    await _closeSafely(
-      '桌面歌词',
-      () async => _desktopLyricService?.stopDesktopLyric(
-        persistPreference: false,
+    // 2. 并行释放播放器与各附属服务，消除串行超时等待
+    await Future.wait([
+      _closeSafely('播放器', () async => _playbackService?.close()),
+      _closeSafely('歌词服务', () async => _lyricService?.close()),
+      _closeSafely(
+        '桌面歌词',
+        () async => _desktopLyricService?.stopDesktopLyric(
+          persistPreference: false,
+        ),
       ),
-    );
-    await _closeSafely('播放器', () async => _playbackService?.close());
-    await AppPreference.instance.save();
+    ]);
   }
 
   Future<void> _closeSafely(
