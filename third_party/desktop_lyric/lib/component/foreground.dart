@@ -164,51 +164,11 @@ Future<void> restoreLyricWindowSizeAndPositionIfNeeded() async {
   }
 }
 
-/// 在保证正确布局的前提下按当前歌词与字号调整窗口大小，彻底消除 10px 亏空与副歌词截断
+/// 歌词主窗口尺寸已遵循 GEMINI.md 与 bd2139d 架构规范锁定（800x134），根除动态拉伸导致的 DWM 背景擦除闪白与交换链重置。
+/// 歌词展示区域由 FittedBox(fit: BoxFit.scaleDown) 在锁定窗口高度下弹性自适应排版，彻底消除溢出与副歌词截断。
 void resizeWithForegroundSize() {
   if (isConfigSubWindow || isDialogOpen.value) return;
-  try {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isConfigSubWindow || isDialogOpen.value) return;
-      try {
-        double? lyricTextHeight;
-        double? translationTextHeight;
-
-        final lyricContext = LYRIC_TEXT_KEY.currentContext;
-        if (lyricContext != null && lyricContext.mounted) {
-          final lyricTextRenderObject = lyricContext.findRenderObject();
-          if (lyricTextRenderObject is RenderBox &&
-              lyricTextRenderObject.hasSize) {
-            lyricTextHeight = lyricTextRenderObject.size.height;
-          }
-        }
-
-        final translationContext = TRANSLATION_TEXT_KEY.currentContext;
-        if (translationContext != null && translationContext.mounted) {
-          final translationTextRenderObject =
-              translationContext.findRenderObject();
-          if (translationTextRenderObject is RenderBox &&
-              translationTextRenderObject.hasSize) {
-            translationTextHeight = translationTextRenderObject.size.height;
-          }
-        }
-
-        final targetHeight = calculateRequiredLyricWindowHeight(
-          lyricFontSize: TEXT_DISPLAY_CONTROLLER.lyricFontSize,
-          translationFontSize: TEXT_DISPLAY_CONTROLLER.translationFontSize,
-          fontFamily: TEXT_DISPLAY_CONTROLLER.lyricFontFamily,
-          measuredLyricHeight: lyricTextHeight,
-          measuredTranslationHeight: translationTextHeight,
-        );
-
-        windowManager.setSize(Size(800.0, targetHeight));
-      } catch (_) {
-        // Safe guard against deallocated widget tree during tests
-      }
-    });
-  } catch (_) {
-    // WidgetsBinding not initialized in some pure unit tests.
-  }
+  // 保持主窗口尺寸锁定，绝不在此发起 windowManager.setSize 触发 Windows DWM 闪白。
 }
 
 class TextDisplayController extends ChangeNotifier {
@@ -312,7 +272,6 @@ class TextDisplayController extends ChangeNotifier {
     lyricFontSize += 1;
     translationFontSize += 1;
     notifyListeners();
-    resizeWithForegroundSize();
   }
 
   /// 每次减少 1，最小 14
@@ -322,7 +281,6 @@ class TextDisplayController extends ChangeNotifier {
     lyricFontSize -= 1;
     translationFontSize -= 1;
     notifyListeners();
-    resizeWithForegroundSize();
   }
 
   /// 用户在字体选择面板中选定/切换字体（三态机流转入口）：
