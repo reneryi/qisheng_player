@@ -48,10 +48,9 @@
   - **方向微动量反馈**：上一首向左微冲量、下一首向右微冲量、随机播放触发 -90° 旋转势能、循环模式轻量上弹移与呼吸式微发光指示点。
 - **核心播放控键无遮挡 (No-Tooltip Policy)**：底栏 5 个核心控键彻底移除浮动气泡，操作时杜绝遮挡曲名与进度条。
 
-<!-- 屏幕截图展示区域 1：主界面与专辑展示 -->
+<!-- 屏幕截图展示区域 1：音乐主界面展示 -->
 <p align="center">
-  <img src="docs/screenshots/music.png" width="49%" alt="音乐主界面" />
-  <img src="docs/screenshots/album.png" width="49%" alt="专辑库浏览" />
+  <img src="docs/screenshots/music.png" width="90%" alt="音乐主界面" />
 </p>
 
 ### 🛠️ 2. 全新现代双栏“音乐编辑”工坊体系
@@ -92,13 +91,14 @@
 - **多维浏览与拼音索引**：内置 A-Z 首字母与全中文拼音检索，支持按单曲、艺术家、专辑、文件夹分类过滤。
 - **智能编码自愈**：底层自动检测并纠正历史音乐文件中常见的 UTF-8 / GBK / Big5 / Latin-1 标签乱码。
 
-<!-- 屏幕截图展示区域 4：艺术家与专辑详情 -->
+<!-- 屏幕截图展示区域 4：曲库浏览与详情页（专辑与艺术家） -->
+<p align="center">
+  <img src="docs/screenshots/album.png" width="49%" alt="专辑库浏览" />
+  <img src="docs/screenshots/album_detail.png" width="49%" alt="专辑详情页" />
+</p>
 <p align="center">
   <img src="docs/screenshots/artist.png" width="49%" alt="艺术家浏览" />
   <img src="docs/screenshots/artist_detail.png" width="49%" alt="艺术家详情页" />
-</p>
-<p align="center">
-  <img src="docs/screenshots/album_detail.png" width="49%" alt="专辑详情页" />
 </p>
 
 ---
