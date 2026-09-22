@@ -95,6 +95,9 @@
 <!-- 屏幕截图展示区域 4：艺术家与专辑详情 -->
 <p align="center">
   <img src="docs/screenshots/artist.png" width="49%" alt="艺术家浏览" />
+  <img src="docs/screenshots/artist_detail.png" width="49%" alt="艺术家详情页" />
+</p>
+<p align="center">
   <img src="docs/screenshots/album_detail.png" width="49%" alt="专辑详情页" />
 </p>
 
@@ -166,7 +169,7 @@ qisheng_player/
 - **Flutter SDK**: `>= 3.1.4 < 4.0.0`
 - **Rust Toolchain**: `stable-x86_64-pc-windows-msvc`
 - **C/C++ Compiler**: Visual Studio 2022 (包含 C++ 桌面开发工作负载)
-- **Inno Setup 6** (若需要生成 Windows 安装安装向导)
+- **Inno Setup 6** (若需要生成 Windows 安装向导)
 
 ### 2. 调试运行
 
