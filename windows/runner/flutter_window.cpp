@@ -820,17 +820,24 @@ bool FlutterWindow::OnCreate() {
         if (method_call.method_name() == "is_maximized") {
           const bool is_hidden_in_tray = !IsWindowVisible(GetHandle());
           const bool is_max = is_hidden_in_tray
-                                  ? was_maximized_before_tray_
+                                  ? (!was_fullscreen_before_tray_ &&
+                                     (was_maximized_before_tray_ || initial_show_maximized_))
                                   : (!is_fullscreen_ &&
                                      !IsEffectivelyFullscreen(GetHandle()) &&
-                                     (IsZoomed(GetHandle()) != FALSE));
+                                     ((IsZoomed(GetHandle()) != FALSE) ||
+                                      was_maximized_before_tray_ ||
+                                      initial_show_maximized_));
           result->Success(flutter::EncodableValue(is_max));
           return;
         }
 
         if (method_call.method_name() == "is_fullscreen") {
-          result->Success(flutter::EncodableValue(
-              is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())));
+          const bool is_hidden_in_tray = !IsWindowVisible(GetHandle());
+          const bool is_full = is_hidden_in_tray
+                                   ? was_fullscreen_before_tray_
+                                   : (is_fullscreen_ ||
+                                      IsEffectivelyFullscreen(GetHandle()));
+          result->Success(flutter::EncodableValue(is_full));
           return;
         }
 
@@ -842,13 +849,16 @@ bool FlutterWindow::OnCreate() {
 
         if (method_call.method_name() == "get_window_layout_mode") {
           std::string mode = "normal";
-          if (!IsWindowVisible(GetHandle())) {
-            if (was_maximized_before_tray_) {
+          const bool is_hidden_in_tray = !IsWindowVisible(GetHandle());
+          if (is_hidden_in_tray) {
+            if (was_fullscreen_before_tray_) {
+              mode = "fullscreen";
+            } else if (was_maximized_before_tray_ || initial_show_maximized_) {
               mode = "maximized";
             }
           } else if (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle())) {
             mode = "fullscreen";
-          } else if (IsZoomed(GetHandle())) {
+          } else if (IsZoomed(GetHandle()) || was_maximized_before_tray_ || initial_show_maximized_) {
             mode = "maximized";
           }
           result->Success(flutter::EncodableValue(mode));
@@ -890,6 +900,12 @@ bool FlutterWindow::OnCreate() {
         }
 
         if (method_call.method_name() == "hide_window") {
+          if (IsWindowVisible(GetHandle())) {
+            was_fullscreen_before_tray_ =
+                is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
+            was_maximized_before_tray_ =
+                !was_fullscreen_before_tray_ && WasWindowMaximized(GetHandle());
+          }
           ShowWindow(GetHandle(), SW_HIDE);
           RemoveTrayIcon();
           result->Success();
@@ -902,19 +918,52 @@ bool FlutterWindow::OnCreate() {
                                 : std::get_if<flutter::EncodableMap>(
                                       method_call.arguments());
           bool maximize = false;
+          bool fullscreen = false;
           if (map != nullptr) {
-            const auto it = map->find(flutter::EncodableValue("maximize"));
-            if (it != map->end()) {
-              if (const auto* val = std::get_if<bool>(&it->second)) {
+            const auto it_max = map->find(flutter::EncodableValue("maximize"));
+            if (it_max != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_max->second)) {
                 maximize = *val;
+              }
+            }
+            const auto it_full =
+                map->find(flutter::EncodableValue("fullscreen"));
+            if (it_full != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_full->second)) {
+                fullscreen = *val;
               }
             }
           }
 
-          if (maximize) {
-            ShowWindow(GetHandle(), SW_MAXIMIZE);
+          if (!fullscreen && !maximize) {
+            if (was_fullscreen_before_tray_) {
+              fullscreen = true;
+            } else if (was_maximized_before_tray_ || initial_show_maximized_) {
+              maximize = true;
+            }
+          }
+
+          if (fullscreen) {
+            was_fullscreen_before_tray_ = true;
+            was_maximized_before_tray_ = false;
+            initial_show_maximized_ = false;
+            this->Show();
+            EnterFullscreen();
+          } else if (maximize) {
+            was_fullscreen_before_tray_ = false;
             was_maximized_before_tray_ = true;
+            initial_show_maximized_ = true;
+            WINDOWPLACEMENT wp = {};
+            wp.length = sizeof(WINDOWPLACEMENT);
+            GetWindowPlacement(GetHandle(), &wp);
+            wp.showCmd = SW_SHOWMAXIMIZED;
+            SetWindowPlacement(GetHandle(), &wp);
+            ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
+            ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
           } else {
+            was_fullscreen_before_tray_ = false;
+            was_maximized_before_tray_ = false;
+            initial_show_maximized_ = false;
             this->Show();
           }
           ApplyRoundedWindowAppearance();
@@ -931,10 +980,24 @@ bool FlutterWindow::OnCreate() {
                                 : std::get_if<flutter::EncodableMap>(
                                       method_call.arguments());
           if (map != nullptr) {
-            const auto it = map->find(flutter::EncodableValue("isMaximized"));
-            if (it != map->end()) {
-              if (const auto* val = std::get_if<bool>(&it->second)) {
+            const auto it_full =
+                map->find(flutter::EncodableValue("isFullScreen"));
+            if (it_full != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_full->second)) {
+                if (!IsWindowVisible(GetHandle())) {
+                  was_fullscreen_before_tray_ = *val;
+                }
+              }
+            }
+            const auto it_max =
+                map->find(flutter::EncodableValue("isMaximized"));
+            if (it_max != map->end()) {
+              if (const auto* val = std::get_if<bool>(&it_max->second)) {
                 initial_show_maximized_ = *val;
+                if (!IsWindowVisible(GetHandle())) {
+                  was_maximized_before_tray_ =
+                      !was_fullscreen_before_tray_ && *val;
+                }
               }
             }
           }
@@ -1261,12 +1324,32 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     }
     case WM_SIZE:
       if (wparam == SIZE_MINIMIZED) {
-        was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
+        if (is_fullscreen_ || IsEffectivelyFullscreen(hwnd)) {
+          was_fullscreen_before_tray_ = true;
+          was_maximized_before_tray_ = false;
+        } else {
+          was_fullscreen_before_tray_ = false;
+          was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
+        }
         AddTrayIcon();
         if (media_control_channel_) {
           media_control_channel_->InvokeMethod("window_minimized_to_tray", nullptr);
         }
-      } else if (wparam == SIZE_RESTORED || wparam == SIZE_MAXIMIZED) {
+      } else if (wparam == SIZE_MAXIMIZED) {
+        was_fullscreen_before_tray_ = false;
+        was_maximized_before_tray_ = true;
+        initial_show_maximized_ = true;
+        if (IsWindowVisible(hwnd)) {
+          RemoveTrayIcon();
+        }
+      } else if (wparam == SIZE_RESTORED) {
+        if (!is_fullscreen_ && !IsEffectivelyFullscreen(hwnd)) {
+          if (IsWindowVisible(hwnd)) {
+            was_fullscreen_before_tray_ = false;
+            was_maximized_before_tray_ = false;
+            initial_show_maximized_ = false;
+          }
+        }
         if (IsWindowVisible(hwnd)) {
           RemoveTrayIcon();
         }
@@ -1455,27 +1538,39 @@ void FlutterWindow::RemoveTrayIcon() {
 }
 
 void FlutterWindow::MinimizeToTray() {
-  if (is_fullscreen_) {
+  const bool was_full = is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
+  const bool was_max = !was_full && WasWindowMaximized(GetHandle());
+  if (was_full) {
     ExitFullscreen();
   }
-  was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
+  was_fullscreen_before_tray_ = was_full;
+  was_maximized_before_tray_ = was_max;
   AddTrayIcon();
   thumb_buttons_added_ = false;
-  ShowWindow(GetHandle(), SW_HIDE);
   if (media_control_channel_) {
     media_control_channel_->InvokeMethod("window_minimized_to_tray", nullptr);
   }
+  ShowWindow(GetHandle(), SW_HIDE);
 }
 
 void FlutterWindow::RestoreFromTray() {
   allow_close_ = false;
   RemoveTrayIcon();
-  const bool restore_maximized = was_maximized_before_tray_;
-  ShowWindow(
-      GetHandle(),
-      restore_maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
+  if (was_fullscreen_before_tray_) {
+    was_fullscreen_before_tray_ = false;
+    ShowWindow(GetHandle(), SW_SHOWNORMAL);
+    EnterFullscreen();
+  } else {
+    const bool restore_maximized = was_maximized_before_tray_ || initial_show_maximized_;
+    ShowWindow(
+        GetHandle(),
+        restore_maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
+    was_maximized_before_tray_ = restore_maximized || WasWindowMaximized(GetHandle());
+    if (restore_maximized) {
+      initial_show_maximized_ = true;
+    }
+  }
   SetForegroundWindow(GetHandle());
-  was_maximized_before_tray_ = WasWindowMaximized(GetHandle());
   PostMessage(GetHandle(), kRefreshThumbButtonsMessage, 0, 0);
   if (media_control_channel_) {
     media_control_channel_->InvokeMethod("window_restored_from_tray", nullptr);
@@ -1484,6 +1579,12 @@ void FlutterWindow::RestoreFromTray() {
 
 void FlutterWindow::ExitApplication() {
   SilenceAudioOutput();
+  if (IsWindowVisible(GetHandle())) {
+    was_fullscreen_before_tray_ =
+        is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
+    was_maximized_before_tray_ =
+        !was_fullscreen_before_tray_ && WasWindowMaximized(GetHandle());
+  }
   ShowWindow(GetHandle(), SW_HIDE);
   RemoveTrayIcon();
   TerminateDesktopLyricProcesses();
@@ -1630,6 +1731,7 @@ void FlutterWindow::EnterFullscreen() {
   }
 
   is_fullscreen_ = true;
+  was_fullscreen_before_tray_ = false;
 
   if (saved_window_placement_.showCmd == SW_SHOWMAXIMIZED) {
     SetWindowPos(
@@ -1638,9 +1740,16 @@ void FlutterWindow::EnterFullscreen() {
         monitor_info.rcMonitor.top,
         monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
         monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-        SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
   } else {
     ShowWindow(hwnd, SW_MAXIMIZE);
+    SetWindowPos(
+        hwnd, HWND_TOP,
+        monitor_info.rcMonitor.left,
+        monitor_info.rcMonitor.top,
+        monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+        monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+        SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
   }
 
   ApplyRoundedWindowAppearance();
@@ -1658,6 +1767,9 @@ void FlutterWindow::ExitFullscreen() {
   }
 
   is_fullscreen_ = false;
+  if (IsWindowVisible(hwnd)) {
+    was_fullscreen_before_tray_ = false;
+  }
 
   WINDOWPLACEMENT restore_placement = saved_window_placement_;
   restore_placement.length = sizeof(WINDOWPLACEMENT);
@@ -1689,6 +1801,9 @@ void FlutterWindow::Maximize() {
   if (is_fullscreen_) {
     ExitFullscreen();
   }
+  was_fullscreen_before_tray_ = false;
+  was_maximized_before_tray_ = true;
+  initial_show_maximized_ = true;
   ShowWindow(hwnd, SW_MAXIMIZE);
 }
 
@@ -1700,6 +1815,9 @@ void FlutterWindow::Unmaximize() {
   if (is_fullscreen_) {
     ExitFullscreen();
   }
+  was_fullscreen_before_tray_ = false;
+  was_maximized_before_tray_ = false;
+  initial_show_maximized_ = false;
   ShowWindow(hwnd, SW_RESTORE);
 }
 
@@ -1713,9 +1831,9 @@ void FlutterWindow::ToggleMaximize() {
     return;
   }
   if (IsZoomed(hwnd)) {
-    ShowWindow(hwnd, SW_RESTORE);
+    Unmaximize();
   } else {
-    ShowWindow(hwnd, SW_MAXIMIZE);
+    Maximize();
   }
 }
 
@@ -1728,21 +1846,28 @@ void FlutterWindow::Minimize() {
 }
 
 void FlutterWindow::NotifyWindowLayoutChanged() {
+  if (!IsWindowVisible(GetHandle()) || (IsIconic(GetHandle()) != FALSE)) {
+    return;
+  }
   if (media_control_channel_) {
-    const bool is_hidden_or_iconic =
-        !IsWindowVisible(GetHandle()) || (IsIconic(GetHandle()) != FALSE);
     const bool is_effective_fullscreen =
-        !is_hidden_or_iconic &&
-        (is_fullscreen_ || IsEffectivelyFullscreen(GetHandle()));
-    const bool is_effective_maximized = is_hidden_or_iconic
-        ? was_maximized_before_tray_
-        : (!is_effective_fullscreen && (IsZoomed(GetHandle()) != FALSE));
+        is_fullscreen_ || IsEffectivelyFullscreen(GetHandle());
+    const bool is_effective_maximized =
+        !is_effective_fullscreen &&
+        ((IsZoomed(GetHandle()) != FALSE) || was_maximized_before_tray_ ||
+         initial_show_maximized_);
     std::string mode = "normal";
     if (is_effective_fullscreen) {
       mode = "fullscreen";
     } else if (is_effective_maximized) {
       mode = "maximized";
     }
+
+    if (mode == last_reported_layout_mode_) {
+      return;
+    }
+    last_reported_layout_mode_ = mode;
+
     flutter::EncodableMap map;
     map[flutter::EncodableValue("mode")] = flutter::EncodableValue(mode);
     map[flutter::EncodableValue("isMaximized")] =
@@ -1852,25 +1977,9 @@ void FlutterWindow::TerminateDesktopLyricProcesses() const {
 }
 
 void FlutterWindow::SilenceAudioOutput() const {
-  // 1. 优先尝试停止并静音 BASS 主音频输出
+  // 1. 优先尝试停止 BASS 主音频输出（只停止播放与排空内部流，严禁调用任何设置音量或流配置的 API，绝对不碰系统主音量）
   HMODULE hBass = GetModuleHandleW(L"bass.dll");
   if (hBass != nullptr) {
-    // 立即通过全局音量配置强制静音，无论通道与线程差异，实现瞬时硬件消音
-    typedef BOOL(WINAPI *BASS_SetConfig_t)(DWORD, DWORD);
-    auto pBASS_SetConfig =
-        reinterpret_cast<BASS_SetConfig_t>(GetProcAddress(hBass, "BASS_SetConfig"));
-    if (pBASS_SetConfig != nullptr) {
-      pBASS_SetConfig(5 /* BASS_CONFIG_GVOL_STREAM */, 0);
-      pBASS_SetConfig(6 /* BASS_CONFIG_GVOL_MUSIC */, 0);
-      pBASS_SetConfig(7 /* BASS_CONFIG_GVOL_SAMPLE */, 0);
-    }
-    typedef BOOL(WINAPI *BASS_SetVolume_t)(float);
-    auto pBASS_SetVolume =
-        reinterpret_cast<BASS_SetVolume_t>(GetProcAddress(hBass, "BASS_SetVolume"));
-    if (pBASS_SetVolume != nullptr) {
-      pBASS_SetVolume(0.0f);
-    }
-
     typedef BOOL(WINAPI *BASS_Pause_t)();
     auto pBASS_Pause =
         reinterpret_cast<BASS_Pause_t>(GetProcAddress(hBass, "BASS_Pause"));
@@ -1885,16 +1994,9 @@ void FlutterWindow::SilenceAudioOutput() const {
     }
   }
 
-  // 2. 尝试停止并静音 BASS WASAPI 独占模式输出
+  // 2. 尝试停止并排空 BASS WASAPI 输出（严禁调用 BASS_WASAPI_SetVolume(0, 0.0f) 篡改全局系统音量）
   HMODULE hBassWasapi = GetModuleHandleW(L"basswasapi.dll");
   if (hBassWasapi != nullptr) {
-    typedef BOOL(WINAPI *BASS_WASAPI_SetVolume_t)(DWORD, float);
-    auto pBASS_WASAPI_SetVolume = reinterpret_cast<BASS_WASAPI_SetVolume_t>(
-        GetProcAddress(hBassWasapi, "BASS_WASAPI_SetVolume"));
-    if (pBASS_WASAPI_SetVolume != nullptr) {
-      pBASS_WASAPI_SetVolume(0 /* BASS_WASAPI_VOL_DEVICE */, 0.0f);
-    }
-
     typedef BOOL(WINAPI *BASS_WASAPI_Stop_t)(BOOL);
     auto pBASS_WASAPI_Stop = reinterpret_cast<BASS_WASAPI_Stop_t>(
         GetProcAddress(hBassWasapi, "BASS_WASAPI_Stop"));

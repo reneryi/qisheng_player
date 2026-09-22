@@ -268,8 +268,9 @@ class _SettingsPageState extends State<SettingsPage> {
         return const [
           AppSection(
             title: '系统与快捷键',
-            description: '全局热键与系统级交互配置。',
+            description: '关闭窗口行为与系统级交互配置。',
             children: [
+              CloseActionControl(),
               HotkeySettingsTile(),
             ],
           ),

@@ -13,21 +13,21 @@ void main() {
     const nowPlayingPage =
         NowPlayingTransitionPage<void>(child: SizedBox.shrink());
 
-    expect(slidePage.transitionDuration, const Duration(milliseconds: 360));
+    expect(slidePage.transitionDuration, const Duration(milliseconds: 320));
     expect(
       slidePage.reverseTransitionDuration,
       const Duration(milliseconds: 260),
     );
-    expect(detailPage.transitionDuration, const Duration(milliseconds: 400));
+    expect(detailPage.transitionDuration, const Duration(milliseconds: 360));
     expect(
       detailPage.reverseTransitionDuration,
-      const Duration(milliseconds: 320),
+      const Duration(milliseconds: 280),
     );
     expect(
-        nowPlayingPage.transitionDuration, const Duration(milliseconds: 520));
+        nowPlayingPage.transitionDuration, const Duration(milliseconds: 460));
     expect(
       nowPlayingPage.reverseTransitionDuration,
-      const Duration(milliseconds: 450),
+      const Duration(milliseconds: 380),
     );
   });
 

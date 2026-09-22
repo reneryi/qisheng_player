@@ -476,6 +476,52 @@ void main() {
         null,
       );
     });
+
+    test('M1-S2.5: Cold start recovery flow with fullscreen window: restores fullscreen layout and IPC contract', () async {
+      final methodCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('qisheng_player/window_controls'),
+        (MethodCall call) async {
+          methodCalls.add(call);
+          return null;
+        },
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        (MethodCall call) async => null,
+      );
+
+      // 1. 模拟冷启动：历史设置为全屏
+      AppSettings.instance.isWindowFullScreen = true;
+      AppSettings.instance.isWindowMaximized = false;
+
+      // 2. 同步执行 setInitialLayoutMode(false, isFullScreen: true)
+      WindowControls.setInitialLayoutMode(false, isFullScreen: true);
+      expect(WindowControls.layoutMode.value, equals(WindowLayoutMode.fullscreen));
+
+      // 3. 首帧完成后触发 showWindow(maximize: false, fullscreen: true)
+      await WindowControls.showWindow(maximize: false, fullscreen: true);
+
+      expect(WindowControls.isWindowVisible.value, isTrue);
+      expect(WindowControls.layoutMode.value, equals(WindowLayoutMode.fullscreen));
+
+      final showCall = methodCalls.firstWhere((c) => c.method == 'show_window');
+      expect((showCall.arguments as Map)['maximize'], isFalse);
+      expect((showCall.arguments as Map)['fullscreen'], isTrue);
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('qisheng_player/window_controls'),
+        null,
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      );
+    });
   });
 
   // =========================================================================

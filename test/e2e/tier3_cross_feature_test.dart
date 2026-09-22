@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
 import 'package:qisheng_player/component/main_layout_frame.dart';
@@ -201,15 +202,16 @@ void main() {
       final nav = AppNavigationState.instance;
 
       for (int i = 0; i < 10; i++) {
-        nav.rememberLocation('/audios');
+        nav.rememberLocation(app_paths.AUDIOS_PAGE);
         nav.setNowPlayingPageActive(true);
         expect(nav.nowPlayingPageActive, isTrue);
 
-        nav.rememberLocation('/now_playing');
+        nav.rememberLocation(app_paths.NOW_PLAYING_PAGE);
         nav.setNowPlayingPageActive(false);
         expect(nav.nowPlayingPageActive, isFalse);
       }
-      expect(nav.lastShellLocation, equals('/now_playing'));
+      expect(nav.lastShellLocation, equals(app_paths.AUDIOS_PAGE));
+      expect(nav.currentEntry.location, equals(app_paths.NOW_PLAYING_PAGE));
     });
 
     // =========================================================================

@@ -22,9 +22,10 @@ import 'package:window_manager/window_manager.dart';
 Future<void> initWindow() async {
   await windowManager.ensureInitialized();
   final isMax = AppSettings.instance.isWindowMaximized;
+  final isFull = AppSettings.instance.isWindowFullScreen;
   await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
   await windowManager.setMinimumSize(AppSettings.minimumWindowSize);
-  if (!isMax) {
+  if (!isMax && !isFull) {
     await windowManager.setSize(AppSettings.instance.windowSize);
     await windowManager.setAlignment(Alignment.center);
   }
@@ -113,7 +114,12 @@ Future<void> main() async {
   ]);
 
   final startupSettings = AppSettings.instance;
-  WindowControls.setInitialLayoutMode(startupSettings.isWindowMaximized);
+  final startupIsMaximized = startupSettings.isWindowMaximized;
+  final startupIsFullScreen = startupSettings.isWindowFullScreen;
+  WindowControls.setInitialLayoutMode(
+    startupIsMaximized,
+    isFullScreen: startupIsFullScreen,
+  );
 
   if (!settingsFile.existsSync()) {
     if (startupSettings.useSystemTheme) {
@@ -167,7 +173,8 @@ Future<void> main() async {
     if (windowShown) return;
     windowShown = true;
     await WindowControls.showWindow(
-      maximize: startupSettings.isWindowMaximized,
+      maximize: startupIsMaximized,
+      fullscreen: startupIsFullScreen,
     );
     unawaited(HotkeysHelper.init());
   }

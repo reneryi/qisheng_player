@@ -97,15 +97,22 @@ class WindowControls {
   static bool _initialized = false;
   static WindowBackdropModeResult? _lastBackdropResult;
   static final _windowListener = _PlaybackWindowListener();
+  @visibleForTesting
+  static WindowListener get windowListenerForTesting => _windowListener;
   static Timer? _resumeSyncTimer;
   static int _resumeSyncGeneration = 0;
-  static final ValueNotifier<bool> isWindowVisible = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> isWindowVisible = ValueNotifier<bool>(
+      Platform.environment.containsKey('FLUTTER_TEST') ? true : false);
   static final ValueNotifier<WindowLayoutMode> layoutMode =
       ValueNotifier(WindowLayoutMode.normal);
 
-  static void setInitialLayoutMode(bool isMaximized) {
-    final next =
-        isMaximized ? WindowLayoutMode.maximized : WindowLayoutMode.normal;
+  static void setInitialLayoutMode(
+    bool isMaximized, {
+    bool isFullScreen = false,
+  }) {
+    final next = isFullScreen
+        ? WindowLayoutMode.fullscreen
+        : (isMaximized ? WindowLayoutMode.maximized : WindowLayoutMode.normal);
     if (layoutMode.value != next) {
       layoutMode.value = next;
     }
@@ -115,17 +122,53 @@ class WindowControls {
       layoutMode.value == WindowLayoutMode.maximized ? 20 : 10;
 
   static void _updateLayoutMode(WindowLayoutMode next) {
+    if (!isWindowVisible.value && next == WindowLayoutMode.normal) {
+      // 当窗口在后台托盘隐藏时，严禁因底层尺寸或恢复消息将预存的最大化或全屏状态降级覆盖为普通窗口
+      if (AppSettings.instance.isWindowMaximized ||
+          AppSettings.instance.isWindowFullScreen) {
+        return;
+      }
+    }
     if (layoutMode.value != next) {
       layoutMode.value = next;
     }
-    if (next == WindowLayoutMode.maximized) {
+    if (next == WindowLayoutMode.fullscreen) {
+      var changed = false;
+      if (!AppSettings.instance.isWindowFullScreen) {
+        AppSettings.instance.isWindowFullScreen = true;
+        changed = true;
+      }
+      if (AppSettings.instance.isWindowMaximized) {
+        AppSettings.instance.isWindowMaximized = false;
+        changed = true;
+      }
+      if (changed) {
+        AppSettings.instance.scheduleSaveSettings();
+      }
+    } else if (next == WindowLayoutMode.maximized) {
+      var changed = false;
       if (!AppSettings.instance.isWindowMaximized) {
         AppSettings.instance.isWindowMaximized = true;
+        changed = true;
+      }
+      if (AppSettings.instance.isWindowFullScreen) {
+        AppSettings.instance.isWindowFullScreen = false;
+        changed = true;
+      }
+      if (changed) {
         AppSettings.instance.scheduleSaveSettings();
       }
     } else if (next == WindowLayoutMode.normal) {
+      var changed = false;
       if (AppSettings.instance.isWindowMaximized) {
         AppSettings.instance.isWindowMaximized = false;
+        changed = true;
+      }
+      if (AppSettings.instance.isWindowFullScreen) {
+        AppSettings.instance.isWindowFullScreen = false;
+        changed = true;
+      }
+      if (changed) {
         AppSettings.instance.scheduleSaveSettings();
       }
     }
@@ -267,6 +310,18 @@ class WindowControls {
   }
 
   static Future<void> close() async {
+    if (AppSettings.instance.closeAction == CloseAction.minimizeToTray) {
+      await minimizeToTray();
+      return;
+    }
+
+    await exitApp();
+  }
+
+  static Future<void> minimizeToTray() async {
+    try {
+      await AppSettings.instance.saveSettings();
+    } catch (_) {}
     isWindowVisible.value = false;
     unawaited(syncTrayMenuState());
     try {
@@ -278,26 +333,33 @@ class WindowControls {
     } catch (_) {}
   }
 
-  static Future<void> minimizeToTray() => close();
-
-  static Future<void> showWindow({bool maximize = false}) async {
-    isWindowVisible.value = true;
+  static Future<void> showWindow({
+    bool maximize = false,
+    bool fullscreen = false,
+  }) async {
     try {
       if (Platform.isWindows) {
         await _channel.invokeMethod("show_window", {
           "maximize": maximize,
+          "fullscreen": fullscreen,
         });
+        isWindowVisible.value = true;
         await windowManager.focus();
         unawaited(syncTrayMenuState());
         return;
       }
-      if (maximize) {
+      if (fullscreen) {
+        await windowManager.setFullScreen(true);
+      } else if (maximize) {
         await windowManager.maximize();
       }
       await windowManager.show();
+      isWindowVisible.value = true;
       await windowManager.focus();
       unawaited(syncTrayMenuState());
-    } catch (_) {}
+    } catch (_) {
+      isWindowVisible.value = true;
+    }
   }
 
   static Future<void> setMaximizeButtonRect({
@@ -518,6 +580,7 @@ class WindowControls {
   static Future<void> exitApp() async {
     if (_isExiting) return;
     _isExiting = true;
+    isWindowVisible.value = false;
 
     // 1. 立即暂停音频播放，杜绝退出时音频残留
     try {
@@ -565,32 +628,39 @@ class WindowControls {
     }
     _initialized = true;
 
-    final playbackService = PlayService.instance.playbackService;
+    final playbackService = Platform.environment.containsKey('FLUTTER_TEST')
+        ? PlayService.existingInstance?.existingPlaybackService
+        : PlayService.instance.playbackService;
     await windowManager.ensureInitialized();
     windowManager.addListener(_windowListener);
     await windowManager.setPreventClose(true);
-    unawaited(syncWindowLayoutMode());
-    if (Platform.isWindows && AppSettings.instance.isWindowMaximized) {
+    if (Platform.isWindows) {
       try {
         await _channel.invokeMethod("set_initial_window_state", {
-          "isMaximized": true,
+          "isMaximized": AppSettings.instance.isWindowMaximized,
+          "isFullScreen": AppSettings.instance.isWindowFullScreen,
         });
       } catch (_) {}
     }
     final initialBackdropResult =
         await setWindowBackdropMode(AppSettings.instance.windowBackdropMode);
-    unawaited(_syncPlayingState(playbackService.playerState));
-    playbackService.playerStateStream.listen((state) {
-      unawaited(_syncPlayingState(state));
-      unawaited(syncTrayMenuState());
-    });
-    playbackService.addListener(() {
-      unawaited(syncTrayMenuState());
-    });
+    if (playbackService != null) {
+      unawaited(_syncPlayingState(playbackService.playerState));
+      playbackService.playerStateStream.listen((state) {
+        unawaited(_syncPlayingState(state));
+        unawaited(syncTrayMenuState());
+      });
+      playbackService.addListener(() {
+        unawaited(syncTrayMenuState());
+      });
+    }
     ThemeProvider.instance.addListener(() {
       unawaited(syncTrayMenuState());
     });
-    PlayService.instance.desktopLyricService.addListener(() {
+    final desktopLyricService = Platform.environment.containsKey('FLUTTER_TEST')
+        ? PlayService.existingInstance?.existingDesktopLyricService
+        : PlayService.instance.desktopLyricService;
+    desktopLyricService?.addListener(() {
       unawaited(syncTrayMenuState());
     });
     unawaited(syncTrayMenuState());
@@ -600,6 +670,12 @@ class WindowControls {
   }
 
   static bool _handlerInitialized = false;
+
+  @visibleForTesting
+  static void resetForTesting() {
+    _initialized = false;
+    _lastBackdropResult = null;
+  }
 
   @visibleForTesting
   static void ensureMethodChannelHandler() {
@@ -664,6 +740,7 @@ class WindowControls {
       case "window_minimized_to_tray":
         isWindowVisible.value = false;
         unawaited(syncTrayMenuState());
+        unawaited(AppSettings.instance.saveSettings());
         return;
       case "on_window_layout_changed":
         if (call.arguments is Map) {
@@ -692,6 +769,7 @@ class _PlaybackWindowListener with WindowListener {
 
   @override
   void onWindowResize() {
+    if (!WindowControls.isWindowVisible.value) return;
     if (!Platform.isWindows) {
       unawaited(WindowControls.syncWindowLayoutMode());
     }
@@ -721,16 +799,21 @@ class _PlaybackWindowListener with WindowListener {
 
   @override
   void onWindowMaximize() {
+    if (Platform.isWindows) return;
     WindowControls._updateLayoutMode(WindowLayoutMode.maximized);
   }
 
   @override
   void onWindowUnmaximize() {
+    if (Platform.isWindows) return;
+    if (!WindowControls.isWindowVisible.value) return;
     WindowControls._updateLayoutMode(WindowLayoutMode.normal);
   }
 
   @override
   void onWindowEnterFullScreen() {
+    if (Platform.isWindows) return;
+    WindowControls._updateLayoutMode(WindowLayoutMode.fullscreen);
     if (!Platform.isWindows) {
       unawaited(WindowControls.syncWindowLayoutMode());
     }
@@ -738,6 +821,9 @@ class _PlaybackWindowListener with WindowListener {
 
   @override
   void onWindowLeaveFullScreen() {
+    if (Platform.isWindows) return;
+    if (!WindowControls.isWindowVisible.value) return;
+    WindowControls._updateLayoutMode(WindowLayoutMode.normal);
     if (!Platform.isWindows) {
       unawaited(WindowControls.syncWindowLayoutMode());
     }

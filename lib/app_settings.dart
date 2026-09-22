@@ -64,6 +64,26 @@ enum WindowBackdropMode {
 
 enum WindowLayoutMode { normal, maximized, fullscreen }
 
+enum CloseAction {
+  minimizeToTray,
+  exitApp;
+
+  static CloseAction? fromName(String? value) {
+    if (value == null) return null;
+    final normalized = value.toLowerCase();
+    if (normalized == 'minimizetotray' || normalized == 'tray') {
+      return CloseAction.minimizeToTray;
+    }
+    if (normalized == 'exitapp' || normalized == 'exit') {
+      return CloseAction.exitApp;
+    }
+    for (final item in values) {
+      if (item.name.toLowerCase() == normalized) return item;
+    }
+    return null;
+  }
+}
+
 enum UiEffectsLevel {
   balanced,
   visual,
@@ -248,8 +268,10 @@ class AppSettings {
 
   /// 歌词保存选项偏好：应用到播放器
   bool lyricSaveApplyPlayer = true;
+  CloseAction closeAction = CloseAction.minimizeToTray;
   Size windowSize = defaultWindowSize;
   bool isWindowMaximized = false;
+  bool isWindowFullScreen = false;
 
   String? fontFamily;
   String? fontPath;
@@ -422,12 +444,24 @@ class AppSettings {
 
     final isMaximized = settingsMap["IsWindowMaximized"];
     if (isMaximized != null) {
-      _instance.isWindowMaximized = isMaximized == 1;
+      _instance.isWindowMaximized = isMaximized == 1 || isMaximized == true;
+    }
+
+    final isFullScreen = settingsMap["IsWindowFullScreen"];
+    if (isFullScreen != null) {
+      _instance.isWindowFullScreen =
+          isFullScreen == 1 || isFullScreen == true;
     }
 
     final us = settingsMap["UiScale"];
     if (us is num) {
       _instance.uiScale = us.toDouble().clamp(0.8, 2.0);
+    }
+
+    final ca = settingsMap["CloseAction"];
+    if (ca is String) {
+      _instance.closeAction =
+          CloseAction.fromName(ca) ?? CloseAction.minimizeToTray;
     }
   }
 
@@ -520,7 +554,20 @@ class AppSettings {
 
       final isMaximized = settingsMap["IsWindowMaximized"];
       if (isMaximized != null) {
-        _instance.isWindowMaximized = isMaximized;
+        _instance.isWindowMaximized =
+            isMaximized == 1 || isMaximized == true;
+      }
+
+      final isFullScreen = settingsMap["IsWindowFullScreen"];
+      if (isFullScreen != null) {
+        _instance.isWindowFullScreen =
+            isFullScreen == 1 || isFullScreen == true;
+      }
+
+      final ca = settingsMap["CloseAction"];
+      if (ca is String) {
+        _instance.closeAction =
+            CloseAction.fromName(ca) ?? CloseAction.minimizeToTray;
       }
 
       final ff = settingsMap["FontFamily"];
@@ -586,37 +633,44 @@ class AppSettings {
       return;
     }
     try {
-      bool isMaximized = _instance.isWindowMaximized ||
-          WindowControls.layoutMode.value == WindowLayoutMode.maximized;
-      bool isFullScreen =
-          WindowControls.layoutMode.value == WindowLayoutMode.fullscreen;
+      bool isMaximized = _instance.isWindowMaximized;
+      bool isFullScreen = _instance.isWindowFullScreen;
       if (!Platform.environment.containsKey('FLUTTER_TEST')) {
         try {
-          if (Platform.isWindows) {
-            isMaximized = await WindowControls.isMaximized().timeout(
-              const Duration(milliseconds: 300),
-              onTimeout: () =>
-                  _instance.isWindowMaximized ||
-                  WindowControls.layoutMode.value == WindowLayoutMode.maximized,
-            );
-            isFullScreen = await WindowControls.isFullScreen().timeout(
-              const Duration(milliseconds: 300),
-              onTimeout: () =>
-                  WindowControls.layoutMode.value == WindowLayoutMode.fullscreen,
-            );
+          if (WindowControls.isWindowVisible.value) {
+            if (Platform.isWindows) {
+              isMaximized = await WindowControls.isMaximized().timeout(
+                const Duration(milliseconds: 300),
+                onTimeout: () =>
+                    _instance.isWindowMaximized ||
+                    WindowControls.layoutMode.value == WindowLayoutMode.maximized,
+              );
+              isFullScreen = await WindowControls.isFullScreen().timeout(
+                const Duration(milliseconds: 300),
+                onTimeout: () =>
+                    _instance.isWindowFullScreen ||
+                    WindowControls.layoutMode.value == WindowLayoutMode.fullscreen,
+              );
+            } else {
+              isMaximized = await windowManager
+                  .isMaximized()
+                  .timeout(const Duration(milliseconds: 300), onTimeout: () => isMaximized);
+              isFullScreen = await windowManager
+                  .isFullScreen()
+                  .timeout(const Duration(milliseconds: 300), onTimeout: () => isFullScreen);
+            }
+            _instance.isWindowMaximized = isMaximized;
+            _instance.isWindowFullScreen = isFullScreen;
           } else {
-            isMaximized = await windowManager
-                .isMaximized()
-                .timeout(const Duration(milliseconds: 300), onTimeout: () => isMaximized);
-            isFullScreen = await windowManager
-                .isFullScreen()
-                .timeout(const Duration(milliseconds: 300), onTimeout: () => isFullScreen);
+            // 当窗口在托盘隐藏（!isWindowVisible.value）时，坚决沿用并信任当前持久化的 isWindowMaximized 和 isWindowFullScreen，严禁被 normal 覆盖
+            isMaximized = _instance.isWindowMaximized;
+            isFullScreen = _instance.isWindowFullScreen;
           }
         } catch (_) {}
       }
-      _instance.isWindowMaximized = isMaximized;
       final settingsMap = {
         "Version": version,
+        "CloseAction": closeAction.name,
         "ThemeMode": themeMode == ThemeMode.dark,
         "DynamicTheme": dynamicTheme,
         "ThemeColorTintBackground": themeColorTintBackground,
@@ -630,6 +684,7 @@ class AppSettings {
         "LyricSaveExportLrc": lyricSaveExportLrc,
         "LyricSaveApplyPlayer": lyricSaveApplyPlayer,
         "IsWindowMaximized": isMaximized,
+        "IsWindowFullScreen": isFullScreen,
         "FontFamily": fontFamily,
         "FontPath": fontPath,
         "BackgroundImagePath": backgroundImagePath,
@@ -646,10 +701,13 @@ class AppSettings {
         "UiScale": uiScale,
       };
 
-      // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸。
-      // 这样 windowSize 始终保存的是窗口化时的尺寸。
+      // 只有在窗口处于可见状态且不是最大化、不是全屏时才保存窗口尺寸。
+      // 这样 windowSize 始终保存的是窗口化时的正常尺寸，避免在后台隐藏或最小化时被异常覆盖。
       Size sizeToSave = windowSize;
-      if (!isMaximized && !isFullScreen && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      if (WindowControls.isWindowVisible.value &&
+          !isMaximized &&
+          !isFullScreen &&
+          !Platform.environment.containsKey('FLUTTER_TEST')) {
         try {
           sizeToSave = await windowManager
               .getSize()

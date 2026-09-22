@@ -676,6 +676,7 @@ class DesktopLyricService extends DesktopLyricController {
             LOGGER.i(
               "[desktop lyric start] aborted after position restore (pid: ${process.pid}, activePid: $_desktopLyricPid)",
             );
+            await _cleanupDesktopLyricProcess();
             return;
           }
           final activeCheck = await desktopLyric;
@@ -786,6 +787,7 @@ class DesktopLyricService extends DesktopLyricController {
     bool persistPreference = true,
   }) async {
     try {
+      _isStarting = false;
       _stopPositionSyncTimer();
       final value = await desktopLyric;
       if (persistPreference && _desktopLyricPid != null) {

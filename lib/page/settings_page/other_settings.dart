@@ -859,3 +859,45 @@ class _HotkeyCaptureDialogState extends State<_HotkeyCaptureDialog> {
     );
   }
 }
+
+class CloseActionControl extends StatefulWidget {
+  const CloseActionControl({super.key});
+
+  @override
+  State<CloseActionControl> createState() => _CloseActionControlState();
+}
+
+class _CloseActionControlState extends State<CloseActionControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "关闭主窗口时",
+      action: SegmentedButton<CloseAction>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<CloseAction>(
+            value: CloseAction.minimizeToTray,
+            icon: Icon(Symbols.vertical_align_bottom_rounded),
+            label: Text("最小化到托盘"),
+          ),
+          ButtonSegment<CloseAction>(
+            value: CloseAction.exitApp,
+            icon: Icon(Symbols.power_settings_new_rounded),
+            label: Text("退出程序"),
+          ),
+        ],
+        selected: {settings.closeAction},
+        onSelectionChanged: (newSelection) async {
+          if (newSelection.first == settings.closeAction) return;
+
+          setState(() {
+            settings.closeAction = newSelection.first;
+          });
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}

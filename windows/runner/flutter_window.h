@@ -113,6 +113,7 @@ class FlutterWindow : public Win32Window {
   std::wstring track_artist_;
   bool thumb_buttons_added_ = false;
   bool was_maximized_before_tray_ = false;
+  bool was_fullscreen_before_tray_ = false;
   bool is_fullscreen_ = false;
   WINDOWPLACEMENT saved_window_placement_ = {sizeof(WINDOWPLACEMENT)};
   DWORD saved_window_style_ = 0;
@@ -127,6 +128,7 @@ class FlutterWindow : public Win32Window {
   HICON icon_play_ = nullptr;
   HICON icon_pause_ = nullptr;
   HICON icon_next_ = nullptr;
+  std::string last_reported_layout_mode_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
