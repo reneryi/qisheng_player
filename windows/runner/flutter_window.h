@@ -47,6 +47,7 @@ class FlutterWindow : public Win32Window {
   static constexpr UINT kCommandNext = 20005;
   static constexpr UINT kCommandToggleThemeMode = 20006;
   static constexpr UINT kCommandToggleDesktopLyric = 20007;
+  static constexpr UINT kCommandTrackArtist = 20008;
 
   static constexpr UINT kThumbButtonPrevious = 20101;
   static constexpr UINT kThumbButtonPlayPause = 20102;

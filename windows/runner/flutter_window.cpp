@@ -1840,29 +1840,39 @@ void FlutterWindow::ShowTrayMenu() {
     return;
   }
 
-  // 1. 当前播放信息展示（置顶不可点击文本项）
+  // 1. 当前播放信息展示（置顶不可点击文本项，分两行显示：歌名在上，歌手在下）
   const bool has_title =
       !track_title_.empty() &&
       track_title_.find_first_not_of(L" \t\r\n") != std::wstring::npos;
-  std::wstring display_info;
+  const bool has_artist =
+      !track_artist_.empty() &&
+      track_artist_.find_first_not_of(L" \t\r\n") != std::wstring::npos;
+
+  auto truncate_text = [](std::wstring text, size_t max_chars) {
+    if (text.length() > max_chars) {
+      size_t cut_len = max_chars > 3 ? max_chars - 3 : max_chars;
+      if (cut_len > 0 && IS_HIGH_SURROGATE(text[cut_len - 1])) {
+        cut_len--;
+      }
+      return text.substr(0, cut_len) + L"...";
+    }
+    return text;
+  };
+
   if (!has_title) {
-    display_info = L"\u6682\u65E0\u64AD\u653E\u66F2\u76EE";  // "暂无播放曲目"
+    AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED, kCommandTrackInfo,
+                L"\u6682\u65E0\u64AD\u653E\u66F2\u76EE");  // "暂无播放曲目"
   } else {
-    display_info = track_title_;
-    if (!track_artist_.empty() &&
-        track_artist_.find_first_not_of(L" \t\r\n") != std::wstring::npos) {
-      display_info += L" - " + track_artist_;
+    std::wstring title_display = truncate_text(track_title_, 30);
+    AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED, kCommandTrackInfo,
+                title_display.c_str());
+
+    if (has_artist) {
+      std::wstring artist_display = truncate_text(track_artist_, 30);
+      AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED,
+                  kCommandTrackArtist, artist_display.c_str());
     }
   }
-  if (display_info.length() > 45) {
-    size_t cut_len = 42;
-    if (cut_len > 0 && IS_HIGH_SURROGATE(display_info[cut_len - 1])) {
-      cut_len--;
-    }
-    display_info = display_info.substr(0, cut_len) + L"...";
-  }
-  AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED, kCommandTrackInfo,
-              display_info.c_str());
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
   // 2. 主界面显隐
