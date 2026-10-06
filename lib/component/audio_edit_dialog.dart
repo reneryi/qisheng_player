@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/ui/modern_dialog.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/library/audio_edit_service.dart';
@@ -330,7 +331,7 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
       imageChild = Image.network(
         coverUrl,
         fit: BoxFit.cover,
-        headers: const {'User-Agent': 'QishengPlayer/1.4.0'},
+        headers: const {'User-Agent': 'QishengPlayer/${AppSettings.version}'},
         errorBuilder: (_, __, ___) => _buildCoverPlaceholder(scheme),
       );
     } else {
@@ -1026,7 +1027,7 @@ class _SearchResultCardState extends State<SearchResultCard> {
                 fit: BoxFit.cover,
                 width: 52,
                 height: 52,
-                headers: const {'User-Agent': 'QishengPlayer/1.4.0'},
+                headers: const {'User-Agent': 'QishengPlayer/${AppSettings.version}'},
                 errorBuilder: (context, error, stackTrace) =>
                     _buildCoverPlaceholder(),
               )

@@ -540,15 +540,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    // Volume changed from 0.5 to 0.54 (54%) and bubble is revealed
-    expect(find.text('54%'), findsOneWidget);
+    // Volume changed from 0.5 to 0.52 (52%) and bubble is revealed
+    expect(find.text('52%'), findsOneWidget);
 
     // Wait for the inactivity timer (1100ms) + reverse animation (120ms)
     await tester.pump(const Duration(milliseconds: 1250));
     await tester.pump(const Duration(milliseconds: 150));
 
     // The bubble auto-hides
-    expect(find.text('54%'), findsNothing);
+    expect(find.text('52%'), findsNothing);
 
     // Send horizontal scroll event (dy == 0, dx != 0)
     await tester.sendEventToBinding(
@@ -560,9 +560,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    // Volume stays at 0.54 and no bubble appears
-    expect(playback.volumeDsp, closeTo(0.54, 0.001));
-    expect(find.text('54%'), findsNothing);
+    // Volume stays at 0.52 and no bubble appears
+    expect(playback.volumeDsp, closeTo(0.52, 0.001));
+    expect(find.text('52%'), findsNothing);
   });
 
   testWidgets('BottomPlayerBar transport controls strictly have no hover tooltips', (tester) async {

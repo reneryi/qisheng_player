@@ -153,7 +153,7 @@ qisheng_player/
 ├─ third_party/desktop_lyric/    独立桌面歌词子程序工程 (Path 依赖)
 ├─ tools/release/                Windows 自动化发布打包脚本与 Inno Setup 模板
 ├─ docs/                         发布日志、工程规范与架构说明
-│  ├─ releases/                  按版本归档的正式发布说明 (v1.4.0.md 等)
+│  ├─ releases/                  按版本归档的正式发布说明 (v1.4.1.md 等)
 │  └─ screenshots/               应用界面高清展示截图
 ├─ assets/                       品牌矢量图标、色彩预设与静态资源
 └─ BASS/                         本地运行时依赖的 BASS 原生动态库 (DLL)
@@ -202,12 +202,12 @@ flutter build windows --release
 Set-Location ..\..
 
 # 执行一体化打包脚本生成便携包与安装向导
-powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.4.0
+powershell -ExecutionPolicy Bypass -File tools/release/package_release_windows.ps1 -Version 1.4.1
 ```
 
 打包产物将输出在 `dist/windows/artifacts/packages/`：
-- `Qisheng-Player-v1.4.0-Windows-x64.zip`
-- `Qisheng-Player-v1.4.0-Setup-x64.exe`
+- `Qisheng-Player-v1.4.1-Windows-x64.zip`
+- `Qisheng-Player-v1.4.1-Setup-x64.exe`
 
 完整发布流程说明详见 [docs/release_workflow.md](docs/release_workflow.md)。
 
