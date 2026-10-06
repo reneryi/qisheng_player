@@ -343,6 +343,14 @@ void main() {
       playback.setEnableVolumeLeveling(false);
       expect(playback.resolveOutputVolumeDsp(loudAudio), equals(1.0));
       expect(playback.resolveOutputVolumeDsp(quietAudio), equals(1.0));
+
+      // 8. Perceptual volume intermediate scaling (e.g. 0.5 perceived -> 0.125 physical amplitude)
+      playback.setVolumeDsp(0.5);
+      playback.setVolumeLevelingPreampDb(0.0);
+      expect(playback.resolveOutputVolumeDsp(noGainAudio), closeTo(0.125, 0.0001));
+      playback.setEnableVolumeLeveling(true);
+      // loud track scale ≈ 0.501187 -> 0.125 * 0.501187 ≈ 0.06265
+      expect(playback.resolveOutputVolumeDsp(loudAudio), closeTo(0.125 * 0.5012, 0.001));
     });
   });
 }

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/play_service/audio_spectrum.dart';
+import 'package:qisheng_player/play_service/volume_curve.dart';
 import 'package:qisheng_player/src/bass/bass_wasapi.dart' as BASS;
 import 'package:qisheng_player/utils.dart';
 import 'package:ffi/ffi.dart' as ffi;
@@ -472,7 +473,11 @@ class BassPlayer {
       wasapiExclusive = exclusive;
       if (_fstream != null && _fPath != null) {
         setSource(_fPath!);
-        setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
+        setVolumeDsp(
+          perceptualVolumeToAmplitude(
+            AppPreference.instance.playbackPref.volumeDsp,
+          ),
+        );
         seek(lastPos);
         if (exclusive) {
           _bassWasapiInit();
@@ -493,7 +498,11 @@ class BassPlayer {
           _bassWasapi.BASS_WASAPI_Free();
         }
         setSource(currentPath);
-        setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
+        setVolumeDsp(
+          perceptualVolumeToAmplitude(
+            AppPreference.instance.playbackPref.volumeDsp,
+          ),
+        );
         seek(lastPos);
         if (prevState) {
           _bassWasapiInit();

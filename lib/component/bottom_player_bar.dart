@@ -1561,8 +1561,8 @@ class _VolumeControlState extends State<_VolumeControl>
 
   void _handleScroll(PointerScrollEvent event, PlaybackController playback, double current) {
     if (event.scrollDelta.dy == 0) return;
-    // 鼠标滚轮向上滚动增加音量，向下滚动减小音量
-    final delta = event.scrollDelta.dy < 0 ? 0.04 : -0.04;
+    // 鼠标滚轮向上滚动增加音量，向下滚动减小音量（感知音量步进 2%）
+    final delta = event.scrollDelta.dy < 0 ? 0.02 : -0.02;
     final next = (current + delta).clamp(0.0, 1.0).toDouble();
     _setVolume(playback, next);
     _showScrollIndicator();

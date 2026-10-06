@@ -162,7 +162,7 @@ class PlaybackPreference {
         : (PlayMode.fromString(map["playMode"]) ?? PlayMode.forward);
     return PlaybackPreference(
       playMode,
-      map["volumeDsp"] ?? 1.0,
+      (map["volumeDsp"] as num?)?.toDouble() ?? 0.2,
       map["enableVolumeLeveling"] ?? false,
       (map["volumeLevelingPreampDb"] as num?)?.toDouble() ?? 0.0,
       map["lastAudioPath"]?.toString(),
@@ -405,6 +405,7 @@ class AppPreference {
         "playlistsPagePref": playlistsPagePref.toMap(),
         "playlistDetailPagePref": playlistDetailPagePref.toMap(),
         "audiosDefaultSortMigrated": true,
+        "perceptualVolumeMigrated": true,
         "sidebarCollapsedLarge": sidebarCollapsedLarge,
         "ignoredUpdateTag": ignoredUpdateTag,
         "playbackPref": playbackPref.toMap(),
@@ -466,11 +467,28 @@ class AppPreference {
       instance.ignoredUpdateTag = prefMap["ignoredUpdateTag"]?.toString();
       final loadedPlaybackPref =
           PlaybackPreference.fromMap(prefMap["playbackPref"]);
-      // Normalize historical startup-at-100% volume bug once.
-      final needNormalizeVolume = loadedPlaybackPref.volumeDsp >= 0.999;
-      final normalizedVolume = needNormalizeVolume
-          ? 0.2
-          : loadedPlaybackPref.volumeDsp.clamp(0.0, 1.0);
+      // 平滑迁移旧版本的线性物理振幅配置到新的感知音量曲线
+      final needMigrateVolumeCurve =
+          prefMap["perceptualVolumeMigrated"] != true;
+      final needNormalizeVolume =
+          !needMigrateVolumeCurve && loadedPlaybackPref.volumeDsp >= 0.999;
+      final double normalizedVolume;
+      if (needMigrateVolumeCurve) {
+        if (loadedPlaybackPref.volumeDsp >= 0.999) {
+          // 历史 100% bug，迁移至适中的感知音量 0.35（物理振幅约 0.043，-27.3 dB）
+          normalizedVolume = 0.35;
+        } else {
+          // 将旧版本的线性物理振幅平滑反向换算为感知音量
+          // 例如旧版本用户设为 0.01（1%），迁移后感知音量变为 (0.01)^(1/3) ≈ 0.215（21.5%）
+          // 用户听到的实际声音大小完全一致，但滑块回到了合理的 22% 舒适位置！
+          normalizedVolume =
+              amplitudeToPerceptualVolume(loadedPlaybackPref.volumeDsp);
+        }
+      } else {
+        normalizedVolume = needNormalizeVolume
+            ? 0.35
+            : loadedPlaybackPref.volumeDsp.clamp(0.0, 1.0);
+      }
       instance.playbackPref
         ..playMode = loadedPlaybackPref.playMode
         ..volumeDsp = normalizedVolume
@@ -526,6 +544,7 @@ class AppPreference {
       }
 
       if (needNormalizeAudiosSort ||
+          needMigrateVolumeCurve ||
           needNormalizeVolume ||
           needNormalizeMuteHotkey) {
         await instance.save();

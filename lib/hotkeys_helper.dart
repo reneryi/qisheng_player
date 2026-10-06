@@ -84,11 +84,17 @@ class HotkeysHelper {
     },
     HotkeyAction.volumeUp: (_) {
       final playbackService = PlayService.instance.playbackService;
-      _setVolume(playbackService, playbackService.volumeDsp + 0.01);
+      _setVolume(
+        playbackService,
+        (playbackService.volumeDsp + 0.02).clamp(0.0, 1.0),
+      );
     },
     HotkeyAction.volumeDown: (_) {
       final playbackService = PlayService.instance.playbackService;
-      _setVolume(playbackService, playbackService.volumeDsp - 0.01);
+      _setVolume(
+        playbackService,
+        (playbackService.volumeDsp - 0.02).clamp(0.0, 1.0),
+      );
     },
     HotkeyAction.mute: (_) {
       _toggleMute();

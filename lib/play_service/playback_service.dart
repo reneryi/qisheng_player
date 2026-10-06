@@ -10,11 +10,14 @@ import 'package:qisheng_player/library/play_count_store.dart';
 import 'package:qisheng_player/play_service/audio_spectrum.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/play_service/playback_session_store.dart';
+import 'package:qisheng_player/play_service/volume_curve.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/src/rust/api/smtc_flutter.dart';
 import 'package:qisheng_player/theme_provider.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/foundation.dart';
+
+export 'package:qisheng_player/play_service/volume_curve.dart';
 
 enum PlayMode {
   /// 椤哄簭鎾斁鍒版挱鏀惧垪琛ㄧ粨灏?
@@ -373,8 +376,10 @@ class PlaybackService extends PlaybackController {
   double resolveOutputVolumeDsp(Audio? audio) => _resolveOutputVolumeDsp(audio);
 
   double _resolveOutputVolumeDsp(Audio? audio) {
+    // 将用户主观感知音量映射为符合人耳听觉的三次多项式物理振幅 (Cubic Auditory Perceptual Curve)
+    final baseAmplitude = perceptualVolumeToAmplitude(_pref.volumeDsp);
     return calculateReplayGainVolume(
-      baseVolume: _pref.volumeDsp,
+      baseVolume: baseAmplitude,
       enableVolumeLeveling: _pref.enableVolumeLeveling,
       replayGainDb: audio?.replayGainDb,
       preampDb: _pref.volumeLevelingPreampDb,
@@ -394,10 +399,11 @@ class PlaybackService extends PlaybackController {
     });
   }
 
-  /// 修改解码时的音量（不影响 Windows 系统音量）
+  /// 修改用户设置的感知音量（0.0 ~ 1.0，不影响 Windows 系统音量）
   void setVolumeDsp(double volume) {
-    _pref.volumeDsp = volume;
-    _volumeDsp.value = volume;
+    final clamped = volume.isFinite ? volume.clamp(0.0, 1.0).toDouble() : 0.0;
+    _pref.volumeDsp = clamped;
+    _volumeDsp.value = clamped;
     _applyOutputVolume(nowPlaying);
     _scheduleVolumeSave();
   }

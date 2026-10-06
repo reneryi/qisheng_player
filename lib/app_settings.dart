@@ -223,8 +223,8 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings {
   static final github = GitHub();
-  // 当前播放器的全局静态版本号，保留四项桌面与列表体验改进。
-  static const String version = "1.4.0";
+  // 当前播放器的全局静态版本号
+  static const String version = "1.4.1";
   static const String releaseRepoOwner = "reneryi";
   static const String releaseRepoName = "qisheng_player";
   static const Size defaultWindowSize = Size(1461, 898);
