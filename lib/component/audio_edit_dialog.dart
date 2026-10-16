@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:qisheng_player/app_settings.dart';
@@ -9,6 +10,7 @@ import 'package:qisheng_player/library/audio_edit_service.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/lyric/lyric_file_helper.dart';
 import 'package:qisheng_player/music_matcher.dart';
+import 'package:qisheng_player/src/rust/api/utils.dart' as rust_utils;
 import 'package:qisheng_player/utils.dart';
 
 /// 栖声播放器现代双栏音乐编辑与在线匹配对话框。
@@ -319,6 +321,62 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
     );
   }
 
+  Widget _buildAcousticSpecsCard(ColorScheme scheme, bool isDark) {
+    final audio = widget.audio;
+    final ext = audio.path.contains('.')
+        ? audio.path.split('.').last.toUpperCase()
+        : 'AUDIO';
+    final specs = <String>[ext];
+    if (audio.sampleRate != null && audio.sampleRate! > 0) {
+      final khz = audio.sampleRate! / 1000.0;
+      specs.add(
+          '${khz.toStringAsFixed(khz.truncateToDouble() == khz ? 0 : 1)} kHz');
+    }
+    if (audio.bitrate != null && audio.bitrate! > 0) {
+      specs.add('${audio.bitrate} kbps');
+    }
+    if (audio.duration > 0) {
+      specs.add(Duration(seconds: audio.duration).toStringHMMSS());
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.black.withValues(alpha: 0.025),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Symbols.graphic_eq_rounded,
+            size: 16,
+            color: scheme.primary.withValues(alpha: 0.85),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              specs.join('  ·  '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCoverPreview(ColorScheme scheme) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final coverBytes = _draft.cover;
@@ -383,7 +441,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                 icon: const Icon(Icons.photo_library_outlined, size: 16),
                 label: const Text('选择本地封面', style: TextStyle(fontSize: 12)),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   minimumSize: const Size(0, 32),
                 ),
               ),
@@ -423,7 +482,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dialogHeight = math.min(740.0, MediaQuery.sizeOf(context).height - 80.0);
+    final dialogHeight =
+        math.min(740.0, MediaQuery.sizeOf(context).height - 80.0);
 
     return PopScope(
       canPop: _allowClose || (!_dirty && !_busy),
@@ -494,7 +554,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                               : '修改本地音频元数据标签；点击保存后写入文件并立即同步播放器',
                           style: TextStyle(
                             fontSize: 12,
-                            color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
+                            color: scheme.onSurfaceVariant
+                                .withValues(alpha: 0.75),
                           ),
                         ),
                       ],
@@ -573,6 +634,7 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                     ),
                                   ],
                                 ),
+                                _buildAcousticSpecsCard(scheme, isDark),
                                 if (_loading)
                                   const Padding(
                                     padding: EdgeInsets.symmetric(vertical: 8),
@@ -617,17 +679,23 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                       decoration: InputDecoration(
                                         hintText: '搜索歌名、歌手进行在线匹配…',
                                         isDense: true,
-                                        prefixIcon: const Icon(Icons.search, size: 20),
+                                        prefixIcon:
+                                            const Icon(Icons.search, size: 20),
                                         suffixIcon: IconButton(
-                                          icon: const Icon(Icons.clear, size: 16),
-                                          onPressed: () => searchController.clear(),
+                                          icon:
+                                              const Icon(Icons.clear, size: 16),
+                                          onPressed: () =>
+                                              searchController.clear(),
                                         ),
                                         filled: true,
                                         fillColor: isDark
-                                            ? Colors.white.withValues(alpha: 0.04)
-                                            : Colors.black.withValues(alpha: 0.03),
+                                            ? Colors.white
+                                                .withValues(alpha: 0.04)
+                                            : Colors.black
+                                                .withValues(alpha: 0.03),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                           borderSide: BorderSide(
                                             color: Theme.of(context)
                                                 .dividerColor
@@ -683,10 +751,11 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                     ChoiceChip(
                                       label: const Text('QQ音乐',
                                           style: TextStyle(fontSize: 11.5)),
-                                      selected:
-                                          _selectedSourceFilter == ResultSource.qq,
+                                      selected: _selectedSourceFilter ==
+                                          ResultSource.qq,
                                       onSelected: (_) => setState(() =>
-                                          _selectedSourceFilter = ResultSource.qq),
+                                          _selectedSourceFilter =
+                                              ResultSource.qq),
                                     ),
                                     const SizedBox(width: 6),
                                     ChoiceChip(
@@ -756,7 +825,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                           scheme: scheme,
                                           busy: _busy,
                                           onFillForm: () => _adopt(item),
-                                          onApplyLyric: () => _chooseLyric(item),
+                                          onApplyLyric: () =>
+                                              _chooseLyric(item),
                                           onApplyCover: () => setState(() {
                                             if (!widget.audio.isCueTrack) {
                                               _draft.coverResult = item;
@@ -847,8 +917,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                         onSelected: widget.audio.isCueTrack ||
                                                 _busy
                                             ? null
-                                            : (v) => setState(() =>
-                                                _draft.writeLyrics = v),
+                                            : (v) => setState(
+                                                () => _draft.writeLyrics = v),
                                       ),
                                       const SizedBox(width: 6),
                                       FilterChip(
@@ -857,8 +927,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                         selected: _draft.exportLyrics,
                                         onSelected: _busy
                                             ? null
-                                            : (v) => setState(() =>
-                                                _draft.exportLyrics = v),
+                                            : (v) => setState(
+                                                () => _draft.exportLyrics = v),
                                       ),
                                       const SizedBox(width: 6),
                                       FilterChip(
@@ -867,8 +937,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                         selected: _draft.applyLyrics,
                                         onSelected: _busy
                                             ? null
-                                            : (v) => setState(() =>
-                                                _draft.applyLyrics = v),
+                                            : (v) => setState(
+                                                () => _draft.applyLyrics = v),
                                       ),
                                     ],
                                   ),
@@ -881,7 +951,8 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
                                             _showLyricEditor = true;
                                             _draft.lyrics ??= '';
                                           }),
-                                  icon: const Icon(Icons.lyrics_outlined, size: 16),
+                                  icon: const Icon(Icons.lyrics_outlined,
+                                      size: 16),
                                   label: const Text('编辑或粘贴歌词',
                                       style: TextStyle(fontSize: 12)),
                                 ),
@@ -911,23 +982,76 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
 
               const Divider(height: 18),
 
-              // 底部动作栏
+              // 底部动作栏（支持一键复制路径与定位本地文件）
               Row(
                 children: [
                   Expanded(
-                    child: Tooltip(
-                      message: widget.audio.mediaPath,
-                      child: Text(
-                        widget.audio.mediaPath,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        Clipboard.setData(
+                          ClipboardData(text: widget.audio.mediaPath),
+                        );
+                        showTextOnSnackBar('已复制文件路径');
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Symbols.content_copy_rounded,
+                              size: 14,
+                              color: scheme.onSurfaceVariant
+                                  .withValues(alpha: 0.55),
                             ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Tooltip(
+                                message: '${widget.audio.mediaPath} (点击复制路径)',
+                                child: Text(
+                                  widget.audio.mediaPath,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant
+                                            .withValues(alpha: 0.65),
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: '定位到本地文件',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    onPressed: () async {
+                      final opened = await rust_utils.showInExplorer(
+                        path: widget.audio.mediaPath,
+                      );
+                      if (!opened) {
+                        showTextOnSnackBar(
+                          '无法在资源管理器中定位：${widget.audio.mediaPath}',
+                        );
+                      }
+                    },
+                    icon: Icon(
+                      Symbols.folder_open_rounded,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   OutlinedButton(
                     onPressed: _busy ? null : _close,
                     child: const Text('关闭'),
@@ -1027,7 +1151,9 @@ class _SearchResultCardState extends State<SearchResultCard> {
                 fit: BoxFit.cover,
                 width: 52,
                 height: 52,
-                headers: const {'User-Agent': 'QishengPlayer/${AppSettings.version}'},
+                headers: const {
+                  'User-Agent': 'QishengPlayer/${AppSettings.version}'
+                },
                 errorBuilder: (context, error, stackTrace) =>
                     _buildCoverPlaceholder(),
               )

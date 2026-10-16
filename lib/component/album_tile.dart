@@ -4,7 +4,9 @@ import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/uni_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -53,7 +55,6 @@ class _AlbumTileState extends State<AlbumTile> {
     ArtworkStore.instance.removeListener(_handleArtworkStoreChange);
     super.dispose();
   }
-
 
   void _initCoverFuture() {
     if (widget.album.cachedCover != null) {
@@ -159,10 +160,22 @@ class _AlbumTileState extends State<AlbumTile> {
     );
   }
 
+  String _buildAlbumSubtitle() {
+    final artistText = widget.album.artistsMap.keys.join(' / ');
+    final countText = widget.album.works.isNotEmpty
+        ? formatWorkCount(widget.album.works.length)
+        : '';
+    if (artistText.isNotEmpty && countText.isNotEmpty) {
+      return '$artistText · $countText';
+    }
+    return artistText.isNotEmpty ? artistText : countText;
+  }
+
   @override
   Widget build(BuildContext context) {
     final listenable = widget.multiSelectController != null
-        ? Listenable.merge([ArtworkStore.instance, widget.multiSelectController!])
+        ? Listenable.merge(
+            [ArtworkStore.instance, widget.multiSelectController!])
         : ArtworkStore.instance;
 
     return ListenableBuilder(
@@ -211,9 +224,6 @@ class _AlbumTileState extends State<AlbumTile> {
     final BoxDecoration hoverDecoration;
 
     if (isTable) {
-      // 沉浸式表格视图卡片：
-      // 默认（未选中/未悬停）完全沉浸透明融入背景，不显式展示深色底板和边框
-      // 选中（selected）状态显式呈现主题高亮外框与强调底色
       normalDecoration = BoxDecoration(
         color: isSelected
             ? (isDark
@@ -276,9 +286,9 @@ class _AlbumTileState extends State<AlbumTile> {
             : surfaces.tileBackground,
         borderRadius: rowRadius,
         border: (isSelected
-                ? scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35)
-                : surfaces.tileBorderColor) ==
-            Colors.transparent
+                    ? scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35)
+                    : surfaces.tileBorderColor) ==
+                Colors.transparent
             ? null
             : Border.all(
                 color: isSelected
@@ -327,6 +337,7 @@ class _AlbumTileState extends State<AlbumTile> {
     }
 
     final cachedImage = widget.album.cachedCover;
+    final subtitleText = _buildAlbumSubtitle();
 
     return AlbumContextMenu(
       album: widget.album,
@@ -342,7 +353,7 @@ class _AlbumTileState extends State<AlbumTile> {
         decoration: normalDecoration,
         hoverDecoration: hoverDecoration,
         selected: isSelected,
-        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
         hoverScale: isTable ? 1.015 : 1.0,
         hoverTranslateY: isTable ? -3.0 : -2.0,
         pressScale: 0.985,
@@ -359,17 +370,81 @@ class _AlbumTileState extends State<AlbumTile> {
                 builder: (context, snapshot) =>
                     _buildArtworkImage(snapshot.data, placeholder),
               ),
-            Flexible(
+            Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(left: 10.0),
-                child: Text(
-                  widget.album.name,
-                  softWrap: false,
-                  maxLines: 2,
-                  style: TextStyle(color: scheme.onSurface),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.album.name,
+                      softWrap: false,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        height: 1.2,
+                      ),
+                    ),
+                    if (subtitleText.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitleText,
+                        softWrap: false,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(
+                            alpha: isDark ? 0.62 : 0.72,
+                          ),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
+            if (!isTable && widget.album.works.isNotEmpty)
+              Semantics(
+                label: '播放专辑',
+                button: true,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      final works = orderedAlbumWorks(widget.album);
+                      if (works.isNotEmpty) {
+                        PlayService.instance.playbackService.play(0, works);
+                      }
+                    },
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(
+                          alpha: isDark ? 0.14 : 0.08,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Symbols.play_arrow_rounded,
+                          size: 17,
+                          color: scheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

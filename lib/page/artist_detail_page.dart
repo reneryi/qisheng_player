@@ -1,12 +1,14 @@
+import 'dart:math' as math;
+
+import 'package:qisheng_player/component/album_tile.dart';
 import 'package:qisheng_player/component/entity_artwork_actions.dart';
 import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/component/artist_artwork_hero.dart';
-import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
-import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/page/uni_detail_page.dart';
 import 'package:qisheng_player/page/uni_page.dart';
 import 'package:qisheng_player/page/uni_page_components.dart';
@@ -56,6 +58,33 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
     super.dispose();
   }
 
+  List<String> _buildArtistBadges(List<Audio> tracks) {
+    final badges = <String>[];
+    if (artist.albumsMap.isNotEmpty) {
+      badges.add('${artist.albumsMap.length} 张收录专辑');
+    }
+    final totalSeconds =
+        tracks.fold<int>(0, (sum, item) => sum + math.max(0, item.duration));
+    if (totalSeconds > 0) {
+      final minutes = (totalSeconds / 60).ceil();
+      if (minutes >= 60) {
+        badges.add('累计 ${minutes ~/ 60} 小时 ${minutes % 60} 分');
+      } else {
+        badges.add('累计 $minutes 分钟');
+      }
+    }
+    int hiResCount = 0;
+    for (final t in tracks) {
+      if ((t.sampleRate ?? 0) >= 48000 || (t.bitrate ?? 0) > 1411) {
+        hiResCount++;
+      }
+    }
+    if (hiResCount > 0) {
+      badges.add('Hi-Res $hiResCount 首');
+    }
+    return badges;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (artist.works.isEmpty) {
@@ -83,14 +112,26 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
             kind: 'artist',
             works: artist.works,
             artist: artist)
-
       ],
       primaryPic: artist.picture,
       primaryPicHeroTag: artistArtworkHeroTag(artist),
       backgroundPic: artist.picture,
       picShape: PicShape.oval,
       title: artist.name,
-      subtitle: formatWorkCount(artist.works.length),
+      subtitle: formatWorkCount(secondaryContent.length),
+      headerBadges: _buildArtistBadges(secondaryContent),
+      onPlayAll: secondaryContent.isEmpty
+          ? null
+          : () {
+              PlayService.instance.playbackService.play(0, secondaryContent);
+            },
+      onShufflePlay: secondaryContent.isEmpty
+          ? null
+          : () {
+              PlayService.instance.playbackService.shuffleAndPlay(
+                secondaryContent,
+              );
+            },
       secondaryContent: secondaryContent,
       secondaryContentRevision: AudioLibrary.revision.value,
       secondaryContentBuilder: (context, audio, i, multiSelectController) =>
@@ -99,12 +140,11 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
         playlist: secondaryContent,
         multiSelectController: multiSelectController,
       ),
-      tertiaryContentTitle: "专辑",
+      tertiaryContentTitle: "收录专辑",
       tertiaryContent: artist.albumsMap.values.toList(),
       tertiaryContentBuilder: (context, album, i, multiSelectController) =>
-          CpListTile(
-        onTap: () => context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album),
-        title: Text(album.name),
+          AlbumTile(
+        album: album,
       ),
       enableShufflePlay: true,
       enableSortMethod: true,

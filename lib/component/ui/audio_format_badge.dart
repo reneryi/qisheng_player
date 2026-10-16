@@ -8,6 +8,7 @@ class AudioFormatBadge extends StatelessWidget {
     super.key,
     required this.audio,
     this.compact = false,
+    this.subtle = false,
   });
 
   /// 音频元数据对象
@@ -15,6 +16,9 @@ class AudioFormatBadge extends StatelessWidget {
 
   /// 是否紧凑模式（紧凑模式下只显示关键无损/Hi-Res标签）
   final bool compact;
+
+  /// 是否采用列表态低饱和磨砂质感（降低多行重复出现时的视觉喧宾夺主感）
+  final bool subtle;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +36,10 @@ class AudioFormatBadge extends StatelessWidget {
 
     // 格式文案处理
     String badgeText = extension;
-    if (extension == 'FLAC' || extension == 'APE' || extension == 'WAV' || extension == 'DSD') {
+    if (extension == 'FLAC' ||
+        extension == 'APE' ||
+        extension == 'WAV' ||
+        extension == 'DSD') {
       badgeText = isHiRes ? 'Hi-Res • $extension' : extension;
     } else if (audio.bitrate != null && audio.bitrate! > 0) {
       badgeText = '$extension ${audio.bitrate}kbps';
@@ -46,6 +53,13 @@ class AudioFormatBadge extends StatelessWidget {
         ? const Color(0xFFEAB308) // 金色 Hi-Res
         : (isLossless ? scheme.primary : scheme.outline);
 
+    final double bgAlpha = subtle
+        ? (isDark ? 0.07 : 0.05)
+        : (isDark ? 0.12 : 0.08);
+    final double borderAlpha = subtle
+        ? (isDark ? 0.22 : 0.16)
+        : (isDark ? 0.35 : 0.25);
+
     return RepaintBoundary(
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -54,9 +68,9 @@ class AudioFormatBadge extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
-          color: badgeTint.withValues(alpha: isDark ? 0.12 : 0.08),
+          color: badgeTint.withValues(alpha: bgAlpha),
           border: Border.all(
-            color: badgeTint.withValues(alpha: isDark ? 0.35 : 0.25),
+            color: badgeTint.withValues(alpha: borderAlpha),
             width: 0.8,
           ),
         ),
@@ -68,7 +82,9 @@ class AudioFormatBadge extends StatelessWidget {
               Icon(
                 Icons.stars_rounded,
                 size: 11,
-                color: badgeTint,
+                color: subtle
+                    ? badgeTint.withValues(alpha: 0.85)
+                    : badgeTint,
               ),
               const SizedBox(width: 3),
             ],
@@ -76,8 +92,16 @@ class AudioFormatBadge extends StatelessWidget {
               badgeText,
               style: TextStyle(
                 color: isDark
-                    ? Color.lerp(badgeTint, Colors.white, 0.5)
-                    : Color.lerp(badgeTint, Colors.black, 0.4),
+                    ? Color.lerp(
+                        badgeTint,
+                        Colors.white,
+                        subtle ? 0.62 : 0.5,
+                      )
+                    : Color.lerp(
+                        badgeTint,
+                        Colors.black,
+                        subtle ? 0.52 : 0.4,
+                      ),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0,
@@ -116,7 +140,18 @@ class AudioFormatBadge extends StatelessWidget {
 
   /// 判断是否属于主流无损音频格式
   bool _isLosslessFormat(String ext) {
-    const lossless = {'FLAC', 'WAV', 'WAVE', 'APE', 'DSD', 'DSF', 'DFF', 'AIFF', 'AIF', 'WV'};
+    const lossless = {
+      'FLAC',
+      'WAV',
+      'WAVE',
+      'APE',
+      'DSD',
+      'DSF',
+      'DFF',
+      'AIFF',
+      'AIF',
+      'WV',
+    };
     return lossless.contains(ext);
   }
 

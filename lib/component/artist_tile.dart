@@ -4,7 +4,9 @@ import 'package:qisheng_player/component/cp/cp_components.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/uni_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -52,7 +54,6 @@ class _ArtistTileState extends State<ArtistTile> {
     ArtworkStore.instance.removeListener(_handleArtworkStoreChange);
     super.dispose();
   }
-
 
   void _initPictureFuture() {
     final cached = widget.artist.cachedPicture ??
@@ -158,10 +159,21 @@ class _ArtistTileState extends State<ArtistTile> {
     );
   }
 
+  String _buildArtistSubtitle() {
+    final workCount = widget.artist.works.length;
+    final albumCount = widget.artist.albumsMap.length;
+    if (workCount <= 0) return '';
+    if (albumCount > 0) {
+      return '${formatWorkCount(workCount)} · $albumCount 张专辑';
+    }
+    return formatWorkCount(workCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     final listenable = widget.multiSelectController != null
-        ? Listenable.merge([ArtworkStore.instance, widget.multiSelectController!])
+        ? Listenable.merge(
+            [ArtworkStore.instance, widget.multiSelectController!])
         : ArtworkStore.instance;
 
     return ListenableBuilder(
@@ -275,9 +287,9 @@ class _ArtistTileState extends State<ArtistTile> {
             : surfaces.tileBackground,
         borderRadius: rowRadius,
         border: (isSelected
-                ? scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35)
-                : surfaces.tileBorderColor) ==
-            Colors.transparent
+                    ? scheme.primary.withValues(alpha: isDark ? 0.45 : 0.35)
+                    : surfaces.tileBorderColor) ==
+                Colors.transparent
             ? null
             : Border.all(
                 color: isSelected
@@ -327,6 +339,7 @@ class _ArtistTileState extends State<ArtistTile> {
 
     final cachedImage = widget.artist.cachedPicture ??
         ArtworkStore.instance.cached(widget.artist.id);
+    final subtitleText = _buildArtistSubtitle();
 
     return CpMotionPressable(
       onTap: _openArtistDetail,
@@ -334,7 +347,7 @@ class _ArtistTileState extends State<ArtistTile> {
       decoration: normalDecoration,
       hoverDecoration: hoverDecoration,
       selected: isSelected,
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
       hoverScale: isTable ? 1.015 : 1.0,
       hoverTranslateY: isTable ? -3.0 : -2.0,
       pressScale: 0.985,
@@ -351,17 +364,81 @@ class _ArtistTileState extends State<ArtistTile> {
               builder: (context, snapshot) =>
                   _buildAvatarWidget(snapshot.data, placeholder),
             ),
-          Flexible(
+          Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 10.0),
-              child: Text(
-                widget.artist.name,
-                softWrap: false,
-                maxLines: 2,
-                style: TextStyle(color: scheme.onSurface),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.artist.name,
+                    softWrap: false,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      height: 1.2,
+                    ),
+                  ),
+                  if (subtitleText.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitleText,
+                      softWrap: false,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(
+                          alpha: isDark ? 0.62 : 0.72,
+                        ),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
+          if (!isTable && widget.artist.works.isNotEmpty)
+            Semantics(
+              label: '播放艺术家作品',
+              button: true,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    final works = List<Audio>.from(widget.artist.works);
+                    if (works.isNotEmpty) {
+                      PlayService.instance.playbackService.play(0, works);
+                    }
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(
+                        alpha: isDark ? 0.14 : 0.08,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Symbols.play_arrow_rounded,
+                        size: 17,
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

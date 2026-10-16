@@ -129,7 +129,9 @@ class _AudioTileState extends State<AudioTile> {
             final normalDecoration = BoxDecoration(
               color: isHighlight ? highlightBgColor : surfaces.tileBackground,
               borderRadius: rowRadius,
-              border: (isHighlight ? highlightBorderColor : surfaces.tileBorderColor) ==
+              border: (isHighlight
+                          ? highlightBorderColor
+                          : surfaces.tileBorderColor) ==
                       Colors.transparent
                   ? null
                   : Border.all(
@@ -170,15 +172,16 @@ class _AudioTileState extends State<AudioTile> {
               boxShadow: [
                 BoxShadow(
                   color: scheme.primary.withValues(
-                    alpha: isDark ? (isHighlight ? 0.24 : 0.16) : (isHighlight ? 0.12 : 0.07),
+                    alpha: isDark
+                        ? (isHighlight ? 0.24 : 0.16)
+                        : (isHighlight ? 0.12 : 0.07),
                   ),
                   blurRadius: 12,
                   offset: const Offset(0, 3),
                 ),
                 BoxShadow(
                   color: surfaces.shadowColor.withValues(
-                    alpha: (isDark ? 0.20 : 0.08) *
-                        surfaces.shadowDepthScale,
+                    alpha: (isDark ? 0.20 : 0.08) * surfaces.shadowDepthScale,
                   ),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
@@ -218,24 +221,20 @@ class _AudioTileState extends State<AudioTile> {
                     }
 
                     if (widget.multiSelectController == null ||
-                        !widget.multiSelectController!
-                            .enableMultiSelectView) {
+                        !widget.multiSelectController!.enableMultiSelectView) {
                       PlayService.instance.playbackService
                           .play(widget.audioIndex, widget.playlist);
                     } else {
-                      widget.multiSelectController!
-                          .toggleSelectionWithIndex(
+                      widget.multiSelectController!.toggleSelectionWithIndex(
                         index: widget.audioIndex,
                         item: audio,
                         items: widget.playlist,
-                        shiftPressed:
-                            MultiSelectController.isShiftPressed(),
+                        shiftPressed: MultiSelectController.isShiftPressed(),
                       );
                     }
                   },
                   onSecondaryTapDown: (details) {
-                    if (widget.multiSelectController
-                            ?.enableMultiSelectView ==
+                    if (widget.multiSelectController?.enableMultiSelectView ==
                         true) {
                       return;
                     }
@@ -247,8 +246,7 @@ class _AudioTileState extends State<AudioTile> {
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: LayoutBuilder(
                     builder: (context, tileConstraints) {
-                      final showDuration =
-                          tileConstraints.maxWidth >= 220;
+                      final showDuration = tileConstraints.maxWidth >= 220;
 
                       final cachedCover = audio.cachedCover;
 
@@ -269,8 +267,7 @@ class _AudioTileState extends State<AudioTile> {
                                   width: 48,
                                   height: 48,
                                   borderRadius: 10,
-                                  placeholder:
-                                      Center(child: placeholder),
+                                  placeholder: Center(child: placeholder),
                                 )
                               else
                                 ScrollAwareFutureBuilder(
@@ -283,243 +280,226 @@ class _AudioTileState extends State<AudioTile> {
                                       width: 48,
                                       height: 48,
                                       borderRadius: 10,
-                                      placeholder:
-                                          Center(child: placeholder),
+                                      placeholder: Center(child: placeholder),
                                     );
                                   },
                                 ),
-                                    // 正在播放时展示右下角微型动态跳动均衡器徽章
-                                    if (effectiveFocus)
-                                      Positioned(
-                                        right: -2,
-                                        bottom: -2,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: scheme.primary,
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: scheme.primary
-                                                    .withValues(alpha: 0.4),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: const EqualizerPlayingBars(
-                                            barColor: Colors.white,
-                                            height: 10,
-                                          ),
+                              // 正在播放时展示右下角微型动态跳动均衡器徽章
+                              if (effectiveFocus)
+                                Positioned(
+                                  right: -2,
+                                  bottom: -2,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.primary,
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: scheme.primary
+                                              .withValues(alpha: 0.4),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(width: 16.0),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        audio.title,
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          height: 1.25,
-                                          letterSpacing: 0,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4.0),
-                                      LayoutBuilder(
-                                        builder: (context, subtitleConstraints) {
-                                          final showBadge = subtitleConstraints
-                                                  .maxWidth >=
-                                              150;
-
-                                          return Row(
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  widget.showPlayCount
-                                                      ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
-                                                      : "${audio.artist} - ${audio.album}",
-                                                  style: TextStyle(
-                                                    color: textColor.withValues(
-                                                      alpha:
-                                                          isDark ? 0.82 : 0.90,
-                                                    ),
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w500,
-                                                    height: 1.25,
-                                                    letterSpacing: 0,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (showBadge) ...[
-                                                const SizedBox(width: 8.0),
-                                                AudioFormatBadge(
-                                                  audio: audio,
-                                                  compact: true,
-                                                ),
-                                              ],
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8.0),
-                                ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 220),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (showDuration) ...[
-                                        // 极简锐利模式下展示右侧彩色 Pill 胶囊徽章（自适应空间）
-                                        Text(
-                                          Duration(seconds: audio.duration)
-                                              .toStringHMMSS(),
-                                          style: TextStyle(
-                                            color: effectiveFocus
-                                                ? scheme.primary
-                                                : scheme.onSurface
-                                                    .withValues(alpha: 0.72),
-                                            fontWeight: FontWeight.w500,
-                                            fontFeatures: const [
-                                              FontFeature.tabularFigures(),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8.0),
                                       ],
-                                      AudioContextMenu(
-                                        audio: audio,
-                                        playlist: widget.playlist,
-                                        audioIndex: widget.audioIndex,
-                                        onEdit: () => showModernDialog(
-                                          context: context,
-                                          builder: (context) => AudioEditDialog(
-                                              audio: audio),
-                                        ),
-                                        builder: (context, moreMenuController,
-                                            _) {
-                                          return Semantics(
-                                            label: '更多',
-                                            button: true,
-                                            child: Focus(
-                                              skipTraversal: true,
-                                              canRequestFocus: false,
-                                              child: IconButton(
-                                                tooltip: '更多',
-                                                onPressed: () {
-                                                  if (moreMenuController
-                                                      .isOpen) {
-                                                    moreMenuController.close();
-                                                  } else {
-                                                    AudioContextMenuManager
-                                                        .closeActive(
-                                                      except:
-                                                          moreMenuController,
-                                                    );
-                                                    moreMenuController.open();
-                                                  }
-                                                },
-                                                icon: const Icon(
-                                                    Symbols.more_vert_rounded),
-                                                color: textColor.withValues(
-                                                  alpha: 0.76,
-                                                ),
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                style: IconButton.styleFrom(
-                                                  minimumSize:
-                                                      const Size(36, 36),
-                                                  fixedSize: const Size(36, 36),
-                                                  padding: EdgeInsets.zero,
-                                                  elevation: 0,
-                                                  shadowColor:
-                                                      Colors.transparent,
-                                                  backgroundColor:
-                                                      Colors.transparent,
-                                                  side: BorderSide.none,
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                ).copyWith(
-                                                  overlayColor:
-                                                      WidgetStatePropertyAll(
-                                                    scheme.primary.withValues(
-                                                      alpha: 0.08,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (widget.multiSelectController
-                                        ?.enableMultiSelectView ==
-                                    true)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: Checkbox(
-                                      value: widget
-                                          .multiSelectController!.selected
-                                          .contains(audio),
-                                      onChanged: (_) {
-                                        widget.multiSelectController!
-                                            .toggleSelectionWithIndex(
-                                          index: widget.audioIndex,
-                                          item: audio,
-                                          items: widget.playlist,
-                                          shiftPressed: MultiSelectController
-                                              .isShiftPressed(),
-                                        );
-                                      },
+                                    ),
+                                    child: const EqualizerPlayingBars(
+                                      barColor: Colors.white,
+                                      height: 10,
                                     ),
                                   ),
-                                if (widget.action != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: widget.action!,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 16.0),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  audio.title,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.25,
+                                    letterSpacing: 0,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4.0),
+                                LayoutBuilder(
+                                  builder: (context, subtitleConstraints) {
+                                    final showBadge =
+                                        subtitleConstraints.maxWidth >= 150;
+
+                                    return Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            widget.showPlayCount
+                                                ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                                : "${audio.artist} - ${audio.album}",
+                                            style: TextStyle(
+                                              color: textColor.withValues(
+                                                alpha: isDark ? 0.82 : 0.90,
+                                              ),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              height: 1.25,
+                                              letterSpacing: 0,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (showBadge) ...[
+                                          const SizedBox(width: 8.0),
+                                          AudioFormatBadge(
+                                            audio: audio,
+                                            compact: true,
+                                            subtle: !effectiveFocus,
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  },
+                                ),
                               ],
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        }
+                            ),
+                          ),
+                          const SizedBox(width: 8.0),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 220),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (showDuration) ...[
+                                  Text(
+                                    Duration(seconds: audio.duration)
+                                        .toStringHMMSS(),
+                                    style: TextStyle(
+                                      color: effectiveFocus
+                                          ? scheme.primary
+                                          : scheme.onSurface
+                                              .withValues(alpha: 0.72),
+                                      fontWeight: FontWeight.w500,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8.0),
+                                ],
+                                AudioContextMenu(
+                                  audio: audio,
+                                  playlist: widget.playlist,
+                                  audioIndex: widget.audioIndex,
+                                  onEdit: () => showModernDialog(
+                                    context: context,
+                                    builder: (context) =>
+                                        AudioEditDialog(audio: audio),
+                                  ),
+                                  builder: (context, moreMenuController, _) {
+                                    return Semantics(
+                                      label: '更多',
+                                      button: true,
+                                      child: Focus(
+                                        skipTraversal: true,
+                                        canRequestFocus: false,
+                                        child: IconButton(
+                                          tooltip: '更多',
+                                          onPressed: () {
+                                            if (moreMenuController.isOpen) {
+                                              moreMenuController.close();
+                                            } else {
+                                              AudioContextMenuManager
+                                                  .closeActive(
+                                                except: moreMenuController,
+                                              );
+                                              moreMenuController.open();
+                                            }
+                                          },
+                                          icon: const Icon(
+                                              Symbols.more_vert_rounded),
+                                          color: textColor.withValues(
+                                            alpha: 0.76,
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                          style: IconButton.styleFrom(
+                                            minimumSize: const Size(36, 36),
+                                            fixedSize: const Size(36, 36),
+                                            padding: EdgeInsets.zero,
+                                            elevation: 0,
+                                            shadowColor: Colors.transparent,
+                                            backgroundColor: Colors.transparent,
+                                            side: BorderSide.none,
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                          ).copyWith(
+                                            overlayColor:
+                                                WidgetStatePropertyAll(
+                                              scheme.primary.withValues(
+                                                alpha: 0.08,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (widget.multiSelectController
+                                  ?.enableMultiSelectView ==
+                              true)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Checkbox(
+                                value: widget.multiSelectController!.selected
+                                    .contains(audio),
+                                onChanged: (_) {
+                                  widget.multiSelectController!
+                                      .toggleSelectionWithIndex(
+                                    index: widget.audioIndex,
+                                    item: audio,
+                                    items: widget.playlist,
+                                    shiftPressed:
+                                        MultiSelectController.isShiftPressed(),
+                                  );
+                                },
+                              ),
+                            ),
+                          if (widget.action != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: widget.action!,
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
-
-
+}
 
 /// 播放律动跳跃均衡器条组件
-/// 用于在正在播放的歌曲列表项上呈现灵动的 3 柱波形跳动反馈
+/// 优先接入 `playback.audioSpectrum` 真实 FFT 频段能量（低频、中频、高频），
+/// 在 WASAPI 独占模式或无实时频谱时平滑回退至正弦呼吸律动。
 class EqualizerPlayingBars extends StatelessWidget {
   const EqualizerPlayingBars({
     super.key,
@@ -532,39 +512,80 @@ class EqualizerPlayingBars extends StatelessWidget {
   final double height;
   final double width;
 
+  double _bandAverage(List<double> spectrum, int start, int end) {
+    if (spectrum.isEmpty) return 0.0;
+    final safeStart = start.clamp(0, spectrum.length - 1);
+    final safeEnd = end.clamp(safeStart + 1, spectrum.length);
+    var sum = 0.0;
+    for (var i = safeStart; i < safeEnd; i++) {
+      sum += spectrum[i];
+    }
+    return sum / (safeEnd - safeStart);
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = context.watch<PlaybackController>();
     final isPlaying = playback.playerState == PlayerState.playing;
 
-    return StreamBuilder<double>(
-      stream: playback.positionStream,
-      initialData: playback.position,
-      builder: (context, snapshot) {
-        final posMs = isPlaying ? ((snapshot.data ?? 0) * 1000).toInt() : 0;
-        final t = (posMs % 900) / 900.0;
-        final h1 = isPlaying
-            ? (0.3 + 0.7 * (0.5 + 0.5 * math.sin(t * 2 * math.pi))).clamp(0.25, 1.0)
-            : 0.45;
-        final h2 = isPlaying
-            ? (0.2 + 0.8 * (0.5 + 0.5 * math.cos(t * 2 * math.pi))).clamp(0.25, 1.0)
-            : 0.8;
-        final h3 = isPlaying
-            ? (0.4 + 0.6 * (0.5 + 0.5 * math.sin((t + 0.3) * 2 * math.pi))).clamp(0.25, 1.0)
-            : 0.35;
+    return ValueListenableBuilder<List<double>>(
+      valueListenable: playback.audioSpectrum,
+      builder: (context, spectrum, _) {
+        if (isPlaying && spectrum.length >= 12) {
+          final low = _bandAverage(spectrum, 1, 6);
+          final mid = _bandAverage(spectrum, 6, 18);
+          final high = _bandAverage(spectrum, 18, math.min(40, spectrum.length));
+          final h1 = (0.28 + low * 0.92).clamp(0.25, 1.0);
+          final h2 = (0.30 + mid * 0.95).clamp(0.25, 1.0);
+          final h3 = (0.26 + high * 1.05).clamp(0.25, 1.0);
+          return SizedBox(
+            width: width,
+            height: height,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _buildBar(h1),
+                _buildBar(h2),
+                _buildBar(h3),
+              ],
+            ),
+          );
+        }
 
-        return SizedBox(
-          width: width,
-          height: height,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _buildBar(h1),
-              _buildBar(h2),
-              _buildBar(h3),
-            ],
-          ),
+        return StreamBuilder<double>(
+          stream: playback.positionStream,
+          initialData: playback.position,
+          builder: (context, snapshot) {
+            final posMs = isPlaying ? ((snapshot.data ?? 0) * 1000).toInt() : 0;
+            final t = (posMs % 900) / 900.0;
+            final h1 = isPlaying
+                ? (0.3 + 0.7 * (0.5 + 0.5 * math.sin(t * 2 * math.pi)))
+                    .clamp(0.25, 1.0)
+                : 0.45;
+            final h2 = isPlaying
+                ? (0.2 + 0.8 * (0.5 + 0.5 * math.cos(t * 2 * math.pi)))
+                    .clamp(0.25, 1.0)
+                : 0.8;
+            final h3 = isPlaying
+                ? (0.4 + 0.6 * (0.5 + 0.5 * math.sin((t + 0.3) * 2 * math.pi)))
+                    .clamp(0.25, 1.0)
+                : 0.35;
+
+            return SizedBox(
+              width: width,
+              height: height,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _buildBar(h1),
+                  _buildBar(h2),
+                  _buildBar(h3),
+                ],
+              ),
+            );
+          },
         );
       },
     );

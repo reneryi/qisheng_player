@@ -9,6 +9,7 @@ import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/search_page/search_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/window_controls.dart';
 import 'package:flutter/material.dart';
@@ -159,39 +160,99 @@ class _TitleLyricPill extends StatefulWidget {
 class _TitleLyricPillState extends State<_TitleLyricPill> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  final _layerLink = LayerLink();
+  final _overlayController = OverlayPortalController();
   bool _expanded = false;
+  UnionSearchResult? _liveResult;
 
   @override
   void initState() {
     super.initState();
     _focusNode.addListener(_handleFocusChanged);
+    _controller.addListener(_handleQueryChanged);
+    HardwareKeyboard.instance.addHandler(_handleGlobalShortcut);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalShortcut);
     if (_focusNode.hasFocus) {
       unawaited(HotkeysHelper.onFocusChanges(false));
     }
     _focusNode.removeListener(_handleFocusChanged);
+    _controller.removeListener(_handleQueryChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  bool _handleGlobalShortcut(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isAlt = HardwareKeyboard.instance.isAltPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    if (!isCtrl || isAlt || isShift) return false;
+
+    if (event.logicalKey == LogicalKeyboardKey.keyK ||
+        event.logicalKey == LogicalKeyboardKey.keyF) {
+      _toggleExpanded(true);
+      return true;
+    }
+    return false;
+  }
+
   void _handleFocusChanged() {
     unawaited(HotkeysHelper.onFocusChanges(_focusNode.hasFocus));
+    _syncOverlayVisibility();
+  }
+
+  void _handleQueryChanged() {
+    if (!mounted) return;
+    final q = _controller.text.trim();
+    if (q.isEmpty) {
+      if (_liveResult != null) {
+        setState(() => _liveResult = null);
+      }
+    } else {
+      setState(() {
+        _liveResult = UnionSearchResult.search(q);
+      });
+    }
+    _syncOverlayVisibility();
+  }
+
+  void _syncOverlayVisibility() {
+    if (!mounted) return;
+    final shouldShow = _expanded &&
+        _focusNode.hasFocus &&
+        _controller.text.trim().isNotEmpty &&
+        _liveResult != null;
+    if (shouldShow && !_overlayController.isShowing) {
+      _overlayController.show();
+    } else if (!shouldShow && _overlayController.isShowing) {
+      _overlayController.hide();
+    }
   }
 
   void _toggleExpanded(bool value) {
-    if (_expanded == value) return;
+    if (_expanded == value) {
+      if (value && !_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+      return;
+    }
     setState(() => _expanded = value);
     if (value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _focusNode.requestFocus();
+          _syncOverlayVisibility();
         }
       });
     } else {
+      if (_overlayController.isShowing) {
+        _overlayController.hide();
+      }
       _focusNode.unfocus();
     }
   }
@@ -199,9 +260,169 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
   void _submitSearch(String rawQuery) {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
+    if (_overlayController.isShowing) {
+      _overlayController.hide();
+    }
     context.push(
       app_paths.buildSearchResultLocation(query),
       extra: UnionSearchResult.search(query),
+    );
+  }
+
+  Widget _buildLiveSuggestionsOverlay(BuildContext context) {
+    final result = _liveResult;
+    if (result == null) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    final topAudios = result.audios.take(4).toList(growable: false);
+    final topArtists = result.artists.take(2).toList(growable: false);
+    final topAlbums = result.album.take(2).toList(growable: false);
+    final hasAny =
+        topAudios.isNotEmpty || topArtists.isNotEmpty || topAlbums.isNotEmpty;
+
+    return CompositedTransformFollower(
+      link: _layerLink,
+      showWhenUnlinked: false,
+      offset: const Offset(0, 44),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Container(
+            width: 360,
+            constraints: const BoxConstraints(maxHeight: 380),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? scheme.surfaceContainerHigh.withValues(alpha: 0.96)
+                  : scheme.surface.withValues(alpha: 0.97),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.32),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.38 : 0.14),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: !hasAny
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Text(
+                      '未找到匹配“${result.query}”的曲目或歌手',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (topAudios.isNotEmpty) ...[
+                          _SuggestionSectionHeader(
+                            title: '单曲 (${result.audios.length})',
+                          ),
+                          for (final audio in topAudios)
+                            _SuggestionRow(
+                              icon: Symbols.music_note_rounded,
+                              title: audio.title,
+                              subtitle: '${audio.artist} · ${audio.album}',
+                              onTap: () {
+                                PlayService.instance.playbackService.play(
+                                  0,
+                                  [audio],
+                                );
+                                _toggleExpanded(false);
+                              },
+                            ),
+                        ],
+                        if (topArtists.isNotEmpty) ...[
+                          _SuggestionSectionHeader(
+                            title: '艺术家 (${result.artists.length})',
+                          ),
+                          for (final artist in topArtists)
+                            _SuggestionRow(
+                              icon: Symbols.person_rounded,
+                              title: artist.name,
+                              subtitle: '${artist.works.length} 首作品',
+                              onTap: () {
+                                _toggleExpanded(false);
+                                context.push(
+                                  app_paths.ARTIST_DETAIL_PAGE,
+                                  extra: artist,
+                                );
+                              },
+                            ),
+                        ],
+                        if (topAlbums.isNotEmpty) ...[
+                          _SuggestionSectionHeader(
+                            title: '专辑 (${result.album.length})',
+                          ),
+                          for (final album in topAlbums)
+                            _SuggestionRow(
+                              icon: Symbols.album_rounded,
+                              title: album.name,
+                              subtitle: '${album.works.length} 首作品',
+                              onTap: () {
+                                _toggleExpanded(false);
+                                context.push(
+                                  app_paths.ALBUM_DETAIL_PAGE,
+                                  extra: album,
+                                );
+                              },
+                            ),
+                        ],
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 4, 10, 2),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => _submitSearch(result.query),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Symbols.search_rounded,
+                                    size: 16,
+                                    color: scheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '查看“${result.query}”的全部搜索结果 (Enter)',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: scheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -225,55 +446,66 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                 },
               ),
             },
-            child: AnimatedContainer(
-              duration: motion.searchExpandDuration,
-              curve: motion.emphasized,
-              width: _expanded ? 360 : 42,
-              child: _expanded
-                  ? TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Symbols.search_rounded, size: 20),
-                        suffixIcon: Semantics(
-                          label: '关闭搜索',
+            child: CompositedTransformTarget(
+              link: _layerLink,
+              child: OverlayPortal(
+                controller: _overlayController,
+                overlayChildBuilder: _buildLiveSuggestionsOverlay,
+                child: AnimatedContainer(
+                  duration: motion.searchExpandDuration,
+                  curve: motion.emphasized,
+                  width: _expanded ? 360 : 42,
+                  child: _expanded
+                      ? TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          decoration: InputDecoration(
+                            prefixIcon:
+                                const Icon(Symbols.search_rounded, size: 20),
+                            suffixIcon: Semantics(
+                              label: '关闭搜索',
+                              button: true,
+                              child: IconButton(
+                                enableFeedback: false,
+                                onPressed: () {
+                                  _controller.clear();
+                                  _toggleExpanded(false);
+                                },
+                                icon:
+                                    const Icon(Symbols.close_rounded, size: 18),
+                              ),
+                            ),
+                            hintText: '搜索歌曲、歌手、专辑 (支持拼音 / Ctrl+K)',
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: _submitSearch,
+                          onTapOutside: (_) {
+                            if (_controller.text.trim().isEmpty) {
+                              _toggleExpanded(false);
+                            } else if (_overlayController.isShowing) {
+                              _overlayController.hide();
+                            }
+                          },
+                        )
+                      : Semantics(
+                          label: '搜索',
                           button: true,
                           child: IconButton(
                             enableFeedback: false,
-                            onPressed: () {
-                              _controller.clear();
-                              _toggleExpanded(false);
-                            },
-                            icon: const Icon(Symbols.close_rounded, size: 18),
+                            onPressed: () => _toggleExpanded(true),
+                            icon: Icon(
+                              Symbols.search_rounded,
+                              size: 20,
+                              color: scheme.onSurface.withValues(alpha: 0.68),
+                            ),
                           ),
                         ),
-                        hintText: '搜索歌曲、艺术家、专辑',
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 11),
-                      ),
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: _submitSearch,
-                      onTapOutside: (_) {
-                        if (_controller.text.trim().isEmpty) {
-                          _toggleExpanded(false);
-                        }
-                      },
-                    )
-                  : Semantics(
-                      label: '搜索',
-                      button: true,
-                      child: IconButton(
-                        enableFeedback: false,
-                        onPressed: () => _toggleExpanded(true),
-                        icon: Icon(
-                          Symbols.search_rounded,
-                          size: 20,
-                          color: scheme.onSurface.withValues(alpha: 0.68),
-                        ),
-                      ),
-                    ),
+                ),
+              ),
             ),
           ),
         ),
@@ -297,6 +529,95 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SuggestionSectionHeader extends StatelessWidget {
+  const _SuggestionSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurfaceVariant.withValues(alpha: 0.78),
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionRow extends StatelessWidget {
+  const _SuggestionRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: scheme.primary.withValues(alpha: 0.85),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

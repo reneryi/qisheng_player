@@ -729,6 +729,8 @@ class _CenteredLyricView extends StatefulWidget {
 }
 
 class _CenteredLyricViewState extends State<_CenteredLyricView> {
+  static const _manualScrollCooldown = Duration(milliseconds: 3500);
+
   late final PlaybackController playbackService;
   late final LyricController lyricService;
   final ScrollController scrollController = ScrollController();
@@ -743,6 +745,30 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
   double _baseScale = 1.0; // 记录捏合手势起始时的基础缩放比例
   bool _showScaleIndicator = false; // 是否在界面顶部展示“歌词大小: XXX%”的浮层提示
   Timer? _scaleIndicatorTimer; // 定时器，用于延迟淡出提示胶囊
+
+  // 手动滚词浏览冷却状态（防止用户翻看上下文歌词时被下一句强行拽回）
+  bool _userScrollingHold = false;
+  Timer? _userScrollHoldTimer;
+
+  void _triggerUserScrollHold() {
+    _userScrollHoldTimer?.cancel();
+    if (!_userScrollingHold && mounted) {
+      setState(() => _userScrollingHold = true);
+    }
+    _userScrollHoldTimer = Timer(_manualScrollCooldown, () {
+      if (!mounted) return;
+      setState(() => _userScrollingHold = false);
+      _requestScrollToLine(_currentLineIndex, animated: true);
+    });
+  }
+
+  void _resumeFollowImmediately() {
+    _userScrollHoldTimer?.cancel();
+    if (_userScrollingHold && mounted) {
+      setState(() => _userScrollingHold = false);
+    }
+    _requestScrollToLine(_currentLineIndex, animated: true);
+  }
 
   // 更新缩放比例并触发提示指示器展示的通用方法
   void _updateScale(double newScale) {
@@ -816,19 +842,25 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     if (!mounted || widget.lyric.lines.isEmpty) return;
     final safeIndex = index.clamp(0, widget.lyric.lines.length - 1).toInt();
     if (_currentLineIndex == safeIndex) {
-      _requestScrollToLine(safeIndex, animated: true);
+      if (!_userScrollingHold) {
+        _requestScrollToLine(safeIndex, animated: true);
+      }
       return;
     }
     setState(() {
       _currentLineIndex = safeIndex;
     });
-    _requestScrollToLine(safeIndex, animated: true);
+    if (!_userScrollingHold) {
+      _requestScrollToLine(safeIndex, animated: true);
+    }
   }
 
   @override
   void didUpdateWidget(covariant _CenteredLyricView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lyric == widget.lyric) return;
+    _userScrollHoldTimer?.cancel();
+    _userScrollingHold = false;
     _syncLineKeys();
     _currentLineIndex = widget.lyric.lines.isEmpty
         ? 0
@@ -1012,35 +1044,50 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             text: TextSpan(
               children: [
                 for (final word in line.words)
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.baseline,
-                    baseline: TextBaseline.alphabetic,
-                    child: ShaderMask(
-                      blendMode: BlendMode.srcIn,
-                      shaderCallback: (bounds) {
-                        final lengthMs = word.length.inMilliseconds;
-                        final progress = lengthMs <= 0
-                            ? (positionMs >= word.start.inMilliseconds
-                                ? 1.0
-                                : 0.0)
-                            : ((positionMs - word.start.inMilliseconds) /
-                                    lengthMs)
-                                .clamp(0.0, 1.0)
-                                .toDouble();
-                        return LinearGradient(
-                          colors: [
-                            scheme.primary,
-                            scheme.primary,
-                            lineColor.withValues(alpha: 0.42),
-                            lineColor.withValues(alpha: 0.42),
-                          ],
-                          stops: [0, progress, progress, 1],
-                        ).createShader(bounds);
-                      },
-                      child: Text(word.content,
-                          style: style, textAlign: TextAlign.left),
-                    ),
-                  ),
+                  () {
+                    final lengthMs = word.length.inMilliseconds;
+                    final progress = lengthMs <= 0
+                        ? (positionMs >= word.start.inMilliseconds
+                            ? 1.0
+                            : 0.0)
+                        : ((positionMs - word.start.inMilliseconds) /
+                                lengthMs)
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                    final isSinging = progress > 0.0 && progress < 1.0;
+                    final floatOffset = (isSinging && lengthMs >= 650)
+                        ? -1.5 * math.sin(progress * math.pi)
+                        : 0.0;
+                    final leftStop = (progress - 0.08).clamp(0.0, 1.0);
+                    final rightStop = (progress + 0.08).clamp(0.0, 1.0);
+
+                    return WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: Transform.translate(
+                        offset: Offset(0, floatOffset),
+                        child: ShaderMask(
+                          blendMode: BlendMode.srcIn,
+                          shaderCallback: (bounds) {
+                            return LinearGradient(
+                              colors: [
+                                scheme.primary,
+                                scheme.primary,
+                                lineColor.withValues(alpha: 0.42),
+                                lineColor.withValues(alpha: 0.42),
+                              ],
+                              stops: [0.0, leftStop, rightStop, 1.0],
+                            ).createShader(bounds);
+                          },
+                          child: Text(
+                            word.content,
+                            style: style,
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                      ),
+                    );
+                  }(),
               ],
             ),
           );
@@ -1084,10 +1131,9 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             _updateScale(_baseScale * details.scale);
           },
           child: Listener(
-            // 捕获桌面端特有的 Ctrl + 鼠标滚轮快捷缩放手势
+            // 捕获桌面端特有的 Ctrl + 鼠标滚轮快捷缩放手势与普通滚轮手动浏览冷却
             onPointerSignal: (pointerSignal) {
               if (pointerSignal is PointerScrollEvent) {
-                // 判断硬件键盘的 Control 键是否被按下
                 final isCtrlPressed =
                     HardwareKeyboard.instance.isControlPressed;
                 if (isCtrlPressed) {
@@ -1095,6 +1141,8 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                   final change =
                       pointerSignal.scrollDelta.dy < 0 ? 0.08 : -0.08;
                   _updateScale(_fontScale + change);
+                } else {
+                  _triggerUserScrollHold();
                 }
               }
             },
@@ -1108,137 +1156,137 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
                         .clamp(0, widget.lyric.lines.length - 1)];
                     final verticalPadding = _verticalPaddingFor(currentLine);
                     final lyricListView = ListView.builder(
-                        controller: scrollController,
-                        padding: EdgeInsets.symmetric(
-                          vertical: verticalPadding,
-                          horizontal: widget.compact ? 20 : 48, // 增加左侧缩进呼吸空间
-                        ),
-                        itemCount: widget.lyric.lines.length,
-                        itemBuilder: (context, index) {
-                          final line = widget.lyric.lines[index];
-                          final isCurrent = index == _currentLineIndex;
-                          final translation = _translationText(line);
-                          final lineColor = _lineColor(
-                            scheme,
-                            index: index,
-                            isCurrent: isCurrent,
-                          );
+                      controller: scrollController,
+                      padding: EdgeInsets.symmetric(
+                        vertical: verticalPadding,
+                        horizontal: widget.compact ? 20 : 48, // 增加左侧缩进呼吸空间
+                      ),
+                      itemCount: widget.lyric.lines.length,
+                      itemBuilder: (context, index) {
+                        final line = widget.lyric.lines[index];
+                        final isCurrent = index == _currentLineIndex;
+                        final translation = _translationText(line);
+                        final lineColor = _lineColor(
+                          scheme,
+                          index: index,
+                          isCurrent: isCurrent,
+                        );
 
-                          final distanceFromCurrent =
-                              (index - _currentLineIndex).abs();
-                          final isPast = index < _currentLineIndex;
+                        final distanceFromCurrent =
+                            (index - _currentLineIndex).abs();
+                        final isPast = index < _currentLineIndex;
 
-                          final isHovered = _hoveredIndex == index && !isCurrent;
-                          return KeyedSubtree(
-                            key: _lineKeys[index],
-                            child: AnimatedOpacity(
-                              duration: motion.controlTransitionDuration,
-                              curve: motion.fast,
-                              opacity: isHovered
-                                  ? 0.95
-                                  : _lineOpacity(
-                                      index: index,
-                                      isCurrent: isCurrent,
-                                      depthBlurEnabled: AppSettings
-                                          .instance.lyricDepthBlur,
-                                    ),
-                              child: LyricLineMotion(
-                                isCurrent: isCurrent,
-                                distanceFromCurrent: distanceFromCurrent,
-                                alignment: Alignment.centerLeft,
-                                child: InkWell(
-                                  enableFeedback: false,
-                                  borderRadius: BorderRadius.circular(24),
-                                  onTap: () {
-                                    playbackService.seek(
-                                        line.start.inMilliseconds / 1000.0);
-                                  },
-                                  onHover: (hovered) {
-                                    if (hovered && _hoveredIndex != index) {
-                                      setState(() => _hoveredIndex = index);
-                                    } else if (!hovered && _hoveredIndex == index) {
-                                      setState(() => _hoveredIndex = null);
-                                    }
-                                  },
-                                  child: ValueListenableBuilder<bool>(
-                                    valueListenable: AppSettings
-                                        .instance.lyricDepthBlurNotifier,
-                                    builder: (context, depthBlurEnabled, _) {
-                                      final depthBlurSigma =
-                                          resolveLyricDepthBlurSigma(
-                                        distanceFromCurrent:
-                                            distanceFromCurrent,
-                                        enabled: depthBlurEnabled,
-                                        effectsLevel: AppSettings
-                                            .instance.uiEffectsLevel,
-                                        blurAdjacent: true,
-                                        isPastLine: isPast,
-                                        isHovered: isHovered,
-                                      );
-
-                                      final content = AnimatedPadding(
-                                        duration:
-                                            motion.controlTransitionDuration,
-                                        curve: motion.normal,
-                                        padding: EdgeInsets.symmetric(
-                                          vertical: isCurrent ? 16 : 10,
-                                          horizontal: 12,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment
-                                              .start, // 杂志排版：歌词左对齐
-                                          children: [
-                                            _primaryLineWidget(
-                                              line: line,
-                                              isCurrent: isCurrent,
-                                              lineColor: lineColor,
-                                              scheme: scheme,
-                                            ),
-                                            if (_showTranslation(line)) ...[
-                                              const SizedBox(height: 8),
-                                              AnimatedDefaultTextStyle(
-                                                duration: motion
-                                                    .controlTransitionDuration,
-                                                curve: motion.fast,
-                                                style: TextStyle(
-                                                  color: isCurrent
-                                                      ? scheme.onSurface
-                                                          .withValues(
-                                                              alpha: 0.74)
-                                                      : lineColor.withValues(
-                                                          alpha: 0.74),
-                                                  fontSize:
-                                                      _translationFontSize,
-                                                  fontWeight: FontWeight.w400,
-                                                  height: 1.25,
-                                                ),
-                                                textAlign:
-                                                    TextAlign.left, // 翻译行左对齐
-                                                child: Text(
-                                                  translation,
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      );
-
-                                      return AnimatedLyricDepthBlur(
-                                        sigma: depthBlurSigma,
-                                        duration:
-                                            motion.controlTransitionDuration,
-                                        curve: motion.normal,
-                                        child: content,
-                                      );
-                                    },
+                        final isHovered = _hoveredIndex == index && !isCurrent;
+                        return KeyedSubtree(
+                          key: _lineKeys[index],
+                          child: AnimatedOpacity(
+                            duration: motion.controlTransitionDuration,
+                            curve: motion.fast,
+                            opacity: isHovered
+                                ? 0.95
+                                : _lineOpacity(
+                                    index: index,
+                                    isCurrent: isCurrent,
+                                    depthBlurEnabled:
+                                        AppSettings.instance.lyricDepthBlur,
                                   ),
+                            child: LyricLineMotion(
+                              isCurrent: isCurrent,
+                              distanceFromCurrent: distanceFromCurrent,
+                              alignment: Alignment.centerLeft,
+                              child: InkWell(
+                                enableFeedback: false,
+                                borderRadius: BorderRadius.circular(24),
+                                onTap: () {
+                                  _userScrollHoldTimer?.cancel();
+                                  _userScrollingHold = false;
+                                  playbackService.seek(
+                                      line.start.inMilliseconds / 1000.0);
+                                },
+                                onHover: (hovered) {
+                                  if (hovered && _hoveredIndex != index) {
+                                    setState(() => _hoveredIndex = index);
+                                  } else if (!hovered &&
+                                      _hoveredIndex == index) {
+                                    setState(() => _hoveredIndex = null);
+                                  }
+                                },
+                                child: ValueListenableBuilder<bool>(
+                                  valueListenable: AppSettings
+                                      .instance.lyricDepthBlurNotifier,
+                                  builder: (context, depthBlurEnabled, _) {
+                                    final depthBlurSigma =
+                                        resolveLyricDepthBlurSigma(
+                                      distanceFromCurrent: distanceFromCurrent,
+                                      enabled: depthBlurEnabled,
+                                      effectsLevel:
+                                          AppSettings.instance.uiEffectsLevel,
+                                      blurAdjacent: true,
+                                      isPastLine: isPast,
+                                      isHovered: isHovered,
+                                    );
+
+                                    final content = AnimatedPadding(
+                                      duration:
+                                          motion.controlTransitionDuration,
+                                      curve: motion.normal,
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: isCurrent ? 16 : 10,
+                                        horizontal: 12,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment
+                                            .start, // 杂志排版：歌词左对齐
+                                        children: [
+                                          _primaryLineWidget(
+                                            line: line,
+                                            isCurrent: isCurrent,
+                                            lineColor: lineColor,
+                                            scheme: scheme,
+                                          ),
+                                          if (_showTranslation(line)) ...[
+                                            const SizedBox(height: 8),
+                                            AnimatedDefaultTextStyle(
+                                              duration: motion
+                                                  .controlTransitionDuration,
+                                              curve: motion.fast,
+                                              style: TextStyle(
+                                                color: isCurrent
+                                                    ? scheme.onSurface
+                                                        .withValues(alpha: 0.74)
+                                                    : lineColor.withValues(
+                                                        alpha: 0.74),
+                                                fontSize: _translationFontSize,
+                                                fontWeight: FontWeight.w400,
+                                                height: 1.25,
+                                              ),
+                                              textAlign:
+                                                  TextAlign.left, // 翻译行左对齐
+                                              child: Text(
+                                                translation,
+                                                textAlign: TextAlign.left,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+
+                                    return AnimatedLyricDepthBlur(
+                                      sigma: depthBlurSigma,
+                                      duration:
+                                          motion.controlTransitionDuration,
+                                      curve: motion.normal,
+                                      child: content,
+                                    );
+                                  },
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      );
+                          ),
+                        );
+                      },
+                    );
 
                     final effectiveList = AppSettings.instance.uiEffectsLevel ==
                             UiEffectsLevel.performance
@@ -1272,6 +1320,57 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
             ),
           ),
         ),
+        if (_userScrollingHold)
+          Positioned(
+            bottom: 20,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                key: const ValueKey('centered-lyric-resume-follow-pill'),
+                borderRadius: BorderRadius.circular(20),
+                onTap: _resumeFollowImmediately,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh.withValues(alpha: 0.86),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: 0.35),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Symbols.my_location_rounded,
+                        size: 15,
+                        color: scheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '恢复跟随当前歌词',
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         // 精致的高斯毛玻璃风格缩放比例提示胶囊组件 (惰性挂载，闲置期彻底卸载 BackdropFilter)
         Positioned(
           top: 32,
@@ -1336,6 +1435,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
 
   @override
   void dispose() {
+    _userScrollHoldTimer?.cancel();
     _scaleIndicatorTimer?.cancel(); // 清理缩放指示指示器可能残存的定时器
     AppSettings.instance.lyricDepthBlurNotifier
         .removeListener(_onDepthBlurSettingChanged);

@@ -2,13 +2,17 @@ import 'dart:async';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_preference.dart';
+import 'package:qisheng_player/component/now_playing_navigation.dart';
 import 'package:qisheng_player/lyric/lrc.dart';
 import 'package:qisheng_player/lyric/lyric.dart';
 import 'package:qisheng_player/lyric/lyric_line_parser.dart';
+import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 class HorizontalLyricView extends StatelessWidget {
@@ -120,6 +124,27 @@ class _LyricHorizontalScrollAreaState
     return "开始播放音乐";
   }
 
+  void _handleTap(BuildContext context) {
+    try {
+      if (isNowPlayingRoute(context)) {
+        final navigation = AppNavigationState.instance;
+        navigation.closeNowPlaying(
+          context,
+          fallback: navigation.lastShellLocation,
+        );
+      } else {
+        openNowPlayingRoute(context);
+      }
+    } catch (_) {}
+  }
+
+  void _handleCopyLyric() {
+    final text = currContent.trim();
+    if (text.isEmpty || text == "开始播放音乐") return;
+    Clipboard.setData(ClipboardData(text: text));
+    showTextOnSnackBar("已复制当前歌词：$text");
+  }
+
   @override
   void initState() {
     super.initState();
@@ -198,64 +223,71 @@ class _LyricHorizontalScrollAreaState
             : const Duration(milliseconds: 100);
 
     return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: SingleChildScrollView(
-          controller: scrollController,
-          scrollDirection: Axis.horizontal,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: AnimatedSwitcher(
-              duration: transitionDuration,
-              reverseDuration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 120),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                // 顶栏歌词切换：平稳向上的 0.2 微滑入 + 优雅淡入，彻底消除颠簸
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: enableMotion
-                          ? const Offset(0.0, 0.25)
-                          : Offset.zero,
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => _handleTap(context),
+        onSecondaryTap: _handleCopyLyric,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            scrollDirection: Axis.horizontal,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: AnimatedSwitcher(
+                duration: transitionDuration,
+                reverseDuration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 120),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  // 顶栏歌词切换：平稳向上的 0.2 微滑入 + 优雅淡入，彻底消除颠簸
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: enableMotion
+                            ? const Offset(0.0, 0.25)
+                            : Offset.zero,
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
                       ),
-                    ),
-                    child: child,
-                  ),
-                );
-              },
-              child: Builder(
-                builder: (context) {
-                  final isCredit = LyricLineParser.parse(currContent).isCredit;
-                  return Text(
-                    currContent,
-                    key: ValueKey(currContent),
-                    style: TextStyle(
-                      color: isCredit
-                          ? scheme.onSurface.withValues(alpha: 0.68)
-                          : scheme.onSurface,
-                      fontSize: 14,
-                      fontWeight: isCredit ? FontWeight.w400 : FontWeight.w600,
-                      letterSpacing: 0,
-                      shadows: isCredit
-                          ? null
-                          : [
-                              Shadow(
-                                color: scheme.primary.withValues(alpha: 0.16),
-                                blurRadius: 4,
-                              ),
-                            ],
+                      child: child,
                     ),
                   );
                 },
+                child: Builder(
+                  builder: (context) {
+                    final isCredit =
+                        LyricLineParser.parse(currContent).isCredit;
+                    return Text(
+                      currContent,
+                      key: ValueKey(currContent),
+                      style: TextStyle(
+                        color: isCredit
+                            ? scheme.onSurface.withValues(alpha: 0.68)
+                            : scheme.onSurface,
+                        fontSize: 14,
+                        fontWeight:
+                            isCredit ? FontWeight.w400 : FontWeight.w600,
+                        letterSpacing: 0,
+                        shadows: isCredit
+                            ? null
+                            : [
+                                Shadow(
+                                  color: scheme.primary.withValues(alpha: 0.16),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),

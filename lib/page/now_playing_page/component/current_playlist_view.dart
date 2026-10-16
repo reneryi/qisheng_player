@@ -1,7 +1,12 @@
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:qisheng_player/app_settings.dart';
+import 'package:qisheng_player/component/ui/modern_dialog.dart';
+import 'package:qisheng_player/library/playlist.dart';
+import 'package:qisheng_player/page/playlists_page.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/src/bass/bass_player.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,6 +43,40 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
     );
   }
 
+  Future<void> _saveQueueAsPlaylist(BuildContext context) async {
+    final queue = playbackService.playlist.value;
+    if (queue.isEmpty) {
+      showTextOnSnackBar('当前队列为空，无法保存为歌单');
+      return;
+    }
+    final existingNames = PLAYLISTS.map((e) => e.name).toList();
+    final name = await showModernDialog<String>(
+      context: context,
+      builder: (context) => NewPlaylistDialog(existingNames: existingNames),
+    );
+    if (name == null || name.trim().isEmpty) return;
+    final trimmedName = name.trim();
+    PLAYLISTS.add(
+      Playlist(
+        trimmedName,
+        {for (final audio in queue) audio.path: audio},
+      ),
+    );
+    scheduleSavePlaylists();
+    showTextOnSnackBar('已将当前队列存为歌单“$trimmedName”（共 ${queue.length} 首）');
+  }
+
+  static String _formatRemainingDuration(int totalSeconds) {
+    if (totalSeconds <= 0) return '0:00';
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,13 +99,81 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
           if (widget.showHeader)
             Padding(
               padding: const EdgeInsets.only(left: 8, right: 8, bottom: 10),
-              child: Text(
-                '当前队列',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: widget.dense ? 18 : 22,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: ListenableBuilder(
+                listenable: playbackService,
+                builder: (context, _) {
+                  final queue = playbackService.playlist.value;
+                  final currentIdx = playbackService.playlistIndex.clamp(
+                    0,
+                    queue.isEmpty ? 0 : queue.length - 1,
+                  );
+                  var remainingSec = 0;
+                  for (var i = currentIdx; i < queue.length; i++) {
+                    remainingSec += queue[i].duration;
+                  }
+                  return Row(
+                    children: [
+                      Text(
+                        '当前队列',
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: widget.dense ? 18 : 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (queue.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: scheme.primary.withValues(alpha: 0.24),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            '${queue.length} 首 · 约 ${_formatRemainingDuration(remainingSec)}',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: scheme.primary,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: '定位当前播放',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: queue.isEmpty ? null : _toNowPlaying,
+                        icon: Icon(
+                          Icons.my_location_rounded,
+                          size: 18,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '将队列存为新歌单',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: queue.isEmpty
+                            ? null
+                            : () => _saveQueueAsPlaylist(context),
+                        icon: Icon(
+                          Symbols.playlist_add_rounded,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           Expanded(
@@ -177,6 +284,13 @@ class _PlaylistViewItem extends StatelessWidget {
   final bool isCurrent;
   final bool enableReorder;
 
+  static String _formatTrackDuration(int seconds) {
+    if (seconds <= 0) return '';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final playbackService = context.read<PlaybackController>();
@@ -195,6 +309,7 @@ class _PlaylistViewItem extends StatelessWidget {
     final Color targetBorderColor = isHighlight
         ? scheme.primary.withValues(alpha: isDark ? 0.38 : 0.28)
         : Colors.transparent;
+    final durationText = _formatTrackDuration(item.duration);
 
     final itemTile = Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
@@ -271,7 +386,21 @@ class _PlaylistViewItem extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (enableReorder)
+                  if (durationText.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      durationText,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isCurrent
+                            ? scheme.primary.withValues(alpha: 0.82)
+                            : scheme.onSurface.withValues(alpha: 0.46),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                  if (enableReorder) ...[
+                    const SizedBox(width: 6),
                     MouseRegion(
                       cursor: SystemMouseCursors.grab,
                       child: ReorderableDragStartListener(
@@ -285,6 +414,7 @@ class _PlaylistViewItem extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),

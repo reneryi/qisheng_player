@@ -64,6 +64,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
   double? _lastMeshDarkness;
   AlbumPalette? _cachedMeshModePalette;
   List<Color>? _cachedMeshBaseGradient;
+  double _smoothedMeshBassEnergy = 0.0;
 
   // 独立多波源水波纹物理管理器 (0 setState，纯 GPU 驱动)
   final WaterRippleManager _rippleManager = WaterRippleManager();
@@ -444,6 +445,22 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
             );
           }
 
+          // 采样低频 Sub-Bass 频谱能量，以一阶低通滤波驱动流彩涡流强度与光斑呼吸半径
+          var rawBass = 0.0;
+          try {
+            final spectrum =
+                PlayService.instance.playbackService.audioSpectrum.value;
+            if (spectrum.isNotEmpty) {
+              final count = math.min(spectrum.length, 4);
+              for (var i = 0; i < count; i++) {
+                rawBass += spectrum[i];
+              }
+              rawBass = (rawBass / count).clamp(0.0, 1.0);
+            }
+          } catch (_) {}
+          _smoothedMeshBassEnergy =
+              (_smoothedMeshBassEnergy * 0.82 + rawBass * 0.18).clamp(0.0, 1.0);
+
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -464,6 +481,7 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
                   palette: modePalette,
                   darkness: darkness,
                   baseGradient: meshBaseGradient,
+                  bassEnergy: _smoothedMeshBassEnergy,
                 ),
               ),
             ],
@@ -583,6 +601,7 @@ class _MeshFlowPainter extends CustomPainter {
     double? darkness,
     bool? isDark,
     required this.baseGradient,
+    this.bassEnergy = 0.0,
   }) : darkness = darkness ?? (isDark == true ? 1.0 : 0.0);
 
   final ui.FragmentProgram program;
@@ -590,6 +609,7 @@ class _MeshFlowPainter extends CustomPainter {
   final AlbumPalette palette;
   final double darkness;
   final List<Color> baseGradient;
+  final double bassEnergy;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -652,8 +672,9 @@ class _MeshFlowPainter extends CustomPainter {
     shader.setFloat(37, darkness.clamp(0.0, 1.0));
     shader.setFloat(38, 1.0); // 强度
 
-    const warpStrength = 1.0;
-    const blobScale = 1.0;
+    final clampedBass = bassEnergy.isFinite ? bassEnergy.clamp(0.0, 1.0) : 0.0;
+    final warpStrength = 1.0 + clampedBass * 0.35;
+    final blobScale = 1.0 + clampedBass * 0.08;
     const layerMix = 0.55;
     const luminanceLimit = 0.54;
     shader.setFloat(39, warpStrength);

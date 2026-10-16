@@ -12,8 +12,10 @@ import 'package:qisheng_player/page/now_playing_page/page.dart';
 import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:flutter/gestures.dart'; // 引入 gestures 包用于拦截鼠标滚轮信号
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'; // 引入 services 包用于检测 Ctrl 键盘状态
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 const _compactLyricFocusAlignment = 0.25;
@@ -336,6 +338,8 @@ class _VerticalLyricScrollView extends StatefulWidget {
 }
 
 class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
+  static const _manualScrollCooldown = Duration(milliseconds: 3500);
+
   final playbackService = PlayService.instance.playbackService;
   final lyricService = PlayService.instance.lyricService;
   late StreamSubscription lyricLineStreamSubscription;
@@ -348,6 +352,10 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   int? _lastSafeIndex;
   DateTime _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // 手动滚词浏览冷却状态（防止用户翻看上下文歌词时被下一句强行拽回）
+  bool _userScrollingHold = false;
+  Timer? _userScrollHoldTimer;
+
   @override
   void initState() {
     super.initState();
@@ -358,6 +366,32 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         lyricService.lyricLineStream.listen(_updateNextLyricLine);
     AppSettings.instance.lyricDepthBlurNotifier
         .addListener(_onDepthBlurSettingChanged);
+  }
+
+  void _triggerUserScrollHold() {
+    _userScrollHoldTimer?.cancel();
+    if (!_userScrollingHold && mounted) {
+      setState(() {
+        _userScrollingHold = true;
+      });
+    }
+    _userScrollHoldTimer = Timer(_manualScrollCooldown, () {
+      if (!mounted) return;
+      setState(() {
+        _userScrollingHold = false;
+      });
+      _scrollCurrentLyricIntoView(animated: true);
+    });
+  }
+
+  void _resumeFollowImmediately() {
+    _userScrollHoldTimer?.cancel();
+    if (_userScrollingHold && mounted) {
+      setState(() {
+        _userScrollingHold = false;
+      });
+    }
+    _scrollCurrentLyricIntoView(animated: true);
   }
 
   @override
@@ -431,6 +465,8 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       }
       return;
     }
+    _userScrollHoldTimer?.cancel();
+    _userScrollingHold = false;
     _lineKeys = List.generate(widget.lyric.lines.length, (_) => GlobalKey());
     _lastSafeIndex = null;
     _lastLyricUpdateAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -438,6 +474,8 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
   }
 
   void _seekToLyricLine(int i) {
+    _userScrollHoldTimer?.cancel();
+    _userScrollingHold = false;
     playbackService.seek(widget.lyric.lines[i].start.inMilliseconds / 1000);
     setState(() {
       _lastSafeIndex = i;
@@ -489,6 +527,9 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     _lastLyricUpdateAt = now;
     lyricTiles = _generateLyricTiles(safeIndex);
     setState(() {});
+
+    // 当用户正在手动浏览上下句歌词时，仅更新高亮行而不强制打断滚动视口
+    if (_userScrollingHold) return;
 
     _scrollCurrentLyricIntoView(animated: !isLargeJump, jumpFast: isLargeJump);
   }
@@ -559,20 +600,37 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
 
   @override
   Widget build(BuildContext context) {
-    final scrollWidget = CustomScrollView(
-      controller: scrollController,
-      slivers: [
-        const SliverFillRemaining(),
-        SliverToBoxAdapter(
-          child: RepaintBoundary(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: lyricTiles,
+    final scheme = Theme.of(context).colorScheme;
+    final scrollWidget = Listener(
+      onPointerSignal: (signal) {
+        if (signal is PointerScrollEvent &&
+            !HardwareKeyboard.instance.isControlPressed) {
+          _triggerUserScrollHold();
+        }
+      },
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: (notification) {
+          if (notification.direction != ScrollDirection.idle) {
+            _triggerUserScrollHold();
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          controller: scrollController,
+          slivers: [
+            const SliverFillRemaining(),
+            SliverToBoxAdapter(
+              child: RepaintBoundary(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: lyricTiles,
+                ),
+              ),
             ),
-          ),
+            const SliverFillRemaining(),
+          ],
         ),
-        const SliverFillRemaining(),
-      ],
+      ),
     );
 
     final effectiveWidget = AppSettings.instance.uiEffectsLevel ==
@@ -597,12 +655,72 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
           );
 
     return RepaintBoundary(
-      child: effectiveWidget,
+      child: Stack(
+        children: [
+          effectiveWidget,
+          if (_userScrollingHold)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 18.0),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: const ValueKey('lyric-resume-follow-pill'),
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _resumeFollowImmediately,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHigh
+                            .withValues(alpha: 0.86),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.35),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.16),
+                            blurRadius: 12,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Symbols.my_location_rounded,
+                            size: 15,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '恢复跟随当前歌词',
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   @override
   void dispose() {
+    _userScrollHoldTimer?.cancel();
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatusChanged);
     AppSettings.instance.lyricDepthBlurNotifier
         .removeListener(_onDepthBlurSettingChanged);

@@ -217,28 +217,37 @@ class _SyncLineContent extends StatelessWidget {
                   style: inactiveStyle,
                 ));
               } else {
-                // 正在演唱中：全行唯一活跃的平滑字内擦除 ShaderMask
+                // 正在演唱中：软边缘羽化字内擦除 + 长音字呼吸上浮与辉光膨胀
                 final progress =
                     ((posInMs - wordStart) / wordLength).clamp(0.0, 1.0);
+                final isSustained = wordLength >= 650;
+                final floatOffset =
+                    isSustained ? -1.5 * sin(progress * pi) : 0.0;
+                final leftStop = (progress - 0.08).clamp(0.0, 1.0);
+                final rightStop = (progress + 0.08).clamp(0.0, 1.0);
+
                 wordSpans.add(WidgetSpan(
                   alignment: PlaceholderAlignment.baseline,
                   baseline: TextBaseline.alphabetic,
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) {
-                      return LinearGradient(
-                        colors: [
-                          scheme.primary,
-                          scheme.primary,
-                          scheme.primary.withValues(alpha: 0.28),
-                          scheme.primary.withValues(alpha: 0.28),
-                        ],
-                        stops: [0, progress, progress, 1],
-                      ).createShader(bounds);
-                    },
-                    child: Text(
-                      word.content,
-                      style: mainStyle,
+                  child: Transform.translate(
+                    offset: Offset(0, floatOffset),
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) {
+                        return LinearGradient(
+                          colors: [
+                            scheme.primary,
+                            scheme.primary,
+                            scheme.primary.withValues(alpha: 0.28),
+                            scheme.primary.withValues(alpha: 0.28),
+                          ],
+                          stops: [0.0, leftStop, rightStop, 1.0],
+                        ).createShader(bounds);
+                      },
+                      child: Text(
+                        word.content,
+                        style: mainStyle,
+                      ),
                     ),
                   ),
                 ));
@@ -453,7 +462,8 @@ class _LrcLineContent extends StatelessWidget {
                     alpha: isPastLine ? 0.88 : 0.72,
                   )),
         fontSize: (!isCredit && isMainLine) ? fontSize + 4 : fontSize,
-        fontWeight: (!isCredit && isMainLine) ? FontWeight.w700 : FontWeight.w400,
+        fontWeight:
+            (!isCredit && isMainLine) ? FontWeight.w700 : FontWeight.w400,
         height: isMainLine ? 1.28 : 1.3,
         shadows: (!isCredit && isMainLine)
             ? [
@@ -498,7 +508,6 @@ class _LrcLineContent extends StatelessWidget {
 }
 
 /// 歌词间奏表示
-/// lrcLine 鍜?syncLine 蹇呴』鏈変笖鍙湁涓€涓笉涓虹┖
 class LyricTransitionTile extends StatefulWidget {
   final LrcLine? lrcLine;
   final SyncLyricLine? syncLine;

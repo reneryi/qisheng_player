@@ -8,6 +8,7 @@ import 'package:qisheng_player/library/artwork_store.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
 import 'package:qisheng_player/page/uni_page.dart';
+import 'package:qisheng_player/play_service/play_service.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
 import 'package:qisheng_player/utils.dart';
 
@@ -112,10 +113,20 @@ class _ArtistGridTileState extends State<ArtistGridTile> {
     }
   }
 
+  String _buildSubtitle() {
+    final workCount = widget.artist.works.length;
+    final albumCount = widget.artist.albumsMap.length;
+    if (albumCount > 0) {
+      return '${formatWorkCount(workCount)} · $albumCount 张专辑';
+    }
+    return formatWorkCount(workCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     final listenable = widget.multiSelectController != null
-        ? Listenable.merge([ArtworkStore.instance, widget.multiSelectController!])
+        ? Listenable.merge(
+            [ArtworkStore.instance, widget.multiSelectController!])
         : ArtworkStore.instance;
 
     return RepaintBoundary(
@@ -254,6 +265,51 @@ class _ArtistGridTileState extends State<ArtistGridTile> {
                             )
                           : null,
                     ),
+                  )
+                else if (widget.artist.works.isNotEmpty)
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: Semantics(
+                      label: '播放艺术家作品',
+                      button: true,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            final works =
+                                List<Audio>.from(widget.artist.works);
+                            if (works.isNotEmpty) {
+                              PlayService.instance.playbackService
+                                  .play(0, works);
+                            }
+                          },
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: scheme.surfaceContainerHighest
+                                  .withValues(alpha: isDark ? 0.82 : 0.90),
+                              border: Border.all(
+                                color: scheme.primary.withValues(
+                                  alpha: isDark ? 0.40 : 0.28,
+                                ),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Symbols.play_arrow_rounded,
+                                size: 17,
+                                color: scheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -279,7 +335,7 @@ class _ArtistGridTileState extends State<ArtistGridTile> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  formatWorkCount(widget.artist.works.length),
+                  _buildSubtitle(),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -317,7 +373,8 @@ class _ArtistAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final cached = artist.cachedPicture ?? ArtworkStore.instance.cached(artist.id);
+    final cached =
+        artist.cachedPicture ?? ArtworkStore.instance.cached(artist.id);
     if (cached != null) {
       return _buildAvatarContent(context, cached, scheme);
     }

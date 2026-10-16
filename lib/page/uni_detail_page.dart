@@ -34,6 +34,9 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
     this.multiSelectViewActions,
     this.primaryPicHeroTag,
     this.artworkActions = const [],
+    this.headerBadges = const [],
+    this.onPlayAll,
+    this.onShufflePlay,
   });
 
   final List<Widget> artworkActions;
@@ -58,6 +61,9 @@ class UniDetailPage<P, S, T> extends StatefulWidget {
   final List<SortMethodDesc<S>>? sortMethods;
   final MultiSelectController<S>? multiSelectController;
   final List<Widget>? multiSelectViewActions;
+  final List<String> headerBadges;
+  final VoidCallback? onPlayAll;
+  final VoidCallback? onShufflePlay;
 
   @override
   State<UniDetailPage<P, S, T>> createState() => _UniDetailPageState<P, S, T>();
@@ -211,6 +217,9 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
               heroTag: widget.primaryPicHeroTag,
               title: widget.title,
               subtitle: widget.subtitle,
+              badges: widget.headerBadges,
+              onPlayAll: widget.onPlayAll,
+              onShufflePlay: widget.onShufflePlay,
             ),
           ),
           const SizedBox(height: 16),
@@ -258,30 +267,64 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
                           ),
                         ),
                     },
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 18, 8, 10),
-                        child: Text(
-                          widget.tertiaryContentTitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                    if (widget.tertiaryContent.isNotEmpty) ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 20, 8, 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                widget.tertiaryContentTitle,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${widget.tertiaryContent.length}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    SliverList.builder(
-                      itemCount: widget.tertiaryContent.length,
-                      itemBuilder: (context, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: widget.tertiaryContentBuilder(
+                      SliverGrid.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 280,
+                          mainAxisExtent: 64,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                        ),
+                        itemCount: widget.tertiaryContent.length,
+                        itemBuilder: (context, i) =>
+                            widget.tertiaryContentBuilder(
                           context,
                           widget.tertiaryContent[i],
                           i,
                           null,
                         ),
                       ),
-                    ),
+                    ],
                     const SliverPadding(
                       padding: EdgeInsets.only(bottom: 32),
                     ),
@@ -306,6 +349,9 @@ class _UniDetailPageHeader extends StatelessWidget {
     this.heroTag,
     required this.title,
     required this.subtitle,
+    this.badges = const [],
+    this.onPlayAll,
+    this.onShufflePlay,
   });
 
   final Future<ImageProvider?> pic;
@@ -314,6 +360,9 @@ class _UniDetailPageHeader extends StatelessWidget {
   final String? heroTag;
   final String title;
   final String subtitle;
+  final List<String> badges;
+  final VoidCallback? onPlayAll;
+  final VoidCallback? onShufflePlay;
 
   @override
   Widget build(BuildContext context) {
@@ -394,13 +443,51 @@ class _UniDetailPageHeader extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 760;
-              final artworkSize = compact ? 104.0 : 132.0;
+              final artworkSize = compact ? 104.0 : 136.0;
               final artwork = _HeaderArtwork(
                 pic: pic,
                 picShape: picShape,
                 heroTag: heroTag,
                 size: artworkSize,
               );
+
+              final badgePills = badges.isEmpty
+                  ? null
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      alignment:
+                          compact ? WrapAlignment.center : WrapAlignment.start,
+                      children: [
+                        for (final badge in badges)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.09)
+                                  : Colors.black.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.14)
+                                    : Colors.black.withValues(alpha: 0.08),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              badge,
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.88),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
 
               final textBlock = Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -432,25 +519,94 @@ class _UniDetailPageHeader extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (badgePills != null) ...[
+                    const SizedBox(height: 12),
+                    badgePills,
+                  ],
                 ],
               );
 
+              final hasQuickActions =
+                  !compact && (onPlayAll != null || onShufflePlay != null);
+
               return Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
                 child: compact
                     ? Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           artwork,
-                          const SizedBox(height: 16),
-                          textBlock,
+                          const SizedBox(height: 14),
+                          Expanded(child: textBlock),
                         ],
                       )
                     : Row(
                         children: [
                           artwork,
-                          const SizedBox(width: 20),
+                          const SizedBox(width: 24),
                           Expanded(child: textBlock),
+                          if (hasQuickActions) ...[
+                            const SizedBox(width: 16),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (onPlayAll != null)
+                                      FilledButton.icon(
+                                        key: const ValueKey(
+                                            'uni-detail-play-all-btn'),
+                                        onPressed: onPlayAll,
+                                        icon: const Icon(
+                                          Symbols.play_arrow_rounded,
+                                          size: 20,
+                                        ),
+                                        label: const Text('播放全部'),
+                                        style: FilledButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 18,
+                                            vertical: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                        ),
+                                      ),
+                                    if (onPlayAll != null &&
+                                        onShufflePlay != null)
+                                      const SizedBox(width: 10),
+                                    if (onShufflePlay != null)
+                                      FilledButton.tonalIcon(
+                                        key: const ValueKey(
+                                            'uni-detail-shuffle-btn'),
+                                        onPressed: onShufflePlay,
+                                        icon: const Icon(
+                                          Symbols.shuffle_rounded,
+                                          size: 18,
+                                        ),
+                                        label: const Text('随机播放'),
+                                        style: FilledButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
               );
