@@ -1738,7 +1738,7 @@ class _FontSelectorState extends State<_FontSelector> {
         maxWidth: 500.0,
         padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
         child: SizedBox(
-          height: 520,
+          height: (MediaQuery.sizeOf(context).height - 108.0).clamp(240.0, 520.0),
           child: _activeFamily != null
               ? _buildSecondaryMenu(context, scheme, theme, _activeFamily!)
               : _buildPrimaryMenu(

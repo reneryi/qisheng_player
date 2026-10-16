@@ -173,13 +173,22 @@ class ModernDialogFrame extends StatelessWidget {
     final isDark = scheme.brightness == Brightness.dark;
     const blurSigma = 24.0;
 
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final verticalMargin = screenHeight < 560 ? 12.0 : 32.0;
+
     return Center(
       child: Material(
         type: MaterialType.transparency,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
+          constraints: BoxConstraints(
+            maxWidth: maxWidth,
+            maxHeight: screenHeight - verticalMargin * 2,
+          ),
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            margin: EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: verticalMargin,
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(surfaces.radiusXxl),
               boxShadow: [

@@ -92,7 +92,7 @@ class __ArtistSeparatorEditDialogState
       maxWidth: 400.0,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       child: SizedBox(
-        height: 380.0,
+        height: (MediaQuery.sizeOf(context).height - 108.0).clamp(200.0, 380.0),
         child: Column(
           children: [
             Row(

@@ -79,7 +79,7 @@ class _ThemePickerDialogState extends State<ThemePickerDialog> {
           ),
           const SizedBox(height: 16.0),
           SizedBox(
-            height: 380,
+            height: (MediaQuery.sizeOf(context).height - 230.0).clamp(180.0, 380.0),
             child: ColorWheelPicker(
               color: selectedColor,
               onChanged: (color) {

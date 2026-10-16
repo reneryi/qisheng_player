@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/library/audio_library.dart';
@@ -33,74 +34,137 @@ class AudioLyricPreviewPanel extends StatelessWidget {
               message: '开始播放后，这里会显示封面、歌曲信息和歌词预览。',
               color: scheme.onSurface,
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: SizedBox(
-                    width: 214,
-                    height: 214,
-                    child: _LyricPreviewArtwork(audio: audio),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  audio.displayTitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  audio.displayArtist,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.7),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Expanded(
-                  child: FutureBuilder<Lyric?>(
-                    future: lyricController.currLyricFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final maxH = constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : 600.0;
+                final maxW = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : 260.0;
+                final ultraCompact = maxH < 340.0;
+                final coverSize = ultraCompact
+                    ? 56.0
+                    : math.min(maxW - 16.0, maxH * 0.35).clamp(84.0, 214.0);
+                final spacing = maxH < 480.0 ? 10.0 : 18.0;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (ultraCompact)
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: coverSize,
+                            height: coverSize,
+                            child: _LyricPreviewArtwork(audio: audio),
                           ),
-                        );
-                      }
-
-                      final lyric = snapshot.data;
-                      if (lyric == null || lyric.lines.isEmpty) {
-                        return _LyricPreviewEmptyState(
-                          icon: Symbols.lyrics_rounded,
-                          title: '暂无歌词',
-                          message: '当前歌曲还没有可用歌词。',
-                          compact: true,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  audio.displayTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  audio.displayArtist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSurface
+                                        .withValues(alpha: 0.7),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      Center(
+                        child: SizedBox(
+                          width: coverSize,
+                          height: coverSize,
+                          child: _LyricPreviewArtwork(audio: audio),
+                        ),
+                      ),
+                      SizedBox(height: spacing),
+                      Text(
+                        audio.displayTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
                           color: scheme.onSurface,
-                        );
-                      }
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        audio.displayArtist,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.7),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: spacing),
+                    Expanded(
+                      child: FutureBuilder<Lyric?>(
+                        future: lyricController.currLyricFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          }
 
-                      return _LyricPreviewLines(
-                        lyric: lyric,
-                        lyricController: lyricController,
-                      );
-                    },
-                  ),
-                ),
-              ],
+                          final lyric = snapshot.data;
+                          if (lyric == null || lyric.lines.isEmpty) {
+                            return _LyricPreviewEmptyState(
+                              icon: Symbols.lyrics_rounded,
+                              title: '暂无歌词',
+                              message: '当前歌曲还没有可用歌词。',
+                              compact: true,
+                              color: scheme.onSurface,
+                            );
+                          }
+
+                          return _LyricPreviewLines(
+                            lyric: lyric,
+                            lyricController: lyricController,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
     );
   }
@@ -303,118 +367,40 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
   }
 
   void _retryJumpToActiveLine({required bool animated, required int attempt}) {
-    if (attempt >= 3) return;
-    Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)), () {
+    if (attempt >= 4) return;
+    Future<void>.delayed(Duration(milliseconds: 50 * (attempt + 1)), () {
       if (!mounted) return;
       _jumpToActiveLine(animated: animated, attempt: attempt + 1);
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final verticalPadding = constraints.maxHeight.isFinite
-            ? (constraints.maxHeight * 0.42).clamp(24.0, 160.0).toDouble()
-            : 24.0;
+  String _lineText(LyricLine line) {
+    if (line is SyncLyricLine) {
+      return line.content.trim();
+    }
+    if (line is LrcLine) {
+      return LyricLineParser.parse(line.content).primary;
+    }
+    return '';
+  }
 
-        final scrollWidget = SingleChildScrollView(
-          controller: _scrollController,
-          padding: EdgeInsets.only(
-            top: verticalPadding,
-            bottom: verticalPadding,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(widget.lyric.lines.length, (index) {
-              final entry = _LyricLineEntry.from(widget.lyric.lines[index]);
-              final active = index == _activeLine;
-              final isCredit = entry.isCredit;
+  String _lineTranslation(LyricLine line) {
+    if (line is SyncLyricLine) {
+      return (line.translation ?? '').trim();
+    }
+    if (line is LrcLine) {
+      final parsed = LyricLineParser.parse(line.content);
+      if (parsed.isCredit) return '';
+      return (parsed.translation ?? '').trim();
+    }
+    return '';
+  }
 
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: index == widget.lyric.lines.length - 1
-                      ? 0
-                      : (isCredit ? 6 : 10),
-                ),
-                child: KeyedSubtree(
-                  key: _lineKeys[index],
-                  child: AnimatedDefaultTextStyle(
-                    duration: context.motion.controlTransitionDuration,
-                    curve: context.motion.normal,
-                    style: TextStyle(
-                      color: isCredit
-                          ? scheme.onSurface.withValues(
-                              alpha: active ? 0.70 : 0.42,
-                            )
-                          : (active
-                              ? scheme.onSurface
-                              : scheme.onSurface.withValues(alpha: 0.58)),
-                      fontSize: isCredit
-                          ? 13
-                          : (active ? 15 : 13),
-                      fontWeight: isCredit
-                          ? FontWeight.w400
-                          : (active ? FontWeight.w700 : FontWeight.w400),
-                      height: isCredit ? 1.35 : 1.45,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.primary,
-                          maxLines: isCredit ? 1 : 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (entry.secondary != null) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            entry.secondary!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: active
-                                  ? scheme.onSurface.withValues(alpha: 0.72)
-                                  : scheme.onSurface.withValues(alpha: 0.45),
-                              fontSize: active ? 12 : 11,
-                              fontWeight: FontWeight.w400,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        );
-
-        if (AppSettings.instance.uiEffectsLevel == UiEffectsLevel.performance) {
-          return scrollWidget;
-        }
-
-        return ShaderMask(
-          shaderCallback: (Rect rect) {
-            return const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black,
-                Colors.black,
-                Colors.transparent,
-              ],
-              stops: [0.0, 0.08, 0.92, 1.0],
-            ).createShader(rect);
-          },
-          blendMode: BlendMode.dstIn,
-          child: scrollWidget,
-        );
-      },
-    );
+  bool _isCreditLine(LyricLine line) {
+    if (line is LrcLine) {
+      return LyricLineParser.parse(line.content).isCredit;
+    }
+    return false;
   }
 
   @override
@@ -423,40 +409,104 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
     _scrollController.dispose();
     super.dispose();
   }
-}
 
-class _LyricLineEntry {
-  const _LyricLineEntry({
-    required this.primary,
-    this.secondary,
-    this.isCredit = false,
-  });
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final motion = context.motion;
+    final scrollView = SingleChildScrollView(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: List.generate(widget.lyric.lines.length, (i) {
+          final line = widget.lyric.lines[i];
+          final content = _lineText(line);
+          if (content.isEmpty) {
+            return SizedBox(key: _lineKeys[i], height: 10);
+          }
 
-  final String primary;
-  final String? secondary;
-  final bool isCredit;
+          final active = i == _activeLine;
+          final isCredit = _isCreditLine(line);
+          final translation = _lineTranslation(line);
+          final showTranslation = translation.isNotEmpty;
 
-  factory _LyricLineEntry.from(LyricLine line) {
-    if (line is SyncLyricLine) {
-      return _LyricLineEntry(
-        primary: line.content.trim().isEmpty ? '...' : line.content.trim(),
-        secondary: line.translation?.trim().isEmpty ?? true
-            ? null
-            : line.translation!.trim(),
-        isCredit: false,
-      );
+          return Padding(
+            key: _lineKeys[i],
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: AnimatedContainer(
+              duration: motion.controlTransitionDuration,
+              curve: motion.normal,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: active
+                    ? scheme.primary.withValues(alpha: 0.14)
+                    : Colors.transparent,
+              ),
+              child: AnimatedDefaultTextStyle(
+                duration: motion.controlTransitionDuration,
+                curve: motion.normal,
+                style: TextStyle(
+                  color: isCredit
+                      ? scheme.onSurface.withValues(alpha: 0.48)
+                      : (active
+                          ? scheme.onSurface
+                          : scheme.onSurface.withValues(alpha: 0.62)),
+                  fontSize: isCredit ? 13 : (active ? 15 : 13),
+                  fontWeight: isCredit
+                      ? FontWeight.w400
+                      : (active ? FontWeight.w700 : FontWeight.w400),
+                  height: 1.35,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(content),
+                    if (showTranslation) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        translation,
+                        style: TextStyle(
+                          color: active
+                              ? scheme.onSurface.withValues(alpha: 0.72)
+                              : scheme.onSurface.withValues(alpha: 0.46),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+
+    if (AppSettings.instance.uiEffectsLevel == UiEffectsLevel.performance) {
+      return scrollView;
     }
 
-    if (line is LrcLine) {
-      final parsed = LyricLineParser.parse(line.content);
-      return _LyricLineEntry(
-        primary: parsed.primary.isEmpty ? '...' : parsed.primary,
-        secondary: parsed.translation,
-        isCredit: parsed.isCredit,
-      );
-    }
-
-    return const _LyricLineEntry(primary: '...');
+    return ShaderMask(
+      shaderCallback: (rect) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black,
+            Colors.black,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.08, 0.92, 1.0],
+        ).createShader(rect);
+      },
+      blendMode: BlendMode.dstIn,
+      child: scrollView,
+    );
   }
 }
 
@@ -465,53 +515,61 @@ class _LyricPreviewEmptyState extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
-    required this.color,
     this.compact = false,
+    required this.color,
   });
 
   final IconData icon;
   final String title;
   final String message;
-  final Color color;
   final bool compact;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 6 : 16,
-          vertical: compact ? 10 : 16,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: color.withValues(alpha: 0.48),
-              size: compact ? 20 : 26,
-            ),
-            SizedBox(height: compact ? 10 : 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: color,
-                fontSize: compact ? 14 : 15,
-                fontWeight: FontWeight.w700,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 12 : 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: compact ? 42 : 48,
+                height: compact ? 42 : 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: compact ? 20 : 22,
+                  color: color.withValues(alpha: 0.72),
+                ),
               ),
-            ),
-            SizedBox(height: compact ? 6 : 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: color.withValues(alpha: 0.62),
-                fontSize: 12,
-                height: 1.45,
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: color,
+                  fontSize: compact ? 14 : 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: color.withValues(alpha: 0.66),
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

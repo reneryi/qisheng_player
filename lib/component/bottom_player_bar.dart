@@ -67,8 +67,9 @@ class BottomPlayerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const padding = EdgeInsets.symmetric(
-      horizontal: 24,
+    final narrowWindow = MediaQuery.sizeOf(context).width < 640;
+    final padding = EdgeInsets.symmetric(
+      horizontal: narrowWindow ? 12 : 24,
       vertical: 6,
     );
     final childWidget = LayoutBuilder(
@@ -162,7 +163,7 @@ class _BottomBarTrackSection extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isConstrained = constraints.maxWidth < 80;
+              final isConstrained = constraints.maxWidth < 135;
               final coverSize = isConstrained ? 38.0 : (dense ? 52.0 : 58.0);
               final coverGap = isConstrained ? 6.0 : (dense ? 12.0 : 16.0);
               final horizPadding = isConstrained ? 3.0 : (dense ? 6.0 : 8.0);

@@ -330,11 +330,14 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    final dialogHeight =
+        (MediaQuery.sizeOf(context).height - 108.0).clamp(220.0, 460.0);
+
     return ModernDialogFrame(
       maxWidth: 580,
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
       child: SizedBox(
-        height: 460,
+        height: dialogHeight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

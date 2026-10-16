@@ -482,8 +482,9 @@ class _AudioEditDialogState extends State<AudioEditDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dialogHeight =
-        math.min(740.0, MediaQuery.sizeOf(context).height - 80.0);
+    final dialogHeight = math
+        .min(740.0, MediaQuery.sizeOf(context).height - 80.0)
+        .clamp(280.0, 740.0);
 
     return PopScope(
       canPop: _allowClose || (!_dirty && !_busy),

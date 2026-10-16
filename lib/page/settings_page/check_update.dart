@@ -686,7 +686,7 @@ class NewestUpdateView extends StatelessWidget {
       maxWidth: 520,
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
       child: SizedBox(
-        height: 460,
+        height: (MediaQuery.sizeOf(context).height - 108.0).clamp(220.0, 460.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

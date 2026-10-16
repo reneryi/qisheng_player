@@ -240,15 +240,14 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                                 ),
                               ),
                             ),
-                            // 顶部的歌词大小百分比毛玻璃指示卡片
-                            Align(
-                              alignment: Alignment.topCenter,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 32.0),
-                                child: AnimatedOpacity(
-                                  opacity: _showScaleIndicator ? 1.0 : 0.0,
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOutCubic,
+                            // 顶部的歌词大小百分比毛玻璃指示卡片（仅在激活时惰性挂载 BackdropFilter）
+                            if (_showScaleIndicator)
+                              Align(
+                                alignment: Alignment.topCenter,
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    top: widget.compact ? 12.0 : 32.0,
+                                  ),
                                   child: GestureDetector(
                                     onTap: () {
                                       // 点击或双击胶囊立即重置为 100% 默认字号
@@ -307,7 +306,6 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                                   ),
                                 ),
                               ),
-                            ),
                           ],
                         );
                       },
@@ -621,9 +619,12 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
             const SliverFillRemaining(),
             SliverToBoxAdapter(
               child: RepaintBoundary(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: lyricTiles,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 52.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: lyricTiles,
+                  ),
                 ),
               ),
             ),

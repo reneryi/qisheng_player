@@ -16,7 +16,6 @@ import 'package:qisheng_player/component/title_bar.dart';
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/ui/audio_format_badge.dart';
-import 'package:qisheng_player/component/ui/spring_scale_feedback.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/online_cover_store.dart';
@@ -372,6 +371,7 @@ class _NowPlayingAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = context.chrome;
+    final compactHeight = MediaQuery.sizeOf(context).height < 620;
     return _NowPlayingStagedReveal(
       begin: 0.12,
       end: 0.48,
@@ -385,8 +385,10 @@ class _NowPlayingAppBar extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
+            padding: EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: compactHeight ? 4 : 10,
+            ), // 替换 AppSurface 为 Padding，实现顶栏完全透明悬浮
             child: SizedBox(
               height: chrome.titleBarHeight,
               child: LayoutBuilder(
@@ -453,152 +455,5 @@ class _NowPlayingBackBtn extends StatelessWidget {
         }),
       ),
     );
-  }
-}
-
-class _MarqueeText extends StatelessWidget {
-  const _MarqueeText({
-    required this.text,
-    required this.style,
-  });
-
-  final String text;
-  final TextStyle style;
-
-  String _sanitizeText(String value) {
-    final cleaned = value
-        // 移除控制字符、BOM、替代字符，避免滚动文本出现异常占位图形
-        .replaceAll(
-          RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF\uFFFD]'),
-          '',
-        )
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    return cleaned.isEmpty ? " " : cleaned;
-  }
-
-  double _measureTextWidth(BuildContext context, String text) {
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: 1,
-      textDirection: Directionality.of(context),
-    )..layout();
-    return painter.width;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final displayText = _sanitizeText(text);
-        if (!constraints.hasBoundedWidth) {
-          return Text(displayText, maxLines: 1, style: style);
-        }
-        final textWidth = _measureTextWidth(context, displayText);
-        final availableWidth = constraints.maxWidth;
-        if (textWidth <= availableWidth) {
-          return Text(displayText, maxLines: 1, style: style);
-        }
-
-        return _MarqueeTextScrollable(
-          text: displayText,
-          style: style,
-          textWidth: textWidth,
-          gap: 56.0,
-          minDuration: const Duration(milliseconds: 4200),
-        );
-      },
-    );
-  }
-}
-
-class _MarqueeTextScrollable extends StatefulWidget {
-  const _MarqueeTextScrollable({
-    required this.text,
-    required this.style,
-    required this.textWidth,
-    required this.gap,
-    required this.minDuration,
-  });
-
-  final String text;
-  final TextStyle style;
-  final double textWidth;
-  final double gap;
-  final Duration minDuration;
-
-  @override
-  State<_MarqueeTextScrollable> createState() => _MarqueeTextScrollableState();
-}
-
-class _MarqueeTextScrollableState extends State<_MarqueeTextScrollable>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  Duration? _lastDuration;
-
-  Duration _resolveDuration() {
-    final distance = widget.textWidth + widget.gap;
-    final bySpeed = Duration(milliseconds: (distance * 45).round());
-    if (bySpeed > widget.minDuration) {
-      return bySpeed;
-    }
-    return widget.minDuration;
-  }
-
-  void _ensureAnimation() {
-    final duration = _resolveDuration();
-    if (_lastDuration == duration && _controller.isAnimating) return;
-    _lastDuration = duration;
-    _controller
-      ..duration = duration
-      ..repeat();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this);
-    _ensureAnimation();
-  }
-
-  @override
-  void didUpdateWidget(covariant _MarqueeTextScrollable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _ensureAnimation();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final distance = widget.textWidth + widget.gap;
-          return Transform.translate(
-            offset: Offset(-distance * _controller.value, 0),
-            child: IgnorePointer(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(widget.text, style: widget.style, maxLines: 1),
-                    SizedBox(width: widget.gap),
-                    Text(widget.text, style: widget.style, maxLines: 1),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }

@@ -18,7 +18,9 @@ class SearchResultPage extends StatelessWidget {
   final UnionSearchResult? initialResult;
 
   UnionSearchResult get resolvedResult =>
-      UnionSearchResult.search(initialQuery);
+      (initialResult != null && initialResult!.query == initialQuery)
+          ? initialResult!
+          : UnionSearchResult.search(initialQuery);
 
   List<_SearchResultPageBody> _buildContent(UnionSearchResult result) {
     return [
@@ -118,75 +120,58 @@ class _SearchResultPageBody extends StatelessWidget {
     );
   }
 
-  List<Widget> buildMusicResultContent(ColorScheme scheme) {
-    return [
-      buildContentHeader(scheme, _SearchResultFilter.music),
-      SliverList.builder(
-        itemCount: result.audios.length,
-        itemBuilder: (context, i) {
-          final item = result.audios[i];
-          return AudioTile(
-            audioIndex: 0,
-            playlist: [item],
-            action: IconButton(
-              onPressed: () {
-                context.push(app_paths.AUDIOS_PAGE, extra: item);
-              },
-              icon: const Icon(Symbols.location_on),
-            ),
-          );
-        },
-      ),
-    ];
-  }
-
-  List<Widget> buildArtistResultContent(ColorScheme scheme) {
-    return [
-      buildContentHeader(scheme, _SearchResultFilter.artist),
-      SliverList.builder(
-        itemCount: result.artists.length,
-        itemBuilder: (context, i) => ArtistTile(artist: result.artists[i]),
-      ),
-    ];
-  }
-
-  List<Widget> buildAlbumResultContent(ColorScheme scheme) {
-    return [
-      buildContentHeader(scheme, _SearchResultFilter.album),
-      SliverList.builder(
-        itemCount: result.album.length,
-        itemBuilder: (context, i) => AlbumTile(album: result.album[i]),
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final slivers = <Widget>[];
-    switch (filter) {
-      case _SearchResultFilter.all:
-        if (result.audios.isNotEmpty) {
-          slivers.addAll(buildMusicResultContent(scheme));
-        }
-        if (result.artists.isNotEmpty) {
-          slivers.addAll(buildArtistResultContent(scheme));
-        }
-        if (result.album.isNotEmpty) {
-          slivers.addAll(buildAlbumResultContent(scheme));
-        }
-        break;
-      case _SearchResultFilter.music:
-        slivers.addAll(buildMusicResultContent(scheme));
-        break;
-      case _SearchResultFilter.artist:
-        slivers.addAll(buildArtistResultContent(scheme));
-        break;
-      case _SearchResultFilter.album:
-        slivers.addAll(buildAlbumResultContent(scheme));
-        break;
-    }
-    slivers.add(const SliverPadding(padding: EdgeInsets.only(bottom: 96.0)));
-    return CustomScrollView(slivers: slivers);
+    const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 300,
+      mainAxisExtent: 64.0,
+      mainAxisSpacing: 8.0,
+      crossAxisSpacing: 8.0,
+    );
+    return CustomScrollView(
+      slivers: [
+        if (filter == _SearchResultFilter.all ||
+            filter == _SearchResultFilter.music) ...[
+          buildContentHeader(scheme, _SearchResultFilter.music),
+          SliverList.builder(
+            itemCount: result.audios.length,
+            itemBuilder: (context, i) => AudioTile(
+              audioIndex: i,
+              playlist: result.audios,
+              action: IconButton(
+                tooltip: "定位",
+                onPressed: () {
+                  context.go(
+                    app_paths.AUDIOS_PAGE,
+                    extra: result.audios[i],
+                  );
+                },
+                icon: const Icon(Symbols.location_on),
+              ),
+            ),
+          ),
+        ],
+        if (filter == _SearchResultFilter.all ||
+            filter == _SearchResultFilter.artist) ...[
+          buildContentHeader(scheme, _SearchResultFilter.artist),
+          SliverGrid.builder(
+            gridDelegate: gridDelegate,
+            itemCount: result.artists.length,
+            itemBuilder: (context, i) => ArtistTile(artist: result.artists[i]),
+          ),
+        ],
+        if (filter == _SearchResultFilter.all ||
+            filter == _SearchResultFilter.album) ...[
+          buildContentHeader(scheme, _SearchResultFilter.album),
+          SliverGrid.builder(
+            gridDelegate: gridDelegate,
+            itemCount: result.album.length,
+            itemBuilder: (context, i) => AlbumTile(album: result.album[i]),
+          ),
+        ],
+        const SliverPadding(padding: EdgeInsets.only(bottom: 96.0)),
+      ],
+    );
   }
 }

@@ -29,7 +29,14 @@ class AudioDetailPage extends StatelessWidget {
     builder:(context,_,__) => _buildCurrent(context));
 
   Widget _buildCurrent(BuildContext context) {
-    final audio = AudioLibrary.instance.audioCollection.where((a)=>a.path==this.audio.path).firstOrNull ?? this.audio;
+    final collection = AudioLibrary.instance.audioCollection;
+    Audio audio = this.audio;
+    for (var i = 0; i < collection.length; i++) {
+      if (collection[i].path == this.audio.path) {
+        audio = collection[i];
+        break;
+      }
+    }
     final artists = List.generate(audio.splitedArtists.length, (i) {
       final name = audio.splitedArtists[i];
       return AudioLibrary.instance.artistCollection[name] ??
@@ -231,14 +238,16 @@ class _AudioDetailHero extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 720;
+          final shortWindow = MediaQuery.sizeOf(context).height < 600;
+          final artSize = shortWindow ? 128.0 : (compact ? 168.0 : 208.0);
           final artwork = FutureBuilder<ImageProvider?>(
             future: audio.mediumCover,
             builder: (context, snapshot) {
               final image = snapshot.data;
               if (image == null) {
                 return SizedBox(
-                  width: compact ? 180 : 208,
-                  height: compact ? 180 : 208,
+                  width: artSize,
+                  height: artSize,
                   child: placeholder,
                 );
               }
@@ -246,8 +255,8 @@ class _AudioDetailHero extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 child: Image(
                   image: image,
-                  width: compact ? 180 : 208,
-                  height: compact ? 180 : 208,
+                  width: artSize,
+                  height: artSize,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => placeholder,
                 ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:qisheng_player/app_paths.dart' as app_paths;
 import 'package:qisheng_player/app_settings.dart';
@@ -43,33 +44,35 @@ class WelcomingPage extends StatelessWidget {
             child: _TitleBar(),
           ),
           body: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: AppSurface(
-                  variant: AppSurfaceVariant.glass,
-                  glassDensity: AppSurfaceGlassDensity.low,
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "你的音乐放在哪些文件夹里？",
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 22,
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: AppSurface(
+                    variant: AppSurfaceVariant.glass,
+                    glassDensity: AppSurfaceGlassDensity.low,
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "你的音乐放在哪些文件夹里？",
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        "软件会扫描这些目录（包含子目录）并建立索引。",
-                        style: TextStyle(color: scheme.onSurface),
-                      ),
-                      const SizedBox(height: 16),
-                      const FolderSelectorView(),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          "软件会扫描这些目录（包含子目录）并建立索引。",
+                          style: TextStyle(color: scheme.onSurface),
+                        ),
+                        const SizedBox(height: 16),
+                        const FolderSelectorView(),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -96,10 +99,15 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final screenSize = MediaQuery.sizeOf(context);
+    final selectorHeight =
+        (screenSize.height - 220.0).clamp(180.0, 420.0).toDouble();
+    final selectorWidth =
+        math.min(460.0, math.max(240.0, screenSize.width - 96.0));
 
     return SizedBox(
-      width: 460,
-      height: 420,
+      width: selectorWidth,
+      height: selectorHeight,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
         child: selecting

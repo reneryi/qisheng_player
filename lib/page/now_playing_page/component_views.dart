@@ -21,49 +21,67 @@ class ImmersiveNowPlayingView extends StatelessWidget {
             child: SizedBox.expand(),
           ),
         ),
-        Padding(
-          padding:
-              EdgeInsets.fromLTRB(compact ? 16 : 28, 12, compact ? 16 : 28, 24),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final stacked = compact ||
-                  constraints.maxWidth < 1160 ||
-                  MediaQuery.sizeOf(context).height < 760;
-              final gap = compact ? 24.0 : 32.0;
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxW = constraints.maxWidth;
+            final maxH = constraints.maxHeight;
+            final shortViewport = maxH < 640;
+            final veryShortViewport = maxH < 480;
+            final horizPad = compact ? (maxW < 640 ? 12.0 : 16.0) : 28.0;
+            final topPad =
+                veryShortViewport ? 4.0 : (shortViewport ? 8.0 : 12.0);
+            final bottomPad =
+                veryShortViewport ? 8.0 : (shortViewport ? 12.0 : 24.0);
 
-              if (stacked) {
-                // 垂直堆叠下：封面精致收小在上，大歌词在下
-                return Column(
+            // 仅当窗口较窄 (< 720) 或高度充裕 (>= 680 且处于 compact/窄屏) 时才采用上下堆叠；
+            // 在横向小窗口（如 850x480、960x540）下保持左右分栏，释放 100% 垂直高度给封面与歌词。
+            final stacked =
+                maxW < 720 || ((compact || maxW < 1160) && maxH >= 680);
+            final gap = stacked
+                ? (veryShortViewport ? 8.0 : (shortViewport ? 12.0 : 20.0))
+                : (compact ? 20.0 : 32.0);
+
+            if (stacked) {
+              final topFlex = maxH < 560 ? 3 : 4;
+              final bottomFlex = maxH < 560 ? 7 : 6;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                    horizPad, topPad, horizPad, bottomPad),
+                child: Column(
                   children: [
-                    const Expanded(
-                      flex: 4,
-                      child: _ImmersiveArtworkStage(compact: true),
+                    Expanded(
+                      flex: topFlex,
+                      child: const _ImmersiveArtworkStage(compact: true),
                     ),
                     SizedBox(height: gap),
-                    const Expanded(
-                      flex: 6,
-                      child: _ImmersiveLyricStage(compact: true),
+                    Expanded(
+                      flex: bottomFlex,
+                      child: const _ImmersiveLyricStage(compact: true),
                     ),
                   ],
-                );
-              }
+                ),
+              );
+            }
 
-              // 杂志级排版大歌词流：左侧放置占比 4 的精致小封面与歌曲信息，右侧放置占比 6 的大歌词
-              return Row(
+            // 杂志级排版大歌词流：左侧放置占比 4 的精致小封面与歌曲信息，右侧放置占比 6 的大歌词
+            return Padding(
+              padding:
+                  EdgeInsets.fromLTRB(horizPad, topPad, horizPad, bottomPad),
+              child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     flex: 4,
-                    child: _ImmersiveArtworkStage(compact: false),
+                    child: _ImmersiveArtworkStage(compact: compact),
                   ),
                   SizedBox(width: gap),
-                  const Expanded(
+                  Expanded(
                     flex: 6,
-                    child: _ImmersiveLyricStage(compact: false),
+                    child: _ImmersiveLyricStage(compact: compact),
                   ),
                 ],
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -84,13 +102,93 @@ class _ImmersiveArtworkStage extends StatelessWidget {
         final availableWidth =
             constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
 
-        // 响应式自适应封面尺寸：保留下方信息区充足空间 (信息区约需 140px)
-        final maxCoverHeight = math.max(80.0, availableHeight - 140.0);
+        // 当垂直空间较为紧凑 (< 250px，例如小窗口上下分栏顶部区域) 时，切换为横向紧凑排布，彻底避免封面与歌名被腰斩裁切
+        if (availableHeight < 250.0) {
+          final horizCoverSize = math
+              .min(availableHeight - 8.0, availableWidth * 0.36)
+              .clamp(48.0, 128.0)
+              .toDouble();
+          return SizedBox.expand(
+            child: Stack(
+              children: [
+                const Positioned.fill(child: _ArtworkStageHitAbsorber()),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _NowPlayingArtwork(
+                        size: horizCoverSize,
+                        radius: 14.0,
+                        large: true,
+                        showBackdropGlow: true,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: math.max(
+                                120.0,
+                                availableWidth - horizCoverSize - 16.0,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const _NowPlayingStagedReveal(
+                                  begin: 0.10,
+                                  end: 0.48,
+                                  beginOffset: Offset(0, 0.012),
+                                  child: _NowPlayingTrackIdentity(compact: true),
+                                ),
+                                const SizedBox(height: 6),
+                                const _NowPlayingStagedReveal(
+                                  begin: 0.14,
+                                  end: 0.54,
+                                  beginOffset: Offset(0, 0.01),
+                                  child: _ImmersiveMetadataStrip(),
+                                ),
+                                if (availableHeight >= 116 &&
+                                    AppSettings
+                                        .instance.showSpectrumVisualizer) ...[
+                                  const SizedBox(height: 8),
+                                  const _NowPlayingStagedReveal(
+                                    begin: 0.14,
+                                    end: 0.54,
+                                    beginOffset: Offset(0, 0.01),
+                                    child: _ImmersiveSpectrumBar(),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // 响应式自适应封面尺寸：保留下方信息区充足空间
+        final infoReserve = AppSettings.instance.showSpectrumVisualizer
+            ? (compact ? 132.0 : 156.0)
+            : (compact ? 94.0 : 116.0);
+        final maxCoverHeight = math.max(72.0, availableHeight - infoReserve);
         final size = compact
-            ? (availableHeight * 0.44).clamp(80.0, 160.0).toDouble()
+            ? math
+                .min(availableWidth * 0.72, maxCoverHeight)
+                .clamp(72.0, 180.0)
+                .toDouble()
             : math
                 .min(availableWidth * 0.76, maxCoverHeight)
-                .clamp(180.0, 380.0)
+                .clamp(140.0, 380.0)
                 .toDouble();
 
         return SizedBox.expand(
@@ -99,46 +197,50 @@ class _ImmersiveArtworkStage extends StatelessWidget {
               const Positioned.fill(child: _ArtworkStageHitAbsorber()),
               Align(
                 alignment: compact ? Alignment.centerLeft : Alignment.center,
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: compact
-                        ? CrossAxisAlignment.start
-                        : CrossAxisAlignment.center,
-                    children: [
-                      _NowPlayingArtwork(
-                        size: size,
-                        radius: compact ? 16.0 : 24.0,
-                        large: true,
-                        showBackdropGlow: true,
-                      ),
-                      SizedBox(height: compact ? 10 : 20),
-                      _NowPlayingStagedReveal(
-                        begin: 0.10,
-                        end: 0.48,
-                        beginOffset: const Offset(0, 0.012),
-                        child: _NowPlayingTrackIdentity(compact: compact),
-                      ),
-                      const SizedBox(height: 10),
-                      // 极简音频参数胶囊标牌
-                      const _NowPlayingStagedReveal(
-                        begin: 0.14,
-                        end: 0.54,
-                        beginOffset: Offset(0, 0.01),
-                        child: _ImmersiveMetadataStrip(),
-                      ),
-                      // 模块化实时音频频谱律动条
-                      if (AppSettings.instance.showSpectrumVisualizer) ...[
-                        const SizedBox(height: 12),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: compact ? Alignment.centerLeft : Alignment.center,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: availableWidth),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: compact
+                          ? CrossAxisAlignment.start
+                          : CrossAxisAlignment.center,
+                      children: [
+                        _NowPlayingArtwork(
+                          size: size,
+                          radius: compact ? 16.0 : 24.0,
+                          large: true,
+                          showBackdropGlow: true,
+                        ),
+                        SizedBox(height: compact ? 10 : 20),
+                        _NowPlayingStagedReveal(
+                          begin: 0.10,
+                          end: 0.48,
+                          beginOffset: const Offset(0, 0.012),
+                          child: _NowPlayingTrackIdentity(compact: compact),
+                        ),
+                        const SizedBox(height: 10),
+                        // 极简音频参数胶囊标牌
                         const _NowPlayingStagedReveal(
                           begin: 0.14,
                           end: 0.54,
                           beginOffset: Offset(0, 0.01),
-                          child: _ImmersiveSpectrumBar(),
+                          child: _ImmersiveMetadataStrip(),
                         ),
+                        // 模块化实时音频频谱律动条
+                        if (AppSettings.instance.showSpectrumVisualizer) ...[
+                          const SizedBox(height: 12),
+                          const _NowPlayingStagedReveal(
+                            begin: 0.14,
+                            end: 0.54,
+                            beginOffset: Offset(0, 0.01),
+                            child: _ImmersiveSpectrumBar(),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -795,7 +897,7 @@ class _CenteredLyricViewState extends State<_CenteredLyricView> {
     if (_viewportHeight <= 0) return _baseVerticalPadding;
     final centered =
         _viewportHeight / 2 - _estimatedLineHeight(line, isCurrent: true) / 2;
-    return math.max(_baseVerticalPadding, centered);
+    return math.max(16.0, centered);
   }
 
   double _viewportHeight = 0;

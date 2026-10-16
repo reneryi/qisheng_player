@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:qisheng_player/app_settings.dart';
@@ -290,8 +291,10 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
         child: Material(
           type: MaterialType.transparency,
           child: Container(
-            width: 360,
-            constraints: const BoxConstraints(maxHeight: 380),
+            width: math.min(360.0, math.max(200.0, MediaQuery.sizeOf(context).width - 48.0)),
+            constraints: BoxConstraints(
+              maxHeight: (MediaQuery.sizeOf(context).height - 110.0).clamp(140.0, 380.0),
+            ),
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: isDark
@@ -430,31 +433,36 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
-    return Row(
-      children: [
-        Shortcuts(
-          shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-          },
-          child: Actions(
-            actions: {
-              DismissIntent: CallbackAction<DismissIntent>(
-                onInvoke: (_) {
-                  _controller.clear();
-                  _toggleExpanded(false);
-                  return null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxExpandedWidth = constraints.maxWidth.isFinite
+            ? math.min(360.0, math.max(42.0, constraints.maxWidth - 16.0))
+            : 360.0;
+        return Row(
+          children: [
+            Shortcuts(
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+              },
+              child: Actions(
+                actions: {
+                  DismissIntent: CallbackAction<DismissIntent>(
+                    onInvoke: (_) {
+                      _controller.clear();
+                      _toggleExpanded(false);
+                      return null;
+                    },
+                  ),
                 },
-              ),
-            },
-            child: CompositedTransformTarget(
-              link: _layerLink,
-              child: OverlayPortal(
-                controller: _overlayController,
-                overlayChildBuilder: _buildLiveSuggestionsOverlay,
-                child: AnimatedContainer(
-                  duration: motion.searchExpandDuration,
-                  curve: motion.emphasized,
-                  width: _expanded ? 360 : 42,
+                child: CompositedTransformTarget(
+                  link: _layerLink,
+                  child: OverlayPortal(
+                    controller: _overlayController,
+                    overlayChildBuilder: _buildLiveSuggestionsOverlay,
+                    child: AnimatedContainer(
+                      duration: motion.searchExpandDuration,
+                      curve: motion.emphasized,
+                      width: _expanded ? maxExpandedWidth : 42,
                   child: _expanded
                       ? TextField(
                           controller: _controller,
@@ -529,6 +537,8 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
           ),
         ),
       ],
+    );
+      },
     );
   }
 }

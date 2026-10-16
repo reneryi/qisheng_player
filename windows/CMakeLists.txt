@@ -48,6 +48,8 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   # warning switches so both Visual Studio and Ninja receive valid arguments.
   target_compile_options(${TARGET} PRIVATE /W4 /wd4100 /utf-8 /wd4819)
   target_compile_options(${TARGET} PRIVATE /EHsc)
+  target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:/Gy>" "$<$<NOT:$<CONFIG:Debug>>:/Gw>")
+  target_link_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:/OPT:REF>" "$<$<NOT:$<CONFIG:Debug>>:/OPT:ICF>")
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()

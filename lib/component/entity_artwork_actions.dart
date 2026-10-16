@@ -366,7 +366,7 @@ class _ArtworkSearchState extends State<_ArtworkSearch> {
 
           // 候选列表区域
           SizedBox(
-            height: 360,
+            height: (MediaQuery.sizeOf(context).height - 260.0).clamp(140.0, 360.0),
             child: FutureBuilder<List<MetadataCandidate>>(
               future: _future,
               builder: (context, snapshot) {
@@ -469,15 +469,22 @@ class _ArtworkSearchState extends State<_ArtworkSearch> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(isArtist ? 140 : 16),
-                  child: Image.memory(
-                    bytes,
-                    width: 260,
-                    height: 260,
-                    fit: BoxFit.cover,
-                  ),
+                Builder(
+                  builder: (ctx) {
+                    final previewSize =
+                        (MediaQuery.sizeOf(ctx).height - 240.0).clamp(140.0, 260.0);
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        isArtist ? previewSize / 2 : 16,
+                      ),
+                      child: Image.memory(
+                        bytes,
+                        width: previewSize,
+                        height: previewSize,
+                        fit: BoxFit.cover,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 Text(

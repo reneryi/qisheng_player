@@ -368,9 +368,10 @@ class _UniDetailPageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
+    final shortWindow = MediaQuery.sizeOf(context).height < 600;
 
     return SizedBox(
-      height: 220,
+      height: shortWindow ? 156 : 220,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -443,7 +444,8 @@ class _UniDetailPageHeader extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 760;
-              final artworkSize = compact ? 104.0 : 136.0;
+              final artworkSize =
+                  shortWindow ? 96.0 : (compact ? 104.0 : 136.0);
               final artwork = _HeaderArtwork(
                 pic: pic,
                 picShape: picShape,
@@ -456,8 +458,7 @@ class _UniDetailPageHeader extends StatelessWidget {
                   : Wrap(
                       spacing: 8,
                       runSpacing: 6,
-                      alignment:
-                          compact ? WrapAlignment.center : WrapAlignment.start,
+                      alignment: WrapAlignment.start,
                       children: [
                         for (final badge in badges)
                           Container(
@@ -490,37 +491,36 @@ class _UniDetailPageHeader extends StatelessWidget {
                     );
 
               final textBlock = Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: compact
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    maxLines: 2,
+                    maxLines: shortWindow ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    textAlign: compact ? TextAlign.center : TextAlign.start,
+                    textAlign: TextAlign.start,
                     style: TextStyle(
                       color: scheme.onSurface,
-                      fontSize: compact ? 22 : 28,
+                      fontSize: shortWindow ? 20 : (compact ? 22 : 28),
                       fontWeight: FontWeight.w700,
                       height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: shortWindow ? 4 : 8),
                   Text(
                     subtitle,
-                    maxLines: 2,
+                    maxLines: shortWindow ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    textAlign: compact ? TextAlign.center : TextAlign.start,
+                    textAlign: TextAlign.start,
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.78),
-                      fontSize: 14,
+                      fontSize: shortWindow ? 13 : 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   if (badgePills != null) ...[
-                    const SizedBox(height: 12),
+                    SizedBox(height: shortWindow ? 8 : 12),
                     badgePills,
                   ],
                 ],
@@ -530,24 +530,23 @@ class _UniDetailPageHeader extends StatelessWidget {
                   !compact && (onPlayAll != null || onShufflePlay != null);
 
               return Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 20,
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 16 : 24,
+                  vertical: shortWindow ? 14 : 20,
                 ),
-                child: compact
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                child: Row(
                         children: [
                           artwork,
-                          const SizedBox(height: 14),
-                          Expanded(child: textBlock),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          artwork,
-                          const SizedBox(width: 24),
-                          Expanded(child: textBlock),
+                          SizedBox(width: compact ? 16 : 24),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SingleChildScrollView(
+                                physics: const ClampingScrollPhysics(),
+                                child: textBlock,
+                              ),
+                            ),
+                          ),
                           if (hasQuickActions) ...[
                             const SizedBox(width: 16),
                             Column(

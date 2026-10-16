@@ -99,34 +99,61 @@ class LyricViewControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibilityController =
         context.read<LyricControlsVisibilityController>();
-    return MouseRegion(
-      onEnter: (_) => visibilityController.setControlsHovered(true),
-      onExit: (_) => visibilityController.setControlsHovered(false),
-      child: const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = constraints.maxHeight;
+        final compact = maxHeight.isFinite && maxHeight < 296;
+        final gap = compact ? 2.0 : 8.0;
+        final pad = compact ? 4.0 : 8.0;
+
+        Widget controlsColumn = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            SetLyricSourceBtn(),
-            SizedBox(height: 8.0),
-            _LyricAlignSwitchBtn(),
-            SizedBox(height: 8.0),
-            _TranslationSwitchBtn(),
-            SizedBox(height: 8.0),
+            const SetLyricSourceBtn(),
+            SizedBox(height: gap),
+            const _LyricAlignSwitchBtn(),
+            SizedBox(height: gap),
+            const _TranslationSwitchBtn(),
+            SizedBox(height: gap),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _IncreaseFontSizeBtn(),
-                SizedBox(width: 8.0),
-                _DecreaseFontSizeBtn(),
+                const _IncreaseFontSizeBtn(),
+                SizedBox(width: gap),
+                const _DecreaseFontSizeBtn(),
               ],
             ),
-            SizedBox(height: 8.0),
-            _AutoHideControlBarBtn(),
+            SizedBox(height: gap),
+            const _AutoHideControlBarBtn(),
           ],
-        ),
-      ),
+        );
+
+        if (compact) {
+          controlsColumn = IconButtonTheme(
+            data: IconButtonThemeData(
+              style: IconButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            child: controlsColumn,
+          );
+        }
+
+        return MouseRegion(
+          onEnter: (_) => visibilityController.setControlsHovered(true),
+          onExit: (_) => visibilityController.setControlsHovered(false),
+          child: Padding(
+            padding: EdgeInsets.all(pad),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.bottomRight,
+              child: controlsColumn,
+            ),
+          ),
+        );
+      },
     );
   }
 }
