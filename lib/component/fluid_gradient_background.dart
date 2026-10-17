@@ -639,36 +639,36 @@ class _MeshFlowPainter extends CustomPainter {
         : (darkness > 0.5 ? const Color(0xFF072229) : const Color(0xFFF0F0EC));
     _setColor(shader, 23, baseColor);
 
-    // 5 个 Apple Music 级流体光斑核心锚点（20~28 秒超慢速优雅公转与呼吸漫游）
-    final t = time * 0.25;
+    // 5 个 Apple Music 级流体光斑核心源锚点（大跨度李萨如环绕与对冲穿插轨迹，动态流转清晰可感）
+    final t = time * 0.55;
 
-    // 光斑 1 (主导色 Primary): 左上至左侧中区宽域漫游
-    final p1x = (0.24 + 0.18 * math.cos(t * 0.58)).clamp(0.06, 0.94);
-    final p1y = (0.40 + 0.18 * math.sin(t * 0.46 + 0.4)).clamp(0.06, 0.94);
+    // 光斑 1 (主导色 Primary): 左上至中左核心区大幅回旋漫游
+    final p1x = (0.24 + 0.22 * math.cos(t * 0.65)).clamp(0.05, 0.95);
+    final p1y = (0.36 + 0.22 * math.sin(t * 0.52 + 0.5)).clamp(0.05, 0.95);
     shader.setFloat(27, p1x);
     shader.setFloat(28, p1y);
 
-    // 光斑 2 (次主色 Secondary): 右下至右侧中区舒缓对向环绕
-    final p2x = (0.76 + 0.18 * math.sin(t * 0.52 + 1.8)).clamp(0.06, 0.94);
-    final p2y = (0.58 + 0.18 * math.cos(t * 0.44 + 1.1)).clamp(0.06, 0.94);
+    // 光斑 2 (次主色 Secondary): 右下至中右区域对向螺旋延伸
+    final p2x = (0.76 + 0.20 * math.sin(t * 0.58 + 2.0)).clamp(0.05, 0.95);
+    final p2y = (0.68 + 0.22 * math.cos(t * 0.48 + 1.2)).clamp(0.05, 0.95);
     shader.setFloat(29, p2x);
     shader.setFloat(30, p2y);
 
-    // 光斑 3 (强调色 Accent): 右上至中上区斜向柔滑穿插
-    final p3x = (0.66 + 0.20 * math.cos(t * 0.50 + 3.1)).clamp(0.06, 0.94);
-    final p3y = (0.28 + 0.18 * math.sin(t * 0.62 + 1.6)).clamp(0.06, 0.94);
+    // 光斑 3 (强调色 Accent): 右上至中央区域大跨度穿插对冲
+    final p3x = (0.70 + 0.22 * math.cos(t * 0.62 + 3.4)).clamp(0.05, 0.95);
+    final p3y = (0.28 + 0.22 * math.sin(t * 0.70 + 1.8)).clamp(0.05, 0.95);
     shader.setFloat(31, p3x);
     shader.setFloat(32, p3y);
 
-    // 光斑 4 (柔和底色 Muted): 左下至底部深邃丝绒暗谷铺底
-    final p4x = (0.32 + 0.20 * math.sin(t * 0.42 + 4.0)).clamp(0.06, 0.94);
-    final p4y = (0.78 + 0.14 * math.cos(t * 0.50 + 2.8)).clamp(0.06, 0.94);
+    // 光斑 4 (丝绒暗谷 Muted): 左下至底部动态游走，在亮色光斑之间雕刻立体暗部深谷
+    final p4x = (0.28 + 0.22 * math.sin(t * 0.46 + 4.2)).clamp(0.05, 0.95);
+    final p4y = (0.76 + 0.18 * math.cos(t * 0.54 + 3.0)).clamp(0.05, 0.95);
     shader.setFloat(33, p4x);
     shader.setFloat(34, p4y);
 
-    // 光斑 5 (高光点缀 Highlight): 中央 8 字形慢速呼吸流转
-    final p5x = (0.48 + 0.20 * math.sin(t * 0.64 + 0.7)).clamp(0.06, 0.94);
-    final p5y = (0.48 + 0.16 * math.sin(t * 1.12 + 1.5)).clamp(0.06, 0.94);
+    // 光斑 5 (高光点缀 Highlight): 中央 8 字形灵动穿透漫游
+    final p5x = (0.50 + 0.24 * math.sin(t * 0.74 + 0.8)).clamp(0.05, 0.95);
+    final p5y = (0.50 + 0.22 * math.sin(t * 1.38 + 1.6)).clamp(0.05, 0.95);
     shader.setFloat(35, p5x);
     shader.setFloat(36, p5y);
 
@@ -677,9 +677,9 @@ class _MeshFlowPainter extends CustomPainter {
     shader.setFloat(38, 1.0); // 强度
 
     final clampedBass = bassEnergy.isFinite ? bassEnergy.clamp(0.0, 1.0) : 0.0;
-    final warpStrength = 1.0 + clampedBass * 0.22;
-    final blobScale = 1.0 + clampedBass * 0.06;
-    const layerMix = 0.52;
+    final warpStrength = 1.0 + clampedBass * 0.35;
+    final blobScale = 1.0 + clampedBass * 0.10;
+    const layerMix = 0.55;
     const luminanceLimit = 0.54;
     shader.setFloat(39, warpStrength);
     shader.setFloat(40, blobScale);

@@ -136,11 +136,11 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
     let bins = histogram.into_values().collect::<Vec<_>>();
     let average_luminance = weighted_average_luminance(&bins, total_weight);
 
-    // 第一阶段：细粒度初始聚类（18 个聚类中心），兼顾全局主色调还原与显著特征色捕获
+    // 第一阶段：色度感知细粒度初始聚类（18 个聚类中心），兼顾大面积背景与鲜明局部主体（如黄色跑车、霓虹高光）
     let fine_count = bins.len().min(18).max(target_count);
     let mut raw_clusters = cluster_histogram(&bins, fine_count);
 
-    // 第二阶段：在感知色彩空间中合并极相近的同色系微弱渐变，保持真实面积加权均值，杜绝色相跑偏
+    // 第二阶段：在感知色彩空间中合并极相近的同色系微弱渐变，保持真实面积加权均值
     let mut merged = Vec::<WeightedColor>::with_capacity(raw_clusters.len());
     raw_clusters.sort_by(|a, b| b.weight.cmp(&a.weight));
     for c in raw_clusters {
@@ -165,7 +165,6 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
     }
 
     // 第三阶段：自适应特征色保留过滤
-    // 过滤微小边缘与文字抗锯齿噪点（如黑白封面上 < 1.8% 的细小文字描边），确保主色与次主色高度忠于封面
     let has_multiple_colors = merged.len() > 1;
     let max_weight = merged.iter().map(|c| c.weight).max().unwrap_or(total_weight);
     let is_dominant_single_background = (max_weight as f64 / total_weight as f64) >= 0.88;
@@ -184,10 +183,10 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
 
         if is_dominant_single_background {
             area_pct >= 5.6
-        } else if chroma >= 0.050 || sat >= 0.36 || (is_high_contrast && area_pct >= 1.8) {
-            area_pct >= 1.8
+        } else if chroma >= 0.048 || sat >= 0.35 || (is_high_contrast && area_pct >= 1.6) {
+            area_pct >= 1.6
         } else {
-            area_pct >= 3.6
+            area_pct >= 3.5
         }
     });
 
@@ -198,7 +197,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
             .then_with(|| right.weight.cmp(&left.weight))
     });
 
-    // 第四阶段：多样性感知贪心选择（Perceptual Diversity Selection）
+    // 第四阶段：多样性感知贪心选择（Perceptual & Chromatic Diversity Selection）
     let mut result = Vec::with_capacity(target_count);
     if let Some(first) = merged.first() {
         result.push(first.rgb);
@@ -214,7 +213,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                     .map(|&r| {
                         let d3 = color_distance_sq(r, a.rgb).sqrt();
                         let dc = chromatic_distance(r, a.rgb);
-                        d3 * 0.76 + dc * 0.24
+                        d3 * 0.62 + dc * 0.38
                     })
                     .fold(f64::INFINITY, f64::min);
                 let dist_b = result
@@ -222,13 +221,13 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                     .map(|&r| {
                         let d3 = color_distance_sq(r, b.rgb).sqrt();
                         let dc = chromatic_distance(r, b.rgb);
-                        d3 * 0.76 + dc * 0.24
+                        d3 * 0.62 + dc * 0.38
                     })
                     .fold(f64::INFINITY, f64::min);
                 let salience_a = visual_salience_score(**a, total_weight, average_luminance);
                 let salience_b = visual_salience_score(**b, total_weight, average_luminance);
-                let score_a = salience_a * 0.60 + dist_a * 0.40;
-                let score_b = salience_b * 0.60 + dist_b * 0.40;
+                let score_a = salience_a * 0.54 + dist_a * 0.46;
+                let score_b = salience_b * 0.54 + dist_b * 0.46;
                 score_a
                     .partial_cmp(&score_b)
                     .unwrap_or(std::cmp::Ordering::Equal)
@@ -239,7 +238,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                 .iter()
                 .map(|&r| color_distance_sq(r, chosen.rgb).sqrt())
                 .fold(f64::INFINITY, f64::min);
-            if min_dist > 0.038 || result.len() < target_count.min(3) {
+            if min_dist > 0.036 || result.len() < target_count.min(3) {
                 result.push(chosen.rgb);
             } else {
                 break;
@@ -287,16 +286,17 @@ fn visual_salience_score(color: WeightedColor, total_weight: u64, average_lumina
     let lum = relative_luminance(sample);
     let contrast = (lum - average_luminance).abs();
 
-    // 仅对极端死黑纯底 (lum < 0.028 && chroma < 0.04) 施加温和权重收敛，
-    // 既避免纯黑边角压制大面积彩色主体，又确保深色/黑白封面的主调准确无误
-    let lum_quality = if lum < 0.028 && chroma < 0.04 {
-        0.62 + (lum / 0.028) * 0.38
+    // 适度收敛极端死黑底 (lum < 0.04) 与死白底 (lum > 0.92)，让封面核心鲜活色彩更容易脱颖而出
+    let lum_quality = if lum < 0.04 && chroma < 0.045 {
+        0.48 + (lum / 0.04) * 0.52
+    } else if lum > 0.92 && chroma < 0.045 {
+        0.55 + ((1.0 - lum) / 0.08) * 0.45
     } else {
         1.0
     };
 
-    let vibrancy = (chroma.min(0.24) * 3.6 + saturation * 0.25).max(0.0);
-    area.powf(0.36) * (0.36 + vibrancy * 0.48 + contrast * 0.16) * lum_quality
+    let vibrancy = (chroma.min(0.25) * 3.8 + saturation * 0.26).max(0.0);
+    area.powf(0.35) * (0.34 + vibrancy * 0.50 + contrast * 0.16) * lum_quality
 }
 
 fn rgb_sample(rgb: u32) -> RgbSample {
@@ -313,7 +313,6 @@ fn rgb_saturation(sample: RgbSample) -> f64 {
     if max == 0.0 {
         return 0.0;
     }
-    // 暗部门限衰减：消除极暗噪点像素（如 RGB(4, 14, 13)）在 (max-min)/max 下产生虚假高饱和度的问题
     let dark_gate = (max / 36.0).min(1.0);
     ((max - min) / max) * dark_gate
 }
@@ -333,12 +332,15 @@ fn cluster_histogram(bins: &[HistogramBin], target_count: usize) -> Vec<Weighted
             .iter()
             .map(|bin| {
                 let color = bin.color();
+                let chroma = color.to_oklab().chroma();
                 let distance = centroids
                     .iter()
                     .map(|centroid| color.distance_sq(*centroid))
                     .reduce(|left, right| left.min(right))
                     .unwrap_or(0.0);
-                (color, distance * bin.weight as f64)
+                // 色度感知种子初始化：确保封面上高饱和度的关键特征物（如黄色跑车、霓虹灯牌）拥有独立聚类中心
+                let weight_factor = (bin.weight as f64).powf(0.75) * (1.0 + chroma * 3.2);
+                (color, distance * weight_factor)
             })
             .max_by(|(_, left_score), (_, right_score)| {
                 left_score

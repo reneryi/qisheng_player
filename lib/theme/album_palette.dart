@@ -183,16 +183,16 @@ class AlbumPalette {
 
     return AlbumPalette(
       primary: color,
-      // 次主色：同色系明暗阶梯与邻近色调和 (+18°)，忠于原色且层次清晰
+      // 次主色：同色系明暗阶梯与邻近色调和 (+22°)，忠于原色且层次清晰
       secondary: hsl
-          .withHue((hsl.hue + 18) % 360)
+          .withHue((hsl.hue + 22) % 360)
           .withSaturation(baseSat)
           .withLightness(
               (hsl.lightness + (isDark ? 0.10 : -0.06)).clamp(0.20, secondaryMaxL))
           .toColor(),
-      // 强调色：邻近微偏 (-18°)，饱满生动
+      // 强调色：邻近微偏 (-22°)，饱满生动
       accent: hsl
-          .withHue((hsl.hue - 18 + 360) % 360)
+          .withHue((hsl.hue - 22 + 360) % 360)
           .withSaturation((baseSat * 1.04).clamp(0.0, 1.0))
           .withLightness(
               (hsl.lightness + (isDark ? 0.12 : -0.08)).clamp(0.22, accentMaxL))
@@ -221,7 +221,8 @@ class AlbumPalette {
     final primary = _selectPrimary(cleanedColors);
     final primaryIsNeutral = isNeutral(primary);
 
-    // 2. 封面色彩忠实提取：优先从封面提取出的真实颜色中挑选次主色与强调色
+    // 2. 封面色彩忠实提取：优先从封面提取出的真实有彩色中挑选高色度对比的次主色与强调色
+    // （避免死黑/死白仅凭明度差抢占 secondary/accent，把死黑死白留给专属的 muted 与 highlight）
     final secondaryCandidate = _selectSecondary(cleanedColors, primary);
     final secondary = secondaryCandidate != null &&
             perceptualColorDistance(primary, secondaryCandidate) > 0.075
@@ -312,91 +313,150 @@ class AlbumPalette {
     );
   }
 
-  /// Apple Music 级流体光斑与极光舞台调色板：
-  /// 1. 严守封面色彩真实性（100% 忠于封面原始色相与气质，绝不强行旋转 45° 制造虚假杂色，黑白灰封面保持纯粹高级银灰）；
-  /// 2. 针对单一色调封面（色相跨度 < 22°），通过 Apple Music 标志性的“深邃丝绒暗谷 + 温润高光色云”明度纵深雕塑
-  ///    与极微幅同色系邻近呼吸（±10°~12°），在不改变封面本色的前提下赋予画面通透立体的光影层次；
-  /// 3. 针对多色封面，忠实保留封面提取的真实主次对比色，并确保 5 个角色具备清晰的明暗阶梯。
+  /// Apple Music `LyricsScene` 级流体光斑与极光舞台调色板：
+  /// 1. 针对黑白灰封面（`allNeutral`）：严格保持 `0.0` 饱和度的纯正银灰与玄墨阶梯，绝不染色，同时拉开明暗反差使光斑清晰可见；
+  /// 2. 针对刻意低饱和度的莫兰迪/冷灰水泥封面（`maxSat < 0.22 && maxChroma < 0.052`）：尊重封面低饱和度克制气质，通过明暗对比塑造光斑；
+  /// 3. 针对单色/同色系封面（`maxHueSpan < 34°`）：以主色相为锚点进行 `±22°` 同色系谐波微展与深浅明度雕塑，告别单色平淡；
+  /// 4. 针对多色封面（如《Up All Night》绿+黄、《Limitless》玫红+电光紫、《Children Of A Miracle》暖金+深海蓝）：
+  ///    参考 Apple Music `LyricsScene` 色彩饱和度增强矩阵（Oversaturation Filter），对提取色进行通透度提纯并拉开各光斑明暗层次。
   AlbumPalette toAtmosphericStagePalette(double darkness) {
     final d = darkness.clamp(0.0, 1.0);
     final allNeutral =
         isNeutral(primary) && isNeutral(secondary) && isNeutral(accent);
 
     if (allNeutral) {
-      // 黑白灰封面：保持 100% 纯正无色偏的玄墨-月光银明暗阶梯，绝不染色
       const darkNeutral = AlbumPalette(
-        primary: Color(0xFF525458),
-        secondary: Color(0xFF3A3C40),
-        accent: Color(0xFF6A6D72),
-        muted: Color(0xFF1A1B1E),
-        highlight: Color(0xFF8C9096),
+        primary: Color(0xFF5E6166),
+        secondary: Color(0xFF3E4045),
+        accent: Color(0xFF787C82),
+        muted: Color(0xFF141518),
+        highlight: Color(0xFF989CA4),
       );
       const lightNeutral = AlbumPalette(
-        primary: Color(0xFFA6A9B0),
-        secondary: Color(0xFFB8BBC2),
-        accent: Color(0xFF9498A0),
-        muted: Color(0xFFD6D9DF),
-        highlight: Color(0xFFECEEF2),
+        primary: Color(0xFFA2A6AE),
+        secondary: Color(0xFFB8BCC4),
+        accent: Color(0xFF8E929B),
+        muted: Color(0xFFD6DAE0),
+        highlight: Color(0xFFECEFF4),
       );
       return AlbumPalette.lerp(lightNeutral, darkNeutral, d) ??
           (d > 0.5 ? darkNeutral : lightNeutral);
     }
 
     final pHsl = HSLColor.fromColor(primary);
+    final sHsl = HSLColor.fromColor(secondary);
+    final aHsl = HSLColor.fromColor(accent);
+
+    final maxSat = math.max(
+      pHsl.saturation,
+      math.max(sHsl.saturation, aHsl.saturation),
+    );
+    final maxChroma = math.max(
+      _colorChroma(primary),
+      math.max(_colorChroma(secondary), _colorChroma(accent)),
+    );
+    final isIntentionalMutedCover = maxSat < 0.22 && maxChroma < 0.052;
 
     final huePS = _hueAngleDiff(primary, secondary);
     final huePA = _hueAngleDiff(primary, accent);
     final hueSA = _hueAngleDiff(secondary, accent);
     final maxHueSpan = math.max(huePS, math.max(huePA, hueSA));
+    final isNarrowHue = maxHueSpan < 34.0;
 
-    // 判断是否为同色系单色封面（色相跨度 < 22°）
-    final isSingleTone = !isNeutral(primary) &&
-        maxHueSpan < 22.0 &&
-        perceptualColorDistance(primary, secondary) < 0.14;
-
-    AlbumPalette working = this;
-    if (isSingleTone) {
+    AlbumPalette working;
+    if (isIntentionalMutedCover) {
+      // 莫兰迪/冷灰水泥封面（如 Catching On）：保持原有低饱和度高级灰调，绝不拉成刺眼荧光色，依靠明度跨度呈现流体光斑
       final baseHue = pHsl.hue;
-      final lum = pureHueLuminance(baseHue);
-      final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-      final maxAllowedSat = (0.88 - excess * 0.12).clamp(0.55, 0.88);
-      // 尊重封面原有饱和度气质（如低饱和度冷灰蓝封面保持高级莫兰迪质感，高饱和度封面保持鲜明）
-      final faithfulSat =
-          (pHsl.saturation * 1.12).clamp(pHsl.saturation, maxAllowedSat);
-
-      // Apple Music 同色系光影雕塑（仅在 ±11° 同色系微邻近范围内拉开深浅明度纵深，绝不篡改色相）：
-      final secHue = (baseHue + 11.0) % 360.0;
-      final accHue = (baseHue - 11.0 + 360.0) % 360.0;
-
+      final gentleSat = (pHsl.saturation * 1.32).clamp(0.14, 0.36);
       working = AlbumPalette(
-        primary: pHsl
-            .withSaturation(faithfulSat)
-            .withLightness(pHsl.lightness.clamp(0.34, 0.52))
-            .toColor(),
+        primary: HSLColor.fromAHSL(1.0, baseHue, gentleSat, 0.42).toColor(),
         secondary: HSLColor.fromAHSL(
           1.0,
-          secHue,
-          (faithfulSat * 0.94).clamp(0.14, maxAllowedSat),
-          (pHsl.lightness - 0.08).clamp(0.24, 0.44),
+          (baseHue + 14.0) % 360.0,
+          (gentleSat * 0.95).clamp(0.12, 0.34),
+          0.30,
         ).toColor(),
         accent: HSLColor.fromAHSL(
           1.0,
-          accHue,
-          (faithfulSat * 1.04).clamp(0.16, maxAllowedSat),
-          (pHsl.lightness + 0.10).clamp(0.38, 0.58),
+          (baseHue - 14.0 + 360.0) % 360.0,
+          (gentleSat * 1.08).clamp(0.16, 0.38),
+          0.52,
+        ).toColor(),
+        muted: HSLColor.fromAHSL(1.0, baseHue, gentleSat * 0.55, 0.12).toColor(),
+        highlight:
+            HSLColor.fromAHSL(1.0, baseHue, gentleSat * 0.80, 0.64).toColor(),
+      );
+    } else if (isNarrowHue) {
+      // 单色/同色系封面：在忠于主色相的前提下进行 ±22° 同色系双翼舒展与大幅明度阶梯雕塑
+      final baseHue = pHsl.hue;
+      final lum = pureHueLuminance(baseHue);
+      final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+      final maxAllowedSat = (0.88 - excess * 0.12).clamp(0.58, 0.88);
+      final vividSat =
+          (pHsl.saturation * 1.38 + 0.14).clamp(0.48, maxAllowedSat);
+
+      working = AlbumPalette(
+        primary: HSLColor.fromAHSL(1.0, baseHue, vividSat, 0.42).toColor(),
+        secondary: HSLColor.fromAHSL(
+          1.0,
+          (baseHue + 22.0) % 360.0,
+          (vividSat * 0.94).clamp(0.44, maxAllowedSat),
+          0.29,
+        ).toColor(),
+        accent: HSLColor.fromAHSL(
+          1.0,
+          (baseHue - 22.0 + 360.0) % 360.0,
+          (vividSat * 1.05).clamp(0.50, maxAllowedSat),
+          0.52,
         ).toColor(),
         muted: HSLColor.fromAHSL(
           1.0,
-          baseHue,
-          (faithfulSat * 0.48).clamp(0.08, 0.45),
-          0.13,
+          (baseHue + 10.0) % 360.0,
+          (vividSat * 0.48).clamp(0.18, 0.46),
+          0.11,
         ).toColor(),
         highlight: HSLColor.fromAHSL(
           1.0,
-          baseHue,
-          (faithfulSat * 0.76).clamp(0.12, 0.72),
+          (baseHue - 10.0 + 360.0) % 360.0,
+          (vividSat * 0.78).clamp(0.36, 0.76),
           0.62,
         ).toColor(),
+      );
+    } else {
+      // 多色封面：应用 Apple Music 标志性的饱和度提纯与明度对比雕塑，让各色光斑鲜活通透
+      Color enhanceRole(Color c, double minSat, double targetL) {
+        if (isNeutral(c)) {
+          return HSLColor.fromAHSL(
+            1.0,
+            pHsl.hue,
+            (pHsl.saturation * 0.85).clamp(0.32, 0.72),
+            targetL,
+          ).toColor();
+        }
+        final hsl = HSLColor.fromColor(c);
+        final lum = pureHueLuminance(hsl.hue);
+        final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+        final capSat = (0.90 - excess * 0.12).clamp(0.58, 0.90);
+        final boostedSat =
+            (hsl.saturation * 1.40 + 0.15).clamp(minSat, capSat);
+        final blendedL = (hsl.lightness * 0.45 + targetL * 0.55)
+            .clamp(0.24, 0.62 - excess * 0.14);
+        return hsl.withSaturation(boostedSat).withLightness(blendedL).toColor();
+      }
+
+      working = AlbumPalette(
+        primary: enhanceRole(primary, 0.50, 0.42),
+        secondary: enhanceRole(secondary, 0.54, 0.36),
+        accent: enhanceRole(accent, 0.56, 0.48),
+        muted: HSLColor.fromColor(isNeutral(muted) ? primary : muted)
+            .withSaturation(0.32)
+            .withLightness(0.11)
+            .toColor(),
+        highlight: enhanceRole(
+          isNeutral(highlight) ? accent : highlight,
+          0.46,
+          0.60,
+        ),
       );
     }
 
@@ -510,24 +570,24 @@ Color _cleanColor(Color color) {
   return color;
 }
 
-/// 忠实主色优选：仅当第一候选色为极端死黑阴影底色 (L < 0.09) 且紧邻的第二主簇为高饱和鲜活主体色时，
-/// 才推举第二主簇为 Primary；对于黑白灰封面或正常明度封面，严格保留第一主导色，确保 100% 取色准确。
+/// 智能主色优选：当首位候选色为死黑阴影底色 (L < 0.15) 或过曝浅白底 (L > 0.82) 时，
+/// 顺延推举封面上最具代表性的鲜活主体色作为 Primary（若全图为黑白灰封面则保持原状）。
 Color _selectPrimary(List<Color> colors) {
   if (colors.length <= 1) return colors.first;
   final first = colors.first;
   final firstHsl = HSLColor.fromColor(first);
-  final firstChroma = _colorChroma(first);
 
-  if (firstHsl.lightness < 0.09 && firstChroma < 0.035) {
-    final second = colors[1];
-    if (!AlbumPalette.isNeutral(second)) {
-      final secHsl = HSLColor.fromColor(second);
-      final secChroma = _colorChroma(second);
-      if (secHsl.saturation >= 0.35 &&
-          secChroma >= 0.08 &&
-          secHsl.lightness >= 0.18 &&
-          secHsl.lightness <= 0.80) {
-        return second;
+  if (firstHsl.lightness < 0.15 || firstHsl.lightness > 0.82) {
+    for (var i = 1; i < colors.length; i++) {
+      final candidate = colors[i];
+      if (AlbumPalette.isNeutral(candidate)) continue;
+      final hsl = HSLColor.fromColor(candidate);
+      final chroma = _colorChroma(candidate);
+      if (hsl.saturation >= 0.24 &&
+          chroma >= 0.055 &&
+          hsl.lightness >= 0.16 &&
+          hsl.lightness <= 0.80) {
+        return candidate;
       }
     }
   }
@@ -557,10 +617,11 @@ double _hueAngleDiff(Color a, Color b) {
 Color? _selectSecondary(List<Color> colors, Color primary) {
   if (colors.length < 2) return null;
   final primaryIsNeutral = AlbumPalette.isNeutral(primary);
-  final primaryChroma = _colorChroma(primary);
-  final hasProminentChromatic = colors.take(4).any(
-        (c) => c != primary && !AlbumPalette.isNeutral(c),
-      );
+  final hasChromaticCandidate = colors.any((c) {
+    if (c == primary || AlbumPalette.isNeutral(c)) return false;
+    final l = HSLColor.fromColor(c).lightness;
+    return l >= 0.15 && l <= 0.82;
+  });
 
   Color? selected;
   var bestScore = double.negativeInfinity;
@@ -569,14 +630,21 @@ Color? _selectSecondary(List<Color> colors, Color primary) {
     if (candidate == primary) continue;
     final distance = perceptualColorDistance(primary, candidate);
     final chromaDist = _chromaticDistance(primary, candidate);
+    final candChroma = _colorChroma(candidate);
+    final candL = HSLColor.fromColor(candidate).lightness;
     final salience = 1 / (index + 1);
 
-    var score = (distance * 0.74 + chromaDist * 0.26) * 0.82 + salience * 0.18;
-    if (!primaryIsNeutral &&
-        primaryChroma >= 0.065 &&
-        hasProminentChromatic &&
-        AlbumPalette.isNeutral(candidate)) {
-      score *= 0.62;
+    // 重点奖励色平面 (a, b) 色相差与色度纯度，防止黑白灰阴影/高光仅靠明度差抢占次主色
+    var score = chromaDist * 0.90 +
+        candChroma * 0.45 +
+        distance * 0.35 +
+        salience * 0.20;
+    if (!primaryIsNeutral && hasChromaticCandidate) {
+      if (AlbumPalette.isNeutral(candidate) ||
+          candL < 0.15 ||
+          (candL > 0.80 && candChroma < 0.065)) {
+        score *= 0.22;
+      }
     }
     if (score > bestScore) {
       bestScore = score;
@@ -592,10 +660,13 @@ Color? _selectAccent(
   required Color secondary,
 }) {
   final primaryIsNeutral = AlbumPalette.isNeutral(primary);
-  final primaryChroma = _colorChroma(primary);
-  final hasProminentChromatic = colors.take(5).any(
-        (c) => c != primary && c != secondary && !AlbumPalette.isNeutral(c),
-      );
+  final hasChromaticCandidate = colors.any((c) {
+    if (c == primary || c == secondary || AlbumPalette.isNeutral(c)) {
+      return false;
+    }
+    final l = HSLColor.fromColor(c).lightness;
+    return l >= 0.15 && l <= 0.82;
+  });
 
   Color? selected;
   var bestScore = double.negativeInfinity;
@@ -610,14 +681,20 @@ Color? _selectAccent(
       _chromaticDistance(primary, candidate),
       _chromaticDistance(secondary, candidate),
     );
+    final candChroma = _colorChroma(candidate);
+    final candL = HSLColor.fromColor(candidate).lightness;
     final salience = 1 / (index + 1);
 
-    var score = (distance * 0.74 + chromaDist * 0.26) * 0.86 + salience * 0.14;
-    if (!primaryIsNeutral &&
-        primaryChroma >= 0.065 &&
-        hasProminentChromatic &&
-        AlbumPalette.isNeutral(candidate)) {
-      score *= 0.62;
+    var score = chromaDist * 0.88 +
+        candChroma * 0.48 +
+        distance * 0.34 +
+        salience * 0.16;
+    if (!primaryIsNeutral && hasChromaticCandidate) {
+      if (AlbumPalette.isNeutral(candidate) ||
+          candL < 0.15 ||
+          (candL > 0.80 && candChroma < 0.065)) {
+        score *= 0.22;
+      }
     }
     if (score > bestScore) {
       bestScore = score;

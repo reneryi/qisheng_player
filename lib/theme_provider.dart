@@ -250,7 +250,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   );
 
   static const int _maxPaletteCacheEntries = 128;
-  static const String _paletteRoleVersion = 'roles-v3';
+  static const String _paletteRoleVersion = 'roles-v4';
 
   final Map<String, AlbumPalette> _paletteCache = {};
   int _dynamicThemeRequestId = 0;
