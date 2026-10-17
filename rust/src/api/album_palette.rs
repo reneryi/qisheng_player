@@ -110,8 +110,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
         let center_x = ((x + 0.5) / width - 0.5) * 2.0;
         let center_y = ((y + 0.5) / height - 0.5) * 2.0;
         let center_distance = (center_x * center_x + center_y * center_y).sqrt();
-        // 强化中心视觉主体权重（中心 1.0 -> 边缘 0.58），抑制四角暗角与边缘文字干扰
-        let spatial_weight = (0.58 + 0.42 * (1.0 - center_distance.min(1.0))).max(0.0);
+        let spatial_weight = (0.68 + 0.32 * (1.0 - center_distance.min(1.0))).max(0.0);
         let weight = (f64::from(a) * spatial_weight).round() as u64;
         if weight == 0 {
             continue;
@@ -137,40 +136,36 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
     let bins = histogram.into_values().collect::<Vec<_>>();
     let average_luminance = weighted_average_luminance(&bins, total_weight);
 
-    // 第一阶段：细粒度初始聚类（20 个聚类中心），充分捕获主体与双色/霓虹特征色
-    let fine_count = bins.len().min(20).max(target_count);
+    // 第一阶段：细粒度初始聚类（18 个聚类中心），兼顾全局主色调还原与显著特征色捕获
+    let fine_count = bins.len().min(18).max(target_count);
     let mut raw_clusters = cluster_histogram(&bins, fine_count);
 
-    // 第二阶段：在感知色彩空间中合并极相近的同色系微弱渐变，合并时向高纯度色核倾斜以防暗部阴影污染色相
+    // 第二阶段：在感知色彩空间中合并极相近的同色系微弱渐变，保持真实面积加权均值，杜绝色相跑偏
     let mut merged = Vec::<WeightedColor>::with_capacity(raw_clusters.len());
     raw_clusters.sort_by(|a, b| b.weight.cmp(&a.weight));
     for c in raw_clusters {
         if let Some(target) = merged
             .iter_mut()
-            .find(|m| color_distance_sq(m.rgb, c.rgb) < 0.048_f64.powi(2))
+            .find(|m| color_distance_sq(m.rgb, c.rgb) < 0.045_f64.powi(2))
         {
-            let target_sample = rgb_sample(target.rgb);
-            let c_sample = rgb_sample(c.rgb);
-            let target_chroma = target_sample.to_oklab().chroma();
-            let c_chroma = c_sample.to_oklab().chroma();
-
-            let tw = (target.weight as f64 * (1.0 + target_chroma * 2.4)).round().max(1.0) as u64;
-            let cw = (c.weight as f64 * (1.0 + c_chroma * 2.4)).round().max(1.0) as u64;
-            let color_w = tw + cw;
-
-            let tr = u64::from(target_sample.r) * tw + u64::from(c_sample.r) * cw;
-            let tg = u64::from(target_sample.g) * tw + u64::from(c_sample.g) * cw;
-            let tb = u64::from(target_sample.b) * tw + u64::from(c_sample.b) * cw;
-            target.rgb = (((tr / color_w) as u32) << 16)
-                | (((tg / color_w) as u32) << 8)
-                | ((tb / color_w) as u32);
-            target.weight += c.weight;
+            let total_w = target.weight + c.weight;
+            let tr = ((target.rgb >> 16) & 0xFF) as u64 * target.weight
+                + ((c.rgb >> 16) & 0xFF) as u64 * c.weight;
+            let tg = ((target.rgb >> 8) & 0xFF) as u64 * target.weight
+                + ((c.rgb >> 8) & 0xFF) as u64 * c.weight;
+            let tb = (target.rgb & 0xFF) as u64 * target.weight
+                + (c.rgb & 0xFF) as u64 * c.weight;
+            target.rgb = (((tr / total_w) as u32) << 16)
+                | (((tg / total_w) as u32) << 8)
+                | ((tb / total_w) as u32);
+            target.weight = total_w;
         } else {
             merged.push(c);
         }
     }
 
     // 第三阶段：自适应特征色保留过滤
+    // 过滤微小边缘与文字抗锯齿噪点（如黑白封面上 < 1.8% 的细小文字描边），确保主色与次主色高度忠于封面
     let has_multiple_colors = merged.len() > 1;
     let max_weight = merged.iter().map(|c| c.weight).max().unwrap_or(total_weight);
     let is_dominant_single_background = (max_weight as f64 / total_weight as f64) >= 0.88;
@@ -185,14 +180,14 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
         let sat = rgb_saturation(sample);
 
         let is_high_contrast =
-            (relative_luminance(sample) - average_luminance).abs() >= 0.30;
+            (relative_luminance(sample) - average_luminance).abs() >= 0.32;
 
         if is_dominant_single_background {
-            area_pct >= 5.8
-        } else if chroma >= 0.045 || sat >= 0.35 || (is_high_contrast && area_pct >= 1.2) {
-            area_pct >= 1.2
+            area_pct >= 5.6
+        } else if chroma >= 0.050 || sat >= 0.36 || (is_high_contrast && area_pct >= 1.8) {
+            area_pct >= 1.8
         } else {
-            area_pct >= 3.5
+            area_pct >= 3.6
         }
     });
 
@@ -203,8 +198,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
             .then_with(|| right.weight.cmp(&left.weight))
     });
 
-    // 第四阶段：多样性感知贪心选择（Perceptual & Chromatic Diversity Selection）
-    // 兼顾显著度、Oklab 空间距离与色平面 (a, b) 色相差，确保红+青、蓝+橙等对比色双双入选
+    // 第四阶段：多样性感知贪心选择（Perceptual Diversity Selection）
     let mut result = Vec::with_capacity(target_count);
     if let Some(first) = merged.first() {
         result.push(first.rgb);
@@ -220,7 +214,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                     .map(|&r| {
                         let d3 = color_distance_sq(r, a.rgb).sqrt();
                         let dc = chromatic_distance(r, a.rgb);
-                        d3 * 0.65 + dc * 0.35
+                        d3 * 0.76 + dc * 0.24
                     })
                     .fold(f64::INFINITY, f64::min);
                 let dist_b = result
@@ -228,13 +222,13 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                     .map(|&r| {
                         let d3 = color_distance_sq(r, b.rgb).sqrt();
                         let dc = chromatic_distance(r, b.rgb);
-                        d3 * 0.65 + dc * 0.35
+                        d3 * 0.76 + dc * 0.24
                     })
                     .fold(f64::INFINITY, f64::min);
                 let salience_a = visual_salience_score(**a, total_weight, average_luminance);
                 let salience_b = visual_salience_score(**b, total_weight, average_luminance);
-                let score_a = salience_a * 0.54 + dist_a * 0.46;
-                let score_b = salience_b * 0.54 + dist_b * 0.46;
+                let score_a = salience_a * 0.60 + dist_a * 0.40;
+                let score_b = salience_b * 0.60 + dist_b * 0.40;
                 score_a
                     .partial_cmp(&score_b)
                     .unwrap_or(std::cmp::Ordering::Equal)
@@ -245,7 +239,7 @@ pub fn extract_dominant_colors(image_bytes: Vec<u8>, max_colors: u8) -> anyhow::
                 .iter()
                 .map(|&r| color_distance_sq(r, chosen.rgb).sqrt())
                 .fold(f64::INFINITY, f64::min);
-            if min_dist > 0.036 || result.len() < target_count.min(3) {
+            if min_dist > 0.038 || result.len() < target_count.min(3) {
                 result.push(chosen.rgb);
             } else {
                 break;
@@ -288,24 +282,21 @@ fn visual_salience_score(color: WeightedColor, total_weight: u64, average_lumina
 
     let area = color.weight as f64 / total_weight as f64;
     let sample = rgb_sample(color.rgb);
-    let lab = sample.to_oklab();
-    let chroma = lab.chroma();
+    let chroma = sample.to_oklab().chroma();
     let saturation = rgb_saturation(sample);
     let lum = relative_luminance(sample);
     let contrast = (lum - average_luminance).abs();
 
-    // 抑制纯黑暗底 (lum < 0.045) 与过曝死白底 (lum > 0.94) 对第一主色的抢占，
-    // 确保暗色背景封面（如 Illusion 的黑底红青霓虹人像）优先提取出真正的主体鲜艳色彩
-    let lum_quality = if lum < 0.045 && chroma < 0.06 {
-        0.30 + (lum / 0.045) * 0.70
-    } else if lum > 0.94 && chroma < 0.05 {
-        0.45 + ((1.0 - lum) / 0.06) * 0.55
+    // 仅对极端死黑纯底 (lum < 0.028 && chroma < 0.04) 施加温和权重收敛，
+    // 既避免纯黑边角压制大面积彩色主体，又确保深色/黑白封面的主调准确无误
+    let lum_quality = if lum < 0.028 && chroma < 0.04 {
+        0.62 + (lum / 0.028) * 0.38
     } else {
         1.0
     };
 
-    let vibrancy = (chroma.min(0.26) * 3.8 + saturation * 0.26).max(0.0);
-    area.powf(0.35) * (0.34 + vibrancy * 0.50 + contrast * 0.16) * lum_quality
+    let vibrancy = (chroma.min(0.24) * 3.6 + saturation * 0.25).max(0.0);
+    area.powf(0.36) * (0.36 + vibrancy * 0.48 + contrast * 0.16) * lum_quality
 }
 
 fn rgb_sample(rgb: u32) -> RgbSample {
@@ -322,8 +313,8 @@ fn rgb_saturation(sample: RgbSample) -> f64 {
     if max == 0.0 {
         return 0.0;
     }
-    // 暗部门限衰减：消除极暗噪点像素（如 RGB(4, 14, 13)）在 (max-min)/max 下产生 70%+ 虚假饱和度的问题
-    let dark_gate = (max / 42.0).min(1.0);
+    // 暗部门限衰减：消除极暗噪点像素（如 RGB(4, 14, 13)）在 (max-min)/max 下产生虚假高饱和度的问题
+    let dark_gate = (max / 36.0).min(1.0);
     ((max - min) / max) * dark_gate
 }
 
@@ -568,16 +559,12 @@ mod tests {
 
     fn is_close(actual: u32, expected: u32, tolerance: i32) -> bool {
         let ar = ((actual >> 16) & 0xFF) as i32;
-        let ag = ((rgb_g(actual)) & 0xFF) as i32;
+        let ag = ((actual >> 8) & 0xFF) as i32;
         let ab = (actual & 0xFF) as i32;
         let er = ((expected >> 16) & 0xFF) as i32;
         let eg = ((expected >> 8) & 0xFF) as i32;
         let eb = (expected & 0xFF) as i32;
         (ar - er).abs() <= tolerance && (ag - eg).abs() <= tolerance && (ab - eb).abs() <= tolerance
-    }
-
-    fn rgb_g(rgb: u32) -> u32 {
-        (rgb >> 8) & 0xFF
     }
 
     #[test]

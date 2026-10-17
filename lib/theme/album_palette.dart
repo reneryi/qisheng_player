@@ -150,7 +150,7 @@ class AlbumPalette {
     final hsl = HSLColor.fromColor(color);
     final isDark = hsl.lightness < 0.5;
 
-    // 若主色是中性色（黑白灰），构建纯正黑白灰明暗阶梯，严禁强行注入红橙饱和度
+    // 若主色是中性色（黑白灰），构建纯正黑白灰明暗阶梯，严禁强行注入杂色饱和度
     if (isNeutral(color)) {
       return AlbumPalette(
         primary: color,
@@ -183,17 +183,17 @@ class AlbumPalette {
 
     return AlbumPalette(
       primary: color,
-      // 次主色：同色系明暗阶梯与邻近色调和 (+28°)，层次清晰
+      // 次主色：同色系明暗阶梯与邻近色调和 (+18°)，忠于原色且层次清晰
       secondary: hsl
-          .withHue((hsl.hue + 28) % 360)
+          .withHue((hsl.hue + 18) % 360)
           .withSaturation(baseSat)
           .withLightness(
               (hsl.lightness + (isDark ? 0.10 : -0.06)).clamp(0.20, secondaryMaxL))
           .toColor(),
-      // 强调色：偏暖方向生动微偏 (-32°)，饱满生动
+      // 强调色：邻近微偏 (-18°)，饱满生动
       accent: hsl
-          .withHue((hsl.hue - 32 + 360) % 360)
-          .withSaturation((baseSat * 1.06).clamp(0.0, 1.0))
+          .withHue((hsl.hue - 18 + 360) % 360)
+          .withSaturation((baseSat * 1.04).clamp(0.0, 1.0))
           .withLightness(
               (hsl.lightness + (isDark ? 0.12 : -0.08)).clamp(0.22, accentMaxL))
           .toColor(),
@@ -221,14 +221,10 @@ class AlbumPalette {
     final primary = _selectPrimary(cleanedColors);
     final primaryIsNeutral = isNeutral(primary);
 
-    // 2. 封面色彩忠实提取：优先从封面提取出的真实颜色中挑选高色度对比的次主色与强调色
+    // 2. 封面色彩忠实提取：优先从封面提取出的真实颜色中挑选次主色与强调色
     final secondaryCandidate = _selectSecondary(cleanedColors, primary);
-    final secondaryHasContrast = secondaryCandidate != null &&
-        perceptualColorDistance(primary, secondaryCandidate) > 0.075 &&
-        (primaryIsNeutral ||
-            _hueAngleDiff(primary, secondaryCandidate) >= 12.0 ||
-            perceptualColorDistance(primary, secondaryCandidate) > 0.14);
-    final secondary = secondaryHasContrast
+    final secondary = secondaryCandidate != null &&
+            perceptualColorDistance(primary, secondaryCandidate) > 0.075
         ? secondaryCandidate
         : _deriveHarmoniousColor(
             primary,
@@ -242,24 +238,12 @@ class AlbumPalette {
       primary: primary,
       secondary: secondary,
     );
-    final accentHasContrast = accentCandidate != null &&
-        math.min(
-              perceptualColorDistance(primary, accentCandidate),
-              perceptualColorDistance(secondary, accentCandidate),
-            ) >
-            0.065 &&
-        (primaryIsNeutral ||
-            math.min(
-                  _hueAngleDiff(primary, accentCandidate),
-                  _hueAngleDiff(secondary, accentCandidate),
-                ) >=
-                10.0 ||
+    final accent = accentCandidate != null &&
             math.min(
                   perceptualColorDistance(primary, accentCandidate),
                   perceptualColorDistance(secondary, accentCandidate),
                 ) >
-                0.13);
-    final accent = accentHasContrast
+                0.065
         ? accentCandidate
         : _deriveHarmoniousColor(
             primary,
@@ -328,127 +312,91 @@ class AlbumPalette {
     );
   }
 
-  /// 为弥散流彩 (Mesh Flow)、极光漫染 (Prismatic Glass) 与水波纹 (Water Ripple) 生成
-  /// 具有丰富色相张力与明暗纵深的舞台调色板：
-  /// - 当封面为多色强对比（如红+青、蓝+橙）时，完整保留真实对比色相并强化通透饱和度；
-  /// - 当封面颜色较为单一（单色或窄色相跨度 < 38°）时，以主色为核心进行邻近-分裂谐波延展，
-  ///   自动构建冷暖呼应、明暗交错的 5 层流光色彩，彻底告别单色封面的平淡沉闷感。
+  /// Apple Music 级流体光斑与极光舞台调色板：
+  /// 1. 严守封面色彩真实性（100% 忠于封面原始色相与气质，绝不强行旋转 45° 制造虚假杂色，黑白灰封面保持纯粹高级银灰）；
+  /// 2. 针对单一色调封面（色相跨度 < 22°），通过 Apple Music 标志性的“深邃丝绒暗谷 + 温润高光色云”明度纵深雕塑
+  ///    与极微幅同色系邻近呼吸（±10°~12°），在不改变封面本色的前提下赋予画面通透立体的光影层次；
+  /// 3. 针对多色封面，忠实保留封面提取的真实主次对比色，并确保 5 个角色具备清晰的明暗阶梯。
   AlbumPalette toAtmosphericStagePalette(double darkness) {
     final d = darkness.clamp(0.0, 1.0);
     final allNeutral =
         isNeutral(primary) && isNeutral(secondary) && isNeutral(accent);
 
     if (allNeutral) {
-      // 黑白灰封面：构建富有层次的月光银与玄墨黛阶梯，注入极微弱的冷暖银辉光感
-      final pHsl = HSLColor.fromColor(primary);
-      final baseHue = pHsl.hue;
-      final darkStage = AlbumPalette(
-        primary: HSLColor.fromAHSL(1.0, baseHue, 0.05, 0.36).toColor(),
-        secondary:
-            HSLColor.fromAHSL(1.0, (baseHue + 200) % 360, 0.08, 0.28).toColor(),
-        accent:
-            HSLColor.fromAHSL(1.0, (baseHue + 28) % 360, 0.07, 0.46).toColor(),
-        muted:
-            HSLColor.fromAHSL(1.0, (baseHue + 210) % 360, 0.06, 0.13).toColor(),
-        highlight:
-            HSLColor.fromAHSL(1.0, (baseHue + 18) % 360, 0.06, 0.62).toColor(),
+      // 黑白灰封面：保持 100% 纯正无色偏的玄墨-月光银明暗阶梯，绝不染色
+      const darkNeutral = AlbumPalette(
+        primary: Color(0xFF525458),
+        secondary: Color(0xFF3A3C40),
+        accent: Color(0xFF6A6D72),
+        muted: Color(0xFF1A1B1E),
+        highlight: Color(0xFF8C9096),
       );
-      final lightStage = AlbumPalette(
-        primary: HSLColor.fromAHSL(1.0, baseHue, 0.04, 0.64).toColor(),
-        secondary:
-            HSLColor.fromAHSL(1.0, (baseHue + 200) % 360, 0.06, 0.72).toColor(),
-        accent:
-            HSLColor.fromAHSL(1.0, (baseHue + 28) % 360, 0.06, 0.58).toColor(),
-        muted:
-            HSLColor.fromAHSL(1.0, (baseHue + 210) % 360, 0.04, 0.82).toColor(),
-        highlight:
-            HSLColor.fromAHSL(1.0, (baseHue + 18) % 360, 0.05, 0.90).toColor(),
+      const lightNeutral = AlbumPalette(
+        primary: Color(0xFFA6A9B0),
+        secondary: Color(0xFFB8BBC2),
+        accent: Color(0xFF9498A0),
+        muted: Color(0xFFD6D9DF),
+        highlight: Color(0xFFECEEF2),
       );
-      return AlbumPalette.lerp(lightStage, darkStage, d) ?? darkStage;
+      return AlbumPalette.lerp(lightNeutral, darkNeutral, d) ??
+          (d > 0.5 ? darkNeutral : lightNeutral);
     }
 
     final pHsl = HSLColor.fromColor(primary);
-    final sHsl = HSLColor.fromColor(secondary);
-    final aHsl = HSLColor.fromColor(accent);
 
     final huePS = _hueAngleDiff(primary, secondary);
     final huePA = _hueAngleDiff(primary, accent);
     final hueSA = _hueAngleDiff(secondary, accent);
     final maxHueSpan = math.max(huePS, math.max(huePA, hueSA));
 
-    // 判断是否为单一色系/窄色相封面（例如全蓝、全紫、全暖黄或同色深浅渐变封面）
-    final isNarrowHue = maxHueSpan < 38.0 ||
-        (sHsl.saturation < 0.16 && aHsl.saturation < 0.16);
+    // 判断是否为同色系单色封面（色相跨度 < 22°）
+    final isSingleTone = !isNeutral(primary) &&
+        maxHueSpan < 22.0 &&
+        perceptualColorDistance(primary, secondary) < 0.14;
 
     AlbumPalette working = this;
-    if (isNarrowHue) {
+    if (isSingleTone) {
       final baseHue = pHsl.hue;
       final lum = pureHueLuminance(baseHue);
       final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-      final vividSat =
-          pHsl.saturation.clamp(0.52, (0.90 - excess * 0.12).clamp(0.58, 0.90));
+      final maxAllowedSat = (0.88 - excess * 0.12).clamp(0.55, 0.88);
+      // 尊重封面原有饱和度气质（如低饱和度冷灰蓝封面保持高级莫兰迪质感，高饱和度封面保持鲜明）
+      final faithfulSat =
+          (pHsl.saturation * 1.12).clamp(pHsl.saturation, maxAllowedSat);
 
-      // 黄金角邻近-冷暖双翼谐波展开：
-      // - Primary 锚定封面真实本色
-      // - Secondary 向深邃冷调/邻近翼旋转 +42°，形成柔美丝绸过渡
-      // - Accent 向灵动暖调/对冲翼旋转 -46°，赋予画面呼吸张力与层次感
-      // - Muted 深入 +24° 暮色暗谷，拉开明暗反差
-      // - Highlight 提亮 -22° 珠光高光，点亮流彩核心
-      final secHue = (baseHue + 42.0) % 360.0;
-      final accHue = (baseHue - 46.0 + 360.0) % 360.0;
-      final mutHue = (baseHue + 24.0) % 360.0;
-      final hiHue = (baseHue - 22.0 + 360.0) % 360.0;
+      // Apple Music 同色系光影雕塑（仅在 ±11° 同色系微邻近范围内拉开深浅明度纵深，绝不篡改色相）：
+      final secHue = (baseHue + 11.0) % 360.0;
+      final accHue = (baseHue - 11.0 + 360.0) % 360.0;
 
       working = AlbumPalette(
         primary: pHsl
-            .withSaturation(vividSat)
-            .withLightness(pHsl.lightness.clamp(0.34, 0.56))
+            .withSaturation(faithfulSat)
+            .withLightness(pHsl.lightness.clamp(0.34, 0.52))
             .toColor(),
         secondary: HSLColor.fromAHSL(
           1.0,
           secHue,
-          (vividSat * 0.96).clamp(0.46, 0.88),
-          (pHsl.lightness + 0.08).clamp(0.32, 0.60),
+          (faithfulSat * 0.94).clamp(0.14, maxAllowedSat),
+          (pHsl.lightness - 0.08).clamp(0.24, 0.44),
         ).toColor(),
         accent: HSLColor.fromAHSL(
           1.0,
           accHue,
-          (vividSat * 1.05).clamp(0.54, 0.92),
-          (pHsl.lightness + 0.12).clamp(0.38, 0.64),
+          (faithfulSat * 1.04).clamp(0.16, maxAllowedSat),
+          (pHsl.lightness + 0.10).clamp(0.38, 0.58),
         ).toColor(),
         muted: HSLColor.fromAHSL(
           1.0,
-          mutHue,
-          (vividSat * 0.48).clamp(0.22, 0.52),
-          0.14,
+          baseHue,
+          (faithfulSat * 0.48).clamp(0.08, 0.45),
+          0.13,
         ).toColor(),
         highlight: HSLColor.fromAHSL(
           1.0,
-          hiHue,
-          (vividSat * 0.72).clamp(0.40, 0.78),
-          0.66,
+          baseHue,
+          (faithfulSat * 0.76).clamp(0.12, 0.72),
+          0.62,
         ).toColor(),
-      );
-    } else {
-      // 多色封面：对核心角色适度提纯饱和度并拉开明度阶梯，防止原本偏灰的次色在流彩中发闷
-      Color boostRole(Color c, double minSat, double targetLOffset) {
-        if (isNeutral(c)) return c;
-        final hsl = HSLColor.fromColor(c);
-        final lum = pureHueLuminance(hsl.hue);
-        final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-        final maxSat = (0.92 - excess * 0.12).clamp(0.60, 0.92);
-        return hsl
-            .withSaturation(hsl.saturation.clamp(minSat, maxSat))
-            .withLightness((hsl.lightness + targetLOffset).clamp(0.26, 0.66))
-            .toColor();
-      }
-
-      working = AlbumPalette(
-        primary: boostRole(primary, 0.48, 0.0),
-        secondary: boostRole(secondary, 0.52, 0.04),
-        accent: boostRole(accent, 0.56, 0.06),
-        muted: muted,
-        highlight: highlight,
       );
     }
 
@@ -562,31 +510,25 @@ Color _cleanColor(Color color) {
   return color;
 }
 
-/// 智能主色优选：当首位候选色为死黑暗底（L < 0.14）或低饱和度灰底，且后续存在鲜活主体色时，
-/// 优先推举最具表现力的鲜活主体色作为 Primary，防止暗黑背景喧宾夺主。
+/// 忠实主色优选：仅当第一候选色为极端死黑阴影底色 (L < 0.09) 且紧邻的第二主簇为高饱和鲜活主体色时，
+/// 才推举第二主簇为 Primary；对于黑白灰封面或正常明度封面，严格保留第一主导色，确保 100% 取色准确。
 Color _selectPrimary(List<Color> colors) {
   if (colors.length <= 1) return colors.first;
   final first = colors.first;
   final firstHsl = HSLColor.fromColor(first);
   final firstChroma = _colorChroma(first);
 
-  final isFirstWeak = AlbumPalette.isNeutral(first) ||
-      firstHsl.lightness < 0.14 ||
-      firstHsl.lightness > 0.90 ||
-      (firstHsl.saturation < 0.18 && firstChroma < 0.045);
-
-  if (!isFirstWeak) return first;
-
-  for (var i = 1; i < colors.length; i++) {
-    final c = colors[i];
-    if (AlbumPalette.isNeutral(c)) continue;
-    final hsl = HSLColor.fromColor(c);
-    final chroma = _colorChroma(c);
-    if (hsl.saturation >= 0.24 &&
-        chroma >= 0.055 &&
-        hsl.lightness >= 0.15 &&
-        hsl.lightness <= 0.85) {
-      return c;
+  if (firstHsl.lightness < 0.09 && firstChroma < 0.035) {
+    final second = colors[1];
+    if (!AlbumPalette.isNeutral(second)) {
+      final secHsl = HSLColor.fromColor(second);
+      final secChroma = _colorChroma(second);
+      if (secHsl.saturation >= 0.35 &&
+          secChroma >= 0.08 &&
+          secHsl.lightness >= 0.18 &&
+          secHsl.lightness <= 0.80) {
+        return second;
+      }
     }
   }
   return first;
@@ -615,8 +557,10 @@ double _hueAngleDiff(Color a, Color b) {
 Color? _selectSecondary(List<Color> colors, Color primary) {
   if (colors.length < 2) return null;
   final primaryIsNeutral = AlbumPalette.isNeutral(primary);
-  final hasChromaticCandidate =
-      colors.any((c) => c != primary && !AlbumPalette.isNeutral(c));
+  final primaryChroma = _colorChroma(primary);
+  final hasProminentChromatic = colors.take(4).any(
+        (c) => c != primary && !AlbumPalette.isNeutral(c),
+      );
 
   Color? selected;
   var bestScore = double.negativeInfinity;
@@ -625,17 +569,14 @@ Color? _selectSecondary(List<Color> colors, Color primary) {
     if (candidate == primary) continue;
     final distance = perceptualColorDistance(primary, candidate);
     final chromaDist = _chromaticDistance(primary, candidate);
-    final candChroma = _colorChroma(candidate);
     final salience = 1 / (index + 1);
 
-    var score = distance * 0.52 +
-        chromaDist * 0.68 +
-        candChroma * 0.32 +
-        salience * 0.16;
+    var score = (distance * 0.74 + chromaDist * 0.26) * 0.82 + salience * 0.18;
     if (!primaryIsNeutral &&
-        hasChromaticCandidate &&
+        primaryChroma >= 0.065 &&
+        hasProminentChromatic &&
         AlbumPalette.isNeutral(candidate)) {
-      score *= 0.28;
+      score *= 0.62;
     }
     if (score > bestScore) {
       bestScore = score;
@@ -651,9 +592,10 @@ Color? _selectAccent(
   required Color secondary,
 }) {
   final primaryIsNeutral = AlbumPalette.isNeutral(primary);
-  final hasChromaticCandidate = colors.any(
-    (c) => c != primary && c != secondary && !AlbumPalette.isNeutral(c),
-  );
+  final primaryChroma = _colorChroma(primary);
+  final hasProminentChromatic = colors.take(5).any(
+        (c) => c != primary && c != secondary && !AlbumPalette.isNeutral(c),
+      );
 
   Color? selected;
   var bestScore = double.negativeInfinity;
@@ -668,17 +610,14 @@ Color? _selectAccent(
       _chromaticDistance(primary, candidate),
       _chromaticDistance(secondary, candidate),
     );
-    final candChroma = _colorChroma(candidate);
     final salience = 1 / (index + 1);
 
-    var score = distance * 0.54 +
-        chromaDist * 0.66 +
-        candChroma * 0.34 +
-        salience * 0.14;
+    var score = (distance * 0.74 + chromaDist * 0.26) * 0.86 + salience * 0.14;
     if (!primaryIsNeutral &&
-        hasChromaticCandidate &&
+        primaryChroma >= 0.065 &&
+        hasProminentChromatic &&
         AlbumPalette.isNeutral(candidate)) {
-      score *= 0.28;
+      score *= 0.62;
     }
     if (score > bestScore) {
       bestScore = score;
@@ -800,32 +739,28 @@ double perceptualColorDistance(Color left, Color right) {
   return math.sqrt(dl * dl + da * da + db * db);
 }
 
-(double, double, double) _toOklab(Color color) {
-  double linearize(double channel) => channel <= 0.04045
-      ? channel / 12.92
-      : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
+Color _lerpOklab(Color left, Color right, double t) {
+  if (t <= 0.0) return left;
+  if (t >= 1.0) return right;
+  final clampedT = t.clamp(0.0, 1.0);
+  final leftLab = _toOklab(left);
+  final rightLab = _toOklab(right);
+  final l = leftLab.$1 + (rightLab.$1 - leftLab.$1) * clampedT;
+  final a = leftLab.$2 + (rightLab.$2 - leftLab.$2) * clampedT;
+  final b = leftLab.$3 + (rightLab.$3 - leftLab.$3) * clampedT;
+  final alpha = left.a + (right.a - left.a) * clampedT;
+  return _fromOklab(l, a, b, alpha);
+}
 
-  final red = linearize(color.r);
-  final green = linearize(color.g);
-  final blue = linearize(color.b);
-  final l = math
-      .pow(
-        0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue,
-        1 / 3,
-      )
-      .toDouble();
-  final m = math
-      .pow(
-        0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue,
-        1 / 3,
-      )
-      .toDouble();
-  final s = math
-      .pow(
-        0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue,
-        1 / 3,
-      )
-      .toDouble();
+(double, double, double) _toOklab(Color color) {
+  final r = _srgbToLinear(color.r);
+  final g = _srgbToLinear(color.g);
+  final b = _srgbToLinear(color.b);
+
+  final l = _cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  final m = _cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  final s = _cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+
   return (
     0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
     1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
@@ -833,44 +768,43 @@ double perceptualColorDistance(Color left, Color right) {
   );
 }
 
-Color _lerpOklab(Color a, Color b, double t) {
-  final left = _toOklab(a);
-  final right = _toOklab(b);
-  final lab = (
-    left.$1 + (right.$1 - left.$1) * t,
-    left.$2 + (right.$2 - left.$2) * t,
-    left.$3 + (right.$3 - left.$3) * t,
-  );
-  return _fromOklab(lab, Color.lerp(a, b, t)?.a ?? b.a);
-}
+Color _fromOklab(double l, double a, double b, double alpha) {
+  final l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+  final m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+  final s_ = l - 0.0894841775 * a - 1.2914855480 * b;
 
-Color _fromOklab((double, double, double) lab, double alpha) {
-  final l = lab.$1;
-  final a = lab.$2;
-  final b = lab.$3;
-  final lCube = l + 0.3963377774 * a + 0.2158037573 * b;
-  final mCube = l - 0.1055613458 * a - 0.0638541728 * b;
-  final sCube = l - 0.0894841775 * a - 1.2914855480 * b;
-  final lms =
-      (lCube * lCube * lCube, mCube * mCube * mCube, sCube * sCube * sCube);
-  final red =
-      4.0767416621 * lms.$1 - 3.3077115913 * lms.$2 + 0.2309699292 * lms.$3;
-  final green =
-      -1.2684380046 * lms.$1 + 2.6097574011 * lms.$2 - 0.3413193965 * lms.$3;
-  final blue =
-      -0.0041960863 * lms.$1 - 0.7034186147 * lms.$2 + 1.7076147010 * lms.$3;
+  final lCube = l_ * l_ * l_;
+  final mCube = m_ * m_ * m_;
+  final sCube = s_ * s_ * s_;
 
-  double encode(double channel) {
-    final value = channel.clamp(0.0, 1.0).toDouble();
-    return value <= 0.0031308
-        ? value * 12.92
-        : 1.055 * math.pow(value, 1 / 2.4).toDouble() - 0.055;
-  }
+  final r = 4.0767416621 * lCube - 3.3077115913 * mCube + 0.2309699292 * sCube;
+  final g = -1.2684380046 * lCube + 2.6097574011 * mCube - 0.3413193965 * sCube;
+  final bLinear =
+      -0.0041960863 * lCube - 0.7034186147 * mCube + 1.7076147010 * sCube;
 
   return Color.fromARGB(
     (alpha.clamp(0.0, 1.0) * 255).round(),
-    (encode(red) * 255).round().clamp(0, 255),
-    (encode(green) * 255).round().clamp(0, 255),
-    (encode(blue) * 255).round().clamp(0, 255),
+    (_linearToSrgb(r).clamp(0.0, 1.0) * 255).round(),
+    (_linearToSrgb(g).clamp(0.0, 1.0) * 255).round(),
+    (_linearToSrgb(bLinear).clamp(0.0, 1.0) * 255).round(),
   );
+}
+
+double _srgbToLinear(double value) {
+  if (value <= 0.04045) {
+    return value / 12.92;
+  }
+  return math.pow((value + 0.055) / 1.055, 2.4).toDouble();
+}
+
+double _linearToSrgb(double value) {
+  if (value <= 0.0031308) {
+    return 12.92 * value;
+  }
+  return 1.055 * math.pow(value, 1 / 2.4).toDouble() - 0.055;
+}
+
+double _cbrt(double value) {
+  if (value <= 0) return 0;
+  return math.pow(value, 1 / 3).toDouble();
 }

@@ -34,6 +34,10 @@ uniform vec4 u_sky_color;
 
 out vec4 frag_color;
 
+// 全局水面空间缩放系数：整体缩小 22% (0.78x)，使涟漪更精致、水面视野更开阔深远
+const float kWaterScale = 0.78;
+const float kInvWaterScale = 1.2820513;
+
 float hash12(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -53,9 +57,10 @@ mat2 rot2(float a) {
 
 // 真实水底双层干涉焦散光网 (Underwater Optical Caustic Filament Network)
 float causticNetwork(vec2 p, float t) {
-  vec2 p1 = rot2(0.42) * p * 5.2 + vec2(t * 0.18, -t * 0.14);
-  vec2 p2 = rot2(-0.68) * p * 6.4 + vec2(-t * 0.15, t * 0.21);
-  vec2 p3 = rot2(1.05) * p * 4.6 + vec2(sin(t * 0.22) * 0.4, cos(t * 0.19) * 0.4);
+  vec2 sp = p * kInvWaterScale;
+  vec2 p1 = rot2(0.42) * sp * 5.2 + vec2(t * 0.18, -t * 0.14);
+  vec2 p2 = rot2(-0.68) * sp * 6.4 + vec2(-t * 0.15, t * 0.21);
+  vec2 p3 = rot2(1.05) * sp * 4.6 + vec2(sin(t * 0.22) * 0.4, cos(t * 0.19) * 0.4);
 
   vec2 w1 = sin(p1 + cos(p1.yx * 1.35 + t * 0.32));
   vec2 w2 = sin(p2 + cos(p2.yx * 1.25 - t * 0.28));
@@ -94,7 +99,7 @@ vec3 sampleUnderwaterBed(
   float wAccent  = exp(-dot(p - c3, p - c3) / (0.48 * aspect));
   float wPrimary = exp(-dot(p - c1, p - c1) / (0.58 * aspect));
 
-  // 構建通透渐变水底（彻底告别单调死黑，呈现深海琉璃/晴空碧潭层次）
+  // 构建通透渐变水底（彻底告别单调死黑，呈现深海琉璃/晴空碧潭层次）
   float diag = clamp(uv.x * 0.42 + uv.y * 0.58, 0.0, 1.0);
   vec3 bed = mix(deepCol, shallowCol, diag * 0.52 + wShallow * 0.38);
   bed = mix(bed, deepCol * 1.18 + shallowCol * 0.22, wPrimary * 0.45);
@@ -118,7 +123,7 @@ void main() {
   float total_curv = 0.0; // 累积波面曲率（用于真实焦散聚光环计算）
   int count = int(clamp(u_ripple_count, 0.0, 16.0));
 
-  // ── 1. 真实表面张力-重力色散多环水波场 (Capillary-Gravity Dispersive Wave Field) ──
+  // ── 1. 真实表面张力-重力色散多环水波场 (几何同态缩放 0.78x：波纹缩小 22%，水面更开阔) ──
   for (int i = 0; i < 16; i++) {
     if (i >= count) break;
 
@@ -139,10 +144,13 @@ void main() {
     float damping = rParams.z;
 
     vec2 delta = vec2((uv.x - rData.x) * aspect, uv.y - rData.y);
-    float dist = length(delta);
-    if (dist <= 0.0001) continue;
+    float realDist = length(delta);
+    if (realDist <= 0.0001) continue;
 
-    vec2 dir = delta / dist;
+    vec2 dir = delta / realDist;
+    // 将径向距离映射至 1.282x 广角水面空间（等价于将每圈波纹的屏幕物理半径精确缩小 22%），
+    // 同时完美保持波包环数、波峰斜率与焦散聚光环强度不变
+    float dist = realDist * kInvWaterScale;
 
     // 波前扩散半径 R(t)：初始迅速张开，随后以真实色散群速度平滑向外推进
     float R = speed * dt + 0.014 * (1.0 - exp(-dt * 8.0));
@@ -185,10 +193,10 @@ void main() {
       float dWave = c1 - 0.48 * s2;
       float d2Wave = -s1 - 0.96 * c2;
 
-      float h = envelope * decay * wave;
+      float h = envelope * decay * wave * kWaterScale;
       total_h += h;
 
-      // 解析空间一阶梯度（精确计算波面法线）
+      // 解析空间一阶梯度（精确计算波面法线，同态缩放下斜率保持恒定）
       float dh_dr = (dEnv_dr * wave + envelope * k * dWave) * decay;
       total_grad += dh_dr * vec2(dir.x * aspect, dir.y);
 
@@ -197,19 +205,19 @@ void main() {
     }
   }
 
-  // ── 2. 湖面清风微澜 (Dual-Octave Capillary Breeze) ──
+  // ── 2. 湖面清风微澜 (Dual-Octave Capillary Breeze - 同步广角微缩) ──
   float breeze_t = u_time * 0.42;
-  vec2 p_uv = vec2(uv.x * aspect, uv.y);
+  vec2 p_uv = vec2(uv.x * aspect, uv.y) * kInvWaterScale;
   float b1 = sin(p_uv.x * 4.2 + p_uv.y * 2.8 + breeze_t) *
              cos(p_uv.x * 2.6 - p_uv.y * 3.6 - breeze_t * 0.8);
   float b2 = sin(p_uv.x * 7.5 - p_uv.y * 5.2 + breeze_t * 1.3) * 0.45;
-  float amb = (b1 + b2) * 0.00085;
+  float amb = (b1 + b2) * 0.00075;
   total_h += amb;
 
   total_grad.x += (cos(p_uv.x * 4.2 + p_uv.y * 2.8 + breeze_t) * 4.2 +
-                   cos(p_uv.x * 7.5 - p_uv.y * 5.2 + breeze_t * 1.3) * 3.3) * 0.00085;
+                   cos(p_uv.x * 7.5 - p_uv.y * 5.2 + breeze_t * 1.3) * 3.3) * 0.00075;
   total_grad.y += (cos(p_uv.x * 4.2 + p_uv.y * 2.8 + breeze_t) * 2.8 -
-                   cos(p_uv.x * 7.5 - p_uv.y * 5.2 + breeze_t * 1.3) * 2.3) * 0.00085;
+                   cos(p_uv.x * 7.5 - p_uv.y * 5.2 + breeze_t * 1.3) * 2.3) * 0.00075;
 
   // ── 3. 计算真实水面三维光学法线 ──
   float gradMag = length(total_grad);
@@ -234,7 +242,7 @@ void main() {
   }
 
   // ── 4. 斯涅尔水面折射 + RGB 微棱镜色散 (Refraction & Chromatic Dispersion) ──
-  vec2 refrOffset = normal.xy * 0.038;
+  vec2 refrOffset = normal.xy * 0.032;
   float slowT = u_time * 0.35;
 
   // 当涟漪经过时，水底色彩与焦散光网发生真实的透镜折射弯曲与轻微 RGB 色散

@@ -84,44 +84,45 @@ float hash12(vec2 p) {
 }
 
 // ============================================================
-// 柯西衰减涡流旋转算子 (不可压缩流体涡旋场 Divergence-Free Swirl)
+// Apple Music 级大尺度柔焦有机流场扭曲算子 (Ultra-Smooth Silk Domain Warp)
+// 采用大半径 (0.80~0.95)、低扭角 (< 0.65 rad) 与低频谐波流场，
+// 让巨型高斯色云呈现丝绸般缓慢舒展的液态光晕，彻底杜绝尖锐漩涡钩子与撕裂感
 // ============================================================
-vec2 applyVortex(vec2 p, vec2 center, float radius, float strength) {
+vec2 gentleSwirl(vec2 p, vec2 center, float radius, float strength) {
   vec2 delta = p - center;
-  float dist_sq = dot(delta, delta);
-  float r_sq = radius * radius;
-  float angle = strength / (1.0 + dist_sq / (r_sq * 0.45));
+  float distSq = dot(delta, delta);
+  float rSq = radius * radius;
+  float angle = strength * exp(-distSq / (2.0 * rSq));
   float s = sin(angle);
   float c = cos(angle);
-  mat2 rot = mat2(c, s, -s, c);
-  return center + rot * delta;
+  return center + mat2(c, s, -s, c) * delta;
 }
 
-// 高保真分析型大尺度高斯势能核
-float liquidBlob(vec2 p, vec2 center, float radius) {
-  vec2 delta = p - center;
-  float d2 = dot(delta, delta);
-  float r2 = radius * radius;
-  return exp(-d2 / (2.0 * r2));
+vec2 organicSilkWarp(vec2 p, float aspect, float t, float strength) {
+  vec2 c1 = vec2((0.36 + 0.18 * cos(t * 0.32)) * aspect, 0.44 + 0.16 * sin(t * 0.28));
+  vec2 c2 = vec2((0.66 + 0.18 * sin(t * 0.30 + 1.6)) * aspect, 0.58 + 0.16 * cos(t * 0.26 + 0.9));
+
+  vec2 q = gentleSwirl(p, c1, 0.86, 0.52 * strength);
+  q = gentleSwirl(q, c2, 0.82, -0.46 * strength);
+
+  // 低频无散度有机谐波呼吸（模拟流体光斑边沿的自然漫溢）
+  vec2 wave = vec2(
+    sin(q.y * 2.1 + t * 0.42) * cos(q.x * 1.6 - t * 0.34),
+    cos(q.x * 2.0 - t * 0.38) * sin(q.y * 1.7 + t * 0.31)
+  );
+  return q + wave * (0.048 * strength);
 }
 
-vec3 colorLab(vec4 color) {
-  return srgbToOklab(color.rgb);
-}
-
-// Oklch 色度守恒与互补色桥接合成：
-// 彻底解决红+青、蓝+橙等互补色在 Oklab 笛卡尔空间线性平均时 (a, b) 正负抵消退化为灰绿/暗褐泥色的问题
-vec3 preserveChromaMix(vec3 mixedLab, float targetChroma, vec2 fallbackDir) {
-  float actualChroma = length(mixedLab.yz);
-  if (targetChroma <= 0.008) {
-    return mixedLab;
-  }
-  vec2 dir = actualChroma > 0.006
-      ? (mixedLab.yz / actualChroma)
-      : normalize(fallbackDir + vec2(0.0001, -0.0001));
-  // 当两股互补色流交汇导致笛卡尔色度下降时，补偿 74% 的感知色度，使交界处呈现通透宝石过渡色而非脏灰
-  float restoredChroma = mix(actualChroma, targetChroma, 0.74);
-  return vec3(mixedLab.x, dir * restoredChroma);
+// Apple Music 巨型柔焦椭球流体光斑核 (Anisotropic Rotating Gaussian Light Cloud)
+// 每个光斑具备独立的长短轴呼吸比与缓慢自转角，相互交叠时产生如流体透镜般的柔滑融化感
+float fluidLightCloud(vec2 p, vec2 center, vec2 radii, float angle) {
+  vec2 d = p - center;
+  float c = cos(angle);
+  float s = sin(angle);
+  vec2 rotD = vec2(c * d.x + s * d.y, -s * d.x + c * d.y);
+  vec2 q = rotD / max(radii, vec2(0.10));
+  float r2 = dot(q, q);
+  return pow(exp(-0.5 * r2), 1.28);
 }
 
 float dither(vec2 p) {
@@ -132,11 +133,12 @@ float dither(vec2 p) {
 
 void main() {
   vec2 frag = FlutterFragCoord().xy;
-  vec2 uv = frag / u_size;
+  vec2 uv = frag / max(u_size, vec2(1.0));
   float aspect = max(u_size.x / max(u_size.y, 1.0), 0.1);
   vec2 p = vec2(uv.x * aspect, uv.y);
 
-  float time = u_time * 0.62;
+  // Apple Music 标志性的静谧呼吸流速（约 20~28 秒完成一次完整流转）
+  float time = u_time * 0.32;
 
   vec2 p1 = vec2(u_point_1.x * aspect, u_point_1.y);
   vec2 p2 = vec2(u_point_2.x * aspect, u_point_2.y);
@@ -144,132 +146,156 @@ void main() {
   vec2 p4 = vec2(u_point_4.x * aspect, u_point_4.y);
   vec2 p5 = vec2(u_point_5.x * aspect, u_point_5.y);
 
-  // ── 阶段 1：构建多中心游走流体涡流场 (Multi-Vortex Coordinate Warping) ──
-  vec2 vCenter1 = vec2(
-    (0.38 + 0.22 * cos(time * 0.45)) * aspect,
-    0.52 + 0.20 * sin(time * 0.38)
+  float warpAmt = clamp(u_warp_strength, 0.5, 1.6);
+  float scale = max(u_blob_scale, 0.80);
+
+  // ── 阶段 1：构建双层丝绸般平滑的有机流场坐标 (无穷阶可导 C^∞，绝无撕裂或折痕) ──
+  vec2 coordA = organicSilkWarp(p, aspect, time, warpAmt * 0.85);
+  vec2 coordB = organicSilkWarp(p, aspect, -time * 0.82 + 2.4, warpAmt * 0.75);
+
+  // ── 阶段 2：生成 6 团缓慢自转与呼吸的巨型椭球流体光斑 (Apple Music Fluid Light Clouds) ──
+  // 呼吸因子：让各光斑在漫游中呈现自然的扩张与收缩
+  float breathe1 = 1.0 + 0.10 * sin(time * 0.55);
+  float breathe2 = 1.0 + 0.10 * cos(time * 0.48 + 1.3);
+  float breathe3 = 1.0 + 0.12 * sin(time * 0.62 + 2.5);
+
+  // Layer A：主光斑层（大半径柔焦浸润，覆盖全屏并保留自然明暗纵深）
+  float a1 = fluidLightCloud(
+    coordA,
+    p1,
+    vec2(0.76, 0.56) * scale * breathe1,
+    time * 0.22 + 0.3
   );
-  vec2 vCenter2 = vec2(
-    (0.66 + 0.20 * sin(time * 0.50 + 1.2)) * aspect,
-    0.40 + 0.22 * cos(time * 0.42 + 0.8)
+  float a2 = fluidLightCloud(
+    coordA,
+    p2,
+    vec2(0.74, 0.54) * scale * breathe2,
+    -time * 0.20 + 1.1
   );
-  vec2 vCenter3 = vec2(
-    (0.50 + 0.24 * cos(time * 0.55 + 2.4)) * aspect,
-    0.72 + 0.18 * sin(time * 0.48 + 1.6)
+  float a3 = fluidLightCloud(
+    coordA,
+    p3,
+    vec2(0.68, 0.48) * scale * breathe3,
+    time * 0.26 - 0.5
   );
+  float a4 = fluidLightCloud(
+    coordA,
+    p4,
+    vec2(0.82, 0.62) * scale,
+    -time * 0.16 + 0.8
+  );
+  float a5 = fluidLightCloud(
+    coordA,
+    p5,
+    vec2(0.62, 0.46) * scale * breathe1,
+    time * 0.28 + 1.9
+  );
+  // 第 6 团伴生极光云：连接强调色与次主色的斜向柔光带，赋予画面如极光漫染般的丝滑张力
+  vec2 bridgeCenter = mix(p2, p3, 0.5 + 0.18 * sin(time * 0.40));
+  float a6 = fluidLightCloud(
+    coordA,
+    bridgeCenter,
+    vec2(0.70, 0.42) * scale * breathe2,
+    -0.35 + 0.20 * cos(time * 0.24)
+  ) * 0.78;
 
-  float twistScale = u_warp_strength;
+  // Layer B：深层伴生呼吸光云（形成前后景流体视差与柔和穿插）
+  float b1 = fluidLightCloud(coordB, p1, vec2(0.70, 0.54) * scale, -time * 0.18);
+  float b2 = fluidLightCloud(coordB, p2, vec2(0.68, 0.52) * scale, time * 0.19 + 0.7);
+  float b3 = fluidLightCloud(coordB, p3, vec2(0.64, 0.46) * scale, -time * 0.22 + 1.4);
+  float b4 = fluidLightCloud(coordB, p4, vec2(0.78, 0.58) * scale, time * 0.15 + 2.1);
+  float b5 = fluidLightCloud(coordB, p5, vec2(0.58, 0.44) * scale, -time * 0.24 + 0.4);
 
-  // ── 阶段 2：双层反向流体坐标场构建 ──
-  vec2 coordA = p;
-  coordA = applyVortex(coordA, vCenter1, 0.46, 2.6 * twistScale);
-  coordA = applyVortex(coordA, vCenter2, 0.38, -2.1 * twistScale);
+  // ── 阶段 3：连续无奇点 Oklab + 光学混合 (彻底根除零色度等高线断崖与硬边色带) ──
+  vec3 rgb1 = clamp(u_color_1.rgb, 0.0, 1.0);
+  vec3 rgb2 = clamp(u_color_2.rgb, 0.0, 1.0);
+  vec3 rgb3 = clamp(u_color_3.rgb, 0.0, 1.0);
+  vec3 rgb4 = clamp(u_color_4.rgb, 0.0, 1.0);
+  vec3 rgb5 = clamp(u_color_5.rgb, 0.0, 1.0);
 
-  vec2 coordB = p;
-  coordB = applyVortex(coordB, vCenter2, 0.42, 2.3 * twistScale);
-  coordB = applyVortex(coordB, vCenter3, 0.36, -1.9 * twistScale);
+  vec3 lab1 = srgbToOklab(rgb1);
+  vec3 lab2 = srgbToOklab(rgb2);
+  vec3 lab3 = srgbToOklab(rgb3);
+  vec3 lab4 = srgbToOklab(rgb4);
+  vec3 lab5 = srgbToOklab(rgb5);
 
-  // ── 阶段 3：7 组独立动态液态色核 (Liquid Color Blobs) ──
-  vec2 drift1 = vec2(cos(time * 0.55), sin(time * 0.45)) * 0.08;
-  vec2 drift2 = vec2(sin(time * 0.50 + 1.4), cos(time * 0.38 + 0.9)) * 0.07;
-  vec2 drift3 = vec2(cos(time * 0.42 + 2.8), sin(time * 0.52 + 0.5)) * 0.09;
-
-  float scale = max(u_blob_scale, 0.75);
-
-  float a1 = liquidBlob(coordA, p1 + drift1, 0.52 * scale);
-  float a2 = liquidBlob(coordA, p2 - drift2, 0.48 * scale);
-  float a3 = liquidBlob(coordA, p3 + drift3, 0.48 * scale);
-  float a4 = liquidBlob(coordA, p4 - drift1, 0.58 * scale);
-  float a5 = liquidBlob(coordA, p5 + drift2, 0.40 * scale);
-  float a6 = liquidBlob(coordA, p3 + vec2(0.18, -0.16) + drift1, 0.30 * scale) * 0.90;
-  float a7 = liquidBlob(coordA, p2 + vec2(-0.18, 0.16) - drift3, 0.28 * scale) * 0.86;
-
-  // 强化各色块核心区域的主导权（指数 2.4），避免所有颜色在全屏均质化混成一团
-  a1 = pow(a1, 2.4);
-  a2 = pow(a2, 2.4);
-  a3 = pow(a3, 2.4);
-  a4 = pow(a4, 1.9);
-  a5 = pow(a5, 2.5);
-  a6 = pow(a6, 2.3);
-  a7 = pow(a7, 2.3);
-
-  float b1 = pow(liquidBlob(coordB, p1 - drift2, 0.48 * scale), 2.4);
-  float b2 = pow(liquidBlob(coordB, p2 + drift3, 0.46 * scale), 2.4);
-  float b3 = pow(liquidBlob(coordB, p3 - drift1, 0.50 * scale), 2.4);
-  float b4 = pow(liquidBlob(coordB, p4 + drift2, 0.56 * scale), 1.9);
-  float b5 = pow(liquidBlob(coordB, p5 - drift3, 0.38 * scale), 2.5);
-
-  // ── 阶段 4：在 Oklab/Oklch 空间进行色度守恒流体融合 ──
-  vec3 lab1 = colorLab(u_color_1);
-  vec3 lab2 = colorLab(u_color_2);
-  vec3 lab3 = colorLab(u_color_3);
-  vec3 lab4 = colorLab(u_color_4);
-  vec3 lab5 = colorLab(u_color_5);
-
-  float c1 = length(lab1.yz);
-  float c2 = length(lab2.yz);
-  float c3 = length(lab3.yz);
-  float c4 = length(lab4.yz);
-  float c5 = length(lab5.yz);
-
-  float totalA = a1 + a2 + a3 + a4 + a5 + a6 + a7 + 0.0001;
+  float totalA = a1 + a2 + a3 + a4 + a5 + a6 + 0.0001;
   float totalB = b1 + b2 + b3 + b4 + b5 + 0.0001;
 
-  vec3 blendA = (
+  vec3 labBridge = mix(lab2, lab3, 0.5);
+  vec3 rgbBridge = mix(rgb2, rgb3, 0.5);
+
+  vec3 blendLabA = (
     lab1 * a1 +
     lab2 * a2 +
     lab3 * a3 +
     lab4 * a4 +
     lab5 * a5 +
-    lab3 * a6 +
-    lab2 * a7
-  ) / totalA;
-  float targetChromaA = (
-    c1 * a1 + c2 * a2 + c3 * (a3 + a6) + c4 * a4 + c5 * a5 + c2 * a7
+    labBridge * a6
   ) / totalA;
 
-  vec3 blendB = (
+  vec3 blendRgbA = (
+    rgb1 * a1 +
+    rgb2 * a2 +
+    rgb3 * a3 +
+    rgb4 * a4 +
+    rgb5 * a5 +
+    rgbBridge * a6
+  ) / totalA;
+
+  vec3 blendLabB = (
     lab1 * b1 +
     lab2 * b2 +
     lab3 * b3 +
     lab4 * b4 +
     lab5 * b5
   ) / totalB;
-  float targetChromaB = (
-    c1 * b1 + c2 * b2 + c3 * b3 + c4 * b4 + c5 * b5
+
+  vec3 blendRgbB = (
+    rgb1 * b1 +
+    rgb2 * b2 +
+    rgb3 * b3 +
+    rgb4 * b4 +
+    rgb5 * b5
   ) / totalB;
 
-  // 当互补色交汇时利用正交色桥方向保留纯净色度
-  vec2 bridgeDir = vec2(-lab1.z + lab3.y, lab1.y + lab3.z);
-  blendA = preserveChromaMix(blendA, targetChromaA, bridgeDir);
-  blendB = preserveChromaMix(blendB, targetChromaB, -bridgeDir);
+  float layerMixFactor = clamp(u_layer_mix * 0.65 + 0.14 * sin(time * 0.36), 0.20, 0.62);
+  vec3 mixedLab = mix(blendLabA, blendLabB, layerMixFactor);
+  vec3 mixedRgb = mix(blendRgbA, blendRgbB, layerMixFactor);
 
-  float layerMixFactor = clamp(u_layer_mix * 0.72 + 0.16 * sin(time * 0.35), 0.18, 0.68);
-  vec3 blended = mix(blendA, blendB, layerMixFactor);
-  float targetChroma = mix(targetChromaA, targetChromaB, layerMixFactor);
-  blended = preserveChromaMix(blended, targetChroma, bridgeDir);
+  // 混合 Oklab 感知均匀插值与 sRGB 舞台灯光叠加，使跨色相交界区既丝滑无痕又温润通透
+  vec3 opticalLab = srgbToOklab(mixedRgb);
+  vec3 blended = mix(mixedLab, opticalLab, 0.34);
 
-  // ── 阶段 5：明暗模式沉浸合成 ──
+  // 连续可导色度保真增益（直接对 (a, b) 向量乘平滑标量 1.0~1.22，在零点处完全连续，绝不产生任何硬边）
+  float meanChroma = (
+    length(lab1.yz) * a1 +
+    length(lab2.yz) * a2 +
+    length(lab3.yz) * a3 +
+    length(lab4.yz) * a4 +
+    length(lab5.yz) * a5 +
+    length(labBridge.yz) * a6
+  ) / totalA;
+  float curChroma = length(blended.yz);
+  float chromaLoss = clamp((meanChroma - curChroma) / max(meanChroma, 0.035), 0.0, 1.0);
+  blended.yz *= 1.0 + 0.24 * chromaLoss;
+
+  // ── 阶段 4：明暗模式沉浸式光影合成 ──
   vec3 base = srgbToOklab(u_base_color.rgb);
 
-  // 暗色模式：保留深邃丝绒暗谷，同时让流彩主色带通透鲜明
+  // 暗色模式：营造 Apple Music 般“深邃丝绒底幕 + 悬浮呼吸流体光云”的立体层次
   float blobEnergy = mix(totalA, totalB, layerMixFactor);
-  float fluidEnergy = smoothstep(0.18, 1.75, blobEnergy);
-  float darkIntensity = mix(0.42, 0.90, fluidEnergy) * clamp(u_blend_intensity, 0.0, 1.0);
+  float fluidGlow = smoothstep(0.22, 1.85, blobEnergy);
+  float darkIntensity = mix(0.46, 0.90, fluidGlow) * clamp(u_blend_intensity, 0.0, 1.0);
   vec3 darkOutputLab = mix(base, blended, darkIntensity);
-  darkOutputLab = preserveChromaMix(
-    darkOutputLab,
-    mix(length(base.yz), length(blended.yz), darkIntensity),
-    bridgeDir
-  );
   float maxDarkLum = min(u_luminance_limit, 0.54);
   darkOutputLab.x = min(darkOutputLab.x, maxDarkLum);
 
-  // 明亮模式：水彩晕染质感，保留饱满色度，与 135° 哑光纸白底座自然浸润
+  // 明亮模式：高明度水彩流体光晕，通透温润
   vec3 lightPastel = blended;
   lightPastel.x = clamp(lightPastel.x * 0.88 + 0.09, 0.65, 0.86);
-  lightPastel.yz *= 0.94;
-  float lightIntensity = clamp(u_blend_intensity * 0.60, 0.36, 0.70);
+  lightPastel.yz *= 0.93;
+  float lightIntensity = clamp(u_blend_intensity * 0.60, 0.36, 0.68);
   vec3 lightOutputLab = mix(base, lightPastel, lightIntensity);
   lightOutputLab.x = clamp(lightOutputLab.x, 0.72, 0.92);
 
