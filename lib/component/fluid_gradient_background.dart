@@ -404,14 +404,8 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
               (darkness - _lastMeshDarkness!).abs() > 0.001 ||
               _cachedMeshModePalette == null ||
               _cachedMeshBaseGradient == null) {
-            final lightPalette = activePalette.forLightMode();
-            final darkPalette = activePalette.forDarkMode();
-            _cachedMeshModePalette = AlbumPalette.lerp(
-                  lightPalette,
-                  darkPalette,
-                  darkness,
-                ) ??
-                (darkness > 0.5 ? darkPalette : lightPalette);
+            _cachedMeshModePalette =
+                activePalette.toAtmosphericStagePalette(darkness);
 
             final meshLightBase = buildDynamicBackgroundGradient(
               activePalette.secondary,
@@ -488,21 +482,35 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
           );
         }
 
-        // 2. 交互水波纹 (Interactive Water Ripple - 独立雨天自洽深色水光多波源干涉)
+        // 2. 交互水波纹 (Interactive Water Ripple - 琉璃光影水境：多环色散涟漪 + 水底焦散光网 + 动态封面水色)
         if (mode == WindowBackdropMode.waterRipple) {
+          final waterStagePalette =
+              activePalette.toAtmosphericStagePalette(darkness);
+          final waterFallbackBg = darkness > 0.5
+              ? Color.lerp(const Color(0xFF071722), waterStagePalette.primary, 0.28)!
+              : Color.lerp(const Color(0xFFEAF4F8), waterStagePalette.primary, 0.18)!;
+
           if (_waterRippleProgram == null) {
-            return const ColoredBox(color: Color(0xFF0C1014));
+            return ColoredBox(color: waterFallbackBg);
           }
 
           final rippleTime = _currentPhysicalTime;
+          var rawBass = 0.0;
 
           try {
             final spectrum =
                 PlayService.instance.playbackService.audioSpectrum.value;
             if (spectrum.isNotEmpty) {
               _rippleManager.onBassSample(spectrum, rippleTime);
+              final count = math.min(spectrum.length, 4);
+              for (var i = 0; i < count; i++) {
+                rawBass += spectrum[i];
+              }
+              rawBass = (rawBass / count).clamp(0.0, 1.0);
             }
           } catch (_) {}
+          _smoothedMeshBassEnergy =
+              (_smoothedMeshBassEnergy * 0.82 + rawBass * 0.18).clamp(0.0, 1.0);
 
           _rippleManager.updateAmbientRain(rippleTime);
           _rippleManager.pruneExpired(rippleTime);
@@ -510,29 +518,26 @@ class FluidGradientBackgroundState extends State<FluidGradientBackground>
           return Stack(
             fit: StackFit.expand,
             children: [
-              const ColoredBox(color: Color(0xFF0C1014)),
+              ColoredBox(color: waterFallbackBg),
               CustomPaint(
                 size: size,
                 painter: _WaterRipplePainter(
                   program: _waterRippleProgram!,
                   time: rippleTime,
                   ripples: List<RippleSource>.from(_rippleManager.ripples),
+                  palette: waterStagePalette,
+                  darkness: darkness,
+                  bassEnergy: _smoothedMeshBassEnergy,
                 ),
               ),
             ],
           );
         }
 
-        // 3. 极光漫染 (Aurora Glow: 多色调和的静态高斯漫射光晕)
+        // 3. 极光漫染 (Aurora Glow: 多色调和的静态极光丝绸漫射光晕)
         if (mode == WindowBackdropMode.prismaticGlass) {
-          final lightPalette = activePalette.forLightMode();
-          final darkPalette = activePalette.forDarkMode();
-          final modePalette = AlbumPalette.lerp(
-                lightPalette,
-                darkPalette,
-                darkness,
-              ) ??
-              (darkness > 0.5 ? darkPalette : lightPalette);
+          final modePalette =
+              activePalette.toAtmosphericStagePalette(darkness);
 
           final auroraLightBase = buildAuroraGlowGradient(
             activePalette,
@@ -806,11 +811,11 @@ class WaterRippleManager {
       RippleSource(
         origin: clampedPos,
         birthTime: currentTime,
-        duration: 2.0,
-        amplitude: 0.32,
-        speed: 0.30,
-        frequency: 16.0,
-        damping: 2.2,
+        duration: 2.2,
+        amplitude: 0.36,
+        speed: 0.28,
+        frequency: 18.0,
+        damping: 1.85,
         type: RippleType.click,
       ),
       currentTime,
@@ -894,11 +899,11 @@ class WaterRippleManager {
           RippleSource(
             origin: clampedPos,
             birthTime: currentTime,
-            duration: 0.65,
-            amplitude: amplitude,
-            speed: 0.26,
-            frequency: 22.0,
-            damping: 4.5,
+            duration: 1.45,
+            amplitude: (amplitude * 1.25).clamp(0.10, 0.24),
+            speed: 0.24,
+            frequency: 20.0,
+            damping: 2.35,
             type: RippleType.trail,
           ),
           currentTime,
@@ -1094,11 +1099,17 @@ class WaterRipplePainter extends CustomPainter {
     required this.program,
     required this.time,
     required this.ripples,
+    this.palette,
+    this.darkness = 1.0,
+    this.bassEnergy = 0.0,
   });
 
   final ui.FragmentProgram program;
   final double time;
   final List<RippleSource> ripples;
+  final AlbumPalette? palette;
+  final double darkness;
+  final double bassEnergy;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1163,22 +1174,90 @@ class WaterRipplePainter extends CustomPainter {
       }
     }
 
-    // 独立雨天水体光学色彩 (Slot 132 ~ 147)
-    // 严格使用独立雨天冷灰青玄墨光谱，杜绝任何外部专辑主题色染色
-    _setColor(shader, 132, const Color(0xFF0C1014)); // 深水基底色 (深邃玄灰青)
-    _setColor(shader, 136, const Color(0xFF1B252E)); // 浅水漫射散射色 (雨天冷灰青水色)
-    _setColor(shader, 140, const Color(0xFFE2EFF8)); // 镜面高光色 (清冽冷白微芒)
-    _setColor(shader, 144, const Color(0xFF506270)); // 阴天天光微光色 (柔和漫反射灰蓝)
+    // 琉璃光影水境光学色彩与状态通道 (Slot 132 ~ 147)
+    final d = darkness.clamp(0.0, 1.0);
+    final b = bassEnergy.isFinite ? bassEnergy.clamp(0.0, 1.0) : 0.0;
+    final p = palette;
+
+    final Color deepWater;
+    final Color shallowWater;
+    final Color causticAccent;
+    final Color skyReflect;
+
+    if (p != null) {
+      final darkDeep = Color.lerp(
+        const Color(0xFF071824),
+        Color.lerp(p.primary, p.muted, 0.35)!,
+        0.58,
+      )!;
+      final lightDeep = Color.lerp(
+        const Color(0xFFDCEEF5),
+        Color.lerp(p.primary, p.muted, 0.30)!,
+        0.38,
+      )!;
+      deepWater = AlbumPalette.lerpColor(lightDeep, darkDeep, d);
+
+      final darkShallow = Color.lerp(
+        const Color(0xFF0E3345),
+        p.secondary,
+        0.68,
+      )!;
+      final lightShallow = Color.lerp(
+        const Color(0xFFE6F4FA),
+        p.secondary,
+        0.46,
+      )!;
+      shallowWater = AlbumPalette.lerpColor(lightShallow, darkShallow, d);
+
+      final darkAccent = Color.lerp(
+        const Color(0xFF38B2D6),
+        p.accent,
+        0.76,
+      )!;
+      final lightAccent = Color.lerp(
+        const Color(0xFF5AC8E8),
+        p.accent,
+        0.62,
+      )!;
+      causticAccent = AlbumPalette.lerpColor(lightAccent, darkAccent, d);
+
+      final darkSky = Color.lerp(
+        const Color(0xFF9CE4F8),
+        p.highlight,
+        0.65,
+      )!;
+      final lightSky = Color.lerp(
+        const Color(0xFFFFFFFF),
+        p.highlight,
+        0.45,
+      )!;
+      skyReflect = AlbumPalette.lerpColor(lightSky, darkSky, d);
+    } else {
+      deepWater = const Color(0xFF0E2433);
+      shallowWater = const Color(0xFF1A475E);
+      causticAccent = const Color(0xFF5CE1E6);
+      skyReflect = const Color(0xFFC4F0FC);
+    }
+
+    _setColorWithAlpha(shader, 132, deepWater, d);
+    _setColorWithAlpha(shader, 136, shallowWater, b);
+    _setColorWithAlpha(shader, 140, causticAccent, 1.0);
+    _setColorWithAlpha(shader, 144, skyReflect, 1.0);
 
     final paint = Paint()..shader = shader;
     canvas.drawRect(Offset.zero & size, paint);
   }
 
-  void _setColor(ui.FragmentShader shader, int startIndex, Color color) {
+  void _setColorWithAlpha(
+    ui.FragmentShader shader,
+    int startIndex,
+    Color color,
+    double alphaChannel,
+  ) {
     shader.setFloat(startIndex, color.r);
     shader.setFloat(startIndex + 1, color.g);
     shader.setFloat(startIndex + 2, color.b);
-    shader.setFloat(startIndex + 3, color.a);
+    shader.setFloat(startIndex + 3, alphaChannel);
   }
 
   @override
@@ -1290,15 +1369,62 @@ class _AuroraGlowPainter extends CustomPainter {
       alpha: (isDark ? 0.22 : 0.16) * alphaDamp,
     );
 
-    // 【中央交汇 - 湿画法水彩交融】
-    // 中央 1：中央水彩柔和漫晕 (50%, 50% - 衔接左右水彩流变)
+    // 【中央交汇与极光丝带 - 湿画法水彩与斜向极光漫射】
     _drawGlowBlob(
       canvas: canvas,
       center: Offset(size.width * 0.50, size.height * 0.50),
       radius: maxDim * 0.65,
       color: palette.highlight,
-      alpha: (isDark ? 0.16 : 0.14) * alphaDamp,
+      alpha: (isDark ? 0.18 : 0.15) * alphaDamp,
     );
+
+    // 斜向极光漫射光带：打破正圆呆板感，赋予极光漫染模式丝绸般横向流淌的光影张力
+    _drawAuroraRibbon(
+      canvas: canvas,
+      center: Offset(size.width * 0.36, size.height * 0.32),
+      radiusX: maxDim * 0.72,
+      radiusY: maxDim * 0.28,
+      angle: -0.32,
+      color: palette.accent,
+      alpha: (isDark ? 0.20 : 0.15) * alphaDamp,
+    );
+    _drawAuroraRibbon(
+      canvas: canvas,
+      center: Offset(size.width * 0.64, size.height * 0.66),
+      radiusX: maxDim * 0.68,
+      radiusY: maxDim * 0.26,
+      angle: -0.26,
+      color: palette.secondary,
+      alpha: (isDark ? 0.22 : 0.16) * alphaDamp,
+    );
+  }
+
+  void _drawAuroraRibbon({
+    required Canvas canvas,
+    required Offset center,
+    required double radiusX,
+    required double radiusY,
+    required double angle,
+    required Color color,
+    required double alpha,
+  }) {
+    if (radiusX <= 0 || radiusY <= 0) return;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    canvas.scale(1.0, radiusY / radiusX);
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withValues(alpha: alpha),
+          color.withValues(alpha: alpha * 0.68),
+          color.withValues(alpha: alpha * 0.26),
+          color.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.35, 0.72, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: radiusX));
+    canvas.drawCircle(Offset.zero, radiusX, paint);
+    canvas.restore();
   }
 
   void _drawGlowBlob({

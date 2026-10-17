@@ -10,7 +10,9 @@ import 'package:qisheng_player/play_service/lyric_service.dart';
 import 'package:qisheng_player/play_service/playback_service.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/theme/app_theme_extensions.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -283,10 +285,28 @@ class _LyricPreviewLines extends StatefulWidget {
 }
 
 class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
+  static const _manualScrollCooldown = Duration(milliseconds: 1800);
+
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<int>? _lineSubscription;
   late List<GlobalKey> _lineKeys;
   int _activeLine = 0;
+
+  // 仅当用户手动使用鼠标滚轮或拖拽浏览歌词时才显示滚动条，自动滚词时隐藏滚动条
+  bool _manualScrolling = false;
+  Timer? _manualScrollTimer;
+
+  void _triggerManualScroll() {
+    _manualScrollTimer?.cancel();
+    if (!_manualScrolling && mounted) {
+      setState(() => _manualScrolling = true);
+    }
+    _manualScrollTimer = Timer(_manualScrollCooldown, () {
+      if (!mounted) return;
+      setState(() => _manualScrolling = false);
+      _jumpToActiveLine(animated: true);
+    });
+  }
 
   @override
   void initState() {
@@ -307,6 +327,8 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
       return;
     }
     if (oldWidget.lyric != widget.lyric) {
+      _manualScrollTimer?.cancel();
+      _manualScrolling = false;
       _lineKeys = _generateLineKeys();
       _activeLine = widget.lyricController.currentLyricLineIndex
           .clamp(0, widget.lyric.lines.length - 1)
@@ -332,7 +354,9 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
       setState(() {
         _activeLine = line.clamp(0, widget.lyric.lines.length - 1).toInt();
       });
-      _jumpToActiveLine();
+      if (!_manualScrolling) {
+        _jumpToActiveLine();
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -405,6 +429,7 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
 
   @override
   void dispose() {
+    _manualScrollTimer?.cancel();
     _lineSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -414,75 +439,112 @@ class _LyricPreviewLinesState extends State<_LyricPreviewLines> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final motion = context.motion;
-    final scrollView = SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: List.generate(widget.lyric.lines.length, (i) {
-          final line = widget.lyric.lines[i];
-          final content = _lineText(line);
-          if (content.isEmpty) {
-            return SizedBox(key: _lineKeys[i], height: 10);
+    final scrollView = Listener(
+      onPointerSignal: (signal) {
+        if (signal is PointerScrollEvent) {
+          _triggerManualScroll();
+        }
+      },
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: (notification) {
+          if (notification.direction != ScrollDirection.idle) {
+            _triggerManualScroll();
           }
+          return false;
+        },
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: RawScrollbar(
+            controller: _scrollController,
+            thumbVisibility: _manualScrolling,
+            trackVisibility: false,
+            interactive: _manualScrolling,
+            thickness: _manualScrolling ? 4.0 : 0.0,
+            radius: const Radius.circular(999),
+            fadeDuration: const Duration(milliseconds: 220),
+            timeToFade: const Duration(milliseconds: 400),
+            thumbColor: _manualScrolling
+                ? scheme.onSurface.withValues(alpha: 0.28)
+                : Colors.transparent,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: List.generate(widget.lyric.lines.length, (i) {
+                  final line = widget.lyric.lines[i];
+                  final content = _lineText(line);
+                  if (content.isEmpty) {
+                    return SizedBox(key: _lineKeys[i], height: 10);
+                  }
 
-          final active = i == _activeLine;
-          final isCredit = _isCreditLine(line);
-          final translation = _lineTranslation(line);
-          final showTranslation = translation.isNotEmpty;
+                  final active = i == _activeLine;
+                  final isCredit = _isCreditLine(line);
+                  final translation = _lineTranslation(line);
+                  final showTranslation = translation.isNotEmpty;
 
-          return Padding(
-            key: _lineKeys[i],
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: AnimatedContainer(
-              duration: motion.controlTransitionDuration,
-              curve: motion.normal,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: active
-                    ? scheme.primary.withValues(alpha: 0.14)
-                    : Colors.transparent,
-              ),
-              child: AnimatedDefaultTextStyle(
-                duration: motion.controlTransitionDuration,
-                curve: motion.normal,
-                style: TextStyle(
-                  color: isCredit
-                      ? scheme.onSurface.withValues(alpha: 0.48)
-                      : (active
-                          ? scheme.onSurface
-                          : scheme.onSurface.withValues(alpha: 0.62)),
-                  fontSize: isCredit ? 13 : (active ? 15 : 13),
-                  fontWeight: isCredit
-                      ? FontWeight.w400
-                      : (active ? FontWeight.w700 : FontWeight.w400),
-                  height: 1.35,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(content),
-                    if (showTranslation) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        translation,
+                  return Padding(
+                    key: _lineKeys[i],
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    child: AnimatedContainer(
+                      duration: motion.controlTransitionDuration,
+                      curve: motion.normal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        color: active
+                            ? scheme.primary.withValues(alpha: 0.14)
+                            : Colors.transparent,
+                      ),
+                      child: AnimatedDefaultTextStyle(
+                        duration: motion.controlTransitionDuration,
+                        curve: motion.normal,
                         style: TextStyle(
-                          color: active
-                              ? scheme.onSurface.withValues(alpha: 0.72)
-                              : scheme.onSurface.withValues(alpha: 0.46),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          height: 1.3,
+                          color: isCredit
+                              ? scheme.onSurface.withValues(alpha: 0.48)
+                              : (active
+                                  ? scheme.onSurface
+                                  : scheme.onSurface
+                                      .withValues(alpha: 0.62)),
+                          fontSize: isCredit ? 13 : (active ? 15 : 13),
+                          fontWeight: isCredit
+                              ? FontWeight.w400
+                              : (active
+                                  ? FontWeight.w700
+                                  : FontWeight.w400),
+                          height: 1.35,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(content),
+                            if (showTranslation) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                translation,
+                                style: TextStyle(
+                                  color: active
+                                      ? scheme.onSurface.withValues(alpha: 0.72)
+                                      : scheme.onSurface.withValues(alpha: 0.46),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  );
+                }),
               ),
             ),
-          );
-        }),
+          ),
+        ),
       ),
     );
 

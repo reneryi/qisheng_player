@@ -175,7 +175,8 @@ class AlbumPalette {
 
     final lum = pureHueLuminance(hsl.hue);
     final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-    final baseSat = hsl.saturation.clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
+    final baseSat = hsl.saturation
+        .clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
     final secondaryMaxL = 0.72 - excess * 0.18;
     final accentMaxL = 0.76 - excess * 0.20;
     final highlightMaxL = 0.88 - excess * 0.24;
@@ -217,13 +218,17 @@ class AlbumPalette {
 
     // 1. 色彩清洗与去噪（中性色规范化）
     final cleanedColors = rawColors.map(_cleanColor).toList();
-    final primary = cleanedColors.first;
+    final primary = _selectPrimary(cleanedColors);
     final primaryIsNeutral = isNeutral(primary);
 
-    // 2. 封面色彩忠实提取：优先从封面提取出的真实颜色中挑选次主色与强调色
+    // 2. 封面色彩忠实提取：优先从封面提取出的真实颜色中挑选高色度对比的次主色与强调色
     final secondaryCandidate = _selectSecondary(cleanedColors, primary);
-    final secondary = secondaryCandidate != null &&
-            perceptualColorDistance(primary, secondaryCandidate) > 0.075
+    final secondaryHasContrast = secondaryCandidate != null &&
+        perceptualColorDistance(primary, secondaryCandidate) > 0.075 &&
+        (primaryIsNeutral ||
+            _hueAngleDiff(primary, secondaryCandidate) >= 12.0 ||
+            perceptualColorDistance(primary, secondaryCandidate) > 0.14);
+    final secondary = secondaryHasContrast
         ? secondaryCandidate
         : _deriveHarmoniousColor(
             primary,
@@ -237,12 +242,24 @@ class AlbumPalette {
       primary: primary,
       secondary: secondary,
     );
-    final accent = accentCandidate != null &&
+    final accentHasContrast = accentCandidate != null &&
+        math.min(
+              perceptualColorDistance(primary, accentCandidate),
+              perceptualColorDistance(secondary, accentCandidate),
+            ) >
+            0.065 &&
+        (primaryIsNeutral ||
+            math.min(
+                  _hueAngleDiff(primary, accentCandidate),
+                  _hueAngleDiff(secondary, accentCandidate),
+                ) >=
+                10.0 ||
             math.min(
                   perceptualColorDistance(primary, accentCandidate),
                   perceptualColorDistance(secondary, accentCandidate),
                 ) >
-                0.065
+                0.13);
+    final accent = accentHasContrast
         ? accentCandidate
         : _deriveHarmoniousColor(
             primary,
@@ -287,10 +304,13 @@ class AlbumPalette {
   AlbumPalette forDarkMode() {
     return AlbumPalette(
       primary: _clampForDarkMode(primary, targetMinL: 0.28, targetMaxL: 0.55),
-      secondary: _clampForDarkMode(secondary, targetMinL: 0.30, targetMaxL: 0.58),
+      secondary:
+          _clampForDarkMode(secondary, targetMinL: 0.30, targetMaxL: 0.58),
       accent: _clampForDarkMode(accent, targetMinL: 0.34, targetMaxL: 0.62),
-      muted: _clampForDarkMode(muted, targetMinL: 0.12, targetMaxL: 0.25, isMuted: true),
-      highlight: _clampForDarkMode(highlight, targetMinL: 0.38, targetMaxL: 0.68, isHighlight: true),
+      muted: _clampForDarkMode(muted,
+          targetMinL: 0.12, targetMaxL: 0.25, isMuted: true),
+      highlight: _clampForDarkMode(highlight,
+          targetMinL: 0.38, targetMaxL: 0.68, isHighlight: true),
     );
   }
 
@@ -298,11 +318,144 @@ class AlbumPalette {
   AlbumPalette forLightMode() {
     return AlbumPalette(
       primary: _clampForLightMode(primary, targetMinL: 0.50, targetMaxL: 0.72),
-      secondary: _clampForLightMode(secondary, targetMinL: 0.52, targetMaxL: 0.74),
+      secondary:
+          _clampForLightMode(secondary, targetMinL: 0.52, targetMaxL: 0.74),
       accent: _clampForLightMode(accent, targetMinL: 0.50, targetMaxL: 0.72),
-      muted: _clampForLightMode(muted, targetMinL: 0.70, targetMaxL: 0.86, isMuted: true),
-      highlight: _clampForLightMode(highlight, targetMinL: 0.74, targetMaxL: 0.92, isHighlight: true),
+      muted: _clampForLightMode(muted,
+          targetMinL: 0.70, targetMaxL: 0.86, isMuted: true),
+      highlight: _clampForLightMode(highlight,
+          targetMinL: 0.74, targetMaxL: 0.92, isHighlight: true),
     );
+  }
+
+  /// 为弥散流彩 (Mesh Flow)、极光漫染 (Prismatic Glass) 与水波纹 (Water Ripple) 生成
+  /// 具有丰富色相张力与明暗纵深的舞台调色板：
+  /// - 当封面为多色强对比（如红+青、蓝+橙）时，完整保留真实对比色相并强化通透饱和度；
+  /// - 当封面颜色较为单一（单色或窄色相跨度 < 38°）时，以主色为核心进行邻近-分裂谐波延展，
+  ///   自动构建冷暖呼应、明暗交错的 5 层流光色彩，彻底告别单色封面的平淡沉闷感。
+  AlbumPalette toAtmosphericStagePalette(double darkness) {
+    final d = darkness.clamp(0.0, 1.0);
+    final allNeutral =
+        isNeutral(primary) && isNeutral(secondary) && isNeutral(accent);
+
+    if (allNeutral) {
+      // 黑白灰封面：构建富有层次的月光银与玄墨黛阶梯，注入极微弱的冷暖银辉光感
+      final pHsl = HSLColor.fromColor(primary);
+      final baseHue = pHsl.hue;
+      final darkStage = AlbumPalette(
+        primary: HSLColor.fromAHSL(1.0, baseHue, 0.05, 0.36).toColor(),
+        secondary:
+            HSLColor.fromAHSL(1.0, (baseHue + 200) % 360, 0.08, 0.28).toColor(),
+        accent:
+            HSLColor.fromAHSL(1.0, (baseHue + 28) % 360, 0.07, 0.46).toColor(),
+        muted:
+            HSLColor.fromAHSL(1.0, (baseHue + 210) % 360, 0.06, 0.13).toColor(),
+        highlight:
+            HSLColor.fromAHSL(1.0, (baseHue + 18) % 360, 0.06, 0.62).toColor(),
+      );
+      final lightStage = AlbumPalette(
+        primary: HSLColor.fromAHSL(1.0, baseHue, 0.04, 0.64).toColor(),
+        secondary:
+            HSLColor.fromAHSL(1.0, (baseHue + 200) % 360, 0.06, 0.72).toColor(),
+        accent:
+            HSLColor.fromAHSL(1.0, (baseHue + 28) % 360, 0.06, 0.58).toColor(),
+        muted:
+            HSLColor.fromAHSL(1.0, (baseHue + 210) % 360, 0.04, 0.82).toColor(),
+        highlight:
+            HSLColor.fromAHSL(1.0, (baseHue + 18) % 360, 0.05, 0.90).toColor(),
+      );
+      return AlbumPalette.lerp(lightStage, darkStage, d) ?? darkStage;
+    }
+
+    final pHsl = HSLColor.fromColor(primary);
+    final sHsl = HSLColor.fromColor(secondary);
+    final aHsl = HSLColor.fromColor(accent);
+
+    final huePS = _hueAngleDiff(primary, secondary);
+    final huePA = _hueAngleDiff(primary, accent);
+    final hueSA = _hueAngleDiff(secondary, accent);
+    final maxHueSpan = math.max(huePS, math.max(huePA, hueSA));
+
+    // 判断是否为单一色系/窄色相封面（例如全蓝、全紫、全暖黄或同色深浅渐变封面）
+    final isNarrowHue = maxHueSpan < 38.0 ||
+        (sHsl.saturation < 0.16 && aHsl.saturation < 0.16);
+
+    AlbumPalette working = this;
+    if (isNarrowHue) {
+      final baseHue = pHsl.hue;
+      final lum = pureHueLuminance(baseHue);
+      final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+      final vividSat =
+          pHsl.saturation.clamp(0.52, (0.90 - excess * 0.12).clamp(0.58, 0.90));
+
+      // 黄金角邻近-冷暖双翼谐波展开：
+      // - Primary 锚定封面真实本色
+      // - Secondary 向深邃冷调/邻近翼旋转 +42°，形成柔美丝绸过渡
+      // - Accent 向灵动暖调/对冲翼旋转 -46°，赋予画面呼吸张力与层次感
+      // - Muted 深入 +24° 暮色暗谷，拉开明暗反差
+      // - Highlight 提亮 -22° 珠光高光，点亮流彩核心
+      final secHue = (baseHue + 42.0) % 360.0;
+      final accHue = (baseHue - 46.0 + 360.0) % 360.0;
+      final mutHue = (baseHue + 24.0) % 360.0;
+      final hiHue = (baseHue - 22.0 + 360.0) % 360.0;
+
+      working = AlbumPalette(
+        primary: pHsl
+            .withSaturation(vividSat)
+            .withLightness(pHsl.lightness.clamp(0.34, 0.56))
+            .toColor(),
+        secondary: HSLColor.fromAHSL(
+          1.0,
+          secHue,
+          (vividSat * 0.96).clamp(0.46, 0.88),
+          (pHsl.lightness + 0.08).clamp(0.32, 0.60),
+        ).toColor(),
+        accent: HSLColor.fromAHSL(
+          1.0,
+          accHue,
+          (vividSat * 1.05).clamp(0.54, 0.92),
+          (pHsl.lightness + 0.12).clamp(0.38, 0.64),
+        ).toColor(),
+        muted: HSLColor.fromAHSL(
+          1.0,
+          mutHue,
+          (vividSat * 0.48).clamp(0.22, 0.52),
+          0.14,
+        ).toColor(),
+        highlight: HSLColor.fromAHSL(
+          1.0,
+          hiHue,
+          (vividSat * 0.72).clamp(0.40, 0.78),
+          0.66,
+        ).toColor(),
+      );
+    } else {
+      // 多色封面：对核心角色适度提纯饱和度并拉开明度阶梯，防止原本偏灰的次色在流彩中发闷
+      Color boostRole(Color c, double minSat, double targetLOffset) {
+        if (isNeutral(c)) return c;
+        final hsl = HSLColor.fromColor(c);
+        final lum = pureHueLuminance(hsl.hue);
+        final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
+        final maxSat = (0.92 - excess * 0.12).clamp(0.60, 0.92);
+        return hsl
+            .withSaturation(hsl.saturation.clamp(minSat, maxSat))
+            .withLightness((hsl.lightness + targetLOffset).clamp(0.26, 0.66))
+            .toColor();
+      }
+
+      working = AlbumPalette(
+        primary: boostRole(primary, 0.48, 0.0),
+        secondary: boostRole(secondary, 0.52, 0.04),
+        accent: boostRole(accent, 0.56, 0.06),
+        muted: muted,
+        highlight: highlight,
+      );
+    }
+
+    final lightPalette = working.forLightMode();
+    final darkPalette = working.forDarkMode();
+    return AlbumPalette.lerp(lightPalette, darkPalette, d) ??
+        (d > 0.5 ? darkPalette : lightPalette);
   }
 
   /// 对两个调色板的 5 个角色颜色进行平滑插值过渡（Lerp）
@@ -341,12 +494,9 @@ Color _clampForDarkMode(
     return hsl.withSaturation(0.0).withLightness(clampedL).toColor();
   }
 
-  // 计算色相纯色感知亮度及超标比率
-  // 阈值设为 0.30（基准平均感知亮度约 0.46，蓝/紫/洋红均 <= 0.28，黄 0.93，绿 0.72，青 0.79，橙 0.57）
   final lum = AlbumPalette.pureHueLuminance(hsl.hue);
   final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
 
-  // 对过曝倾向严重的暖亮与高感光色（黄、橙、嫩绿、翠绿、青色）进行明度自适应下压
   final maxLReduction = excess * (isHighlight ? 0.24 : (isMuted ? 0.05 : 0.22));
   final minLReduction = excess * (isMuted ? 0.03 : 0.12);
   final effectiveMaxL = (targetMaxL - maxLReduction).clamp(0.16, targetMaxL);
@@ -354,7 +504,6 @@ Color _clampForDarkMode(
 
   final clampedL = hsl.lightness.clamp(effectiveMinL, effectiveMaxL);
 
-  // 饱和度自适应：冷暗色（蓝/紫）保持饱满鲜明，高感知色（黄/橙/青/绿）限制饱和度过冲防止刺眼荧光感
   final satFactor = 1.0 - excess * 0.04;
   final maxSat = (0.95 - math.pow(excess, 1.6) * 0.14).clamp(0.85, 0.95);
   final minSat = isMuted ? 0.0 : 0.20;
@@ -378,12 +527,10 @@ Color _clampForLightMode(
     return hsl.withSaturation(0.0).withLightness(clampedL).toColor();
   }
 
-  // 对高感知亮度色相（黄、青、嫩绿等）在亮色模式下抑制过高明度，防止漂白成死白
   final lum = AlbumPalette.pureHueLuminance(hsl.hue);
   final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
 
   if (isHighlight) {
-    // 亮色模式高光：作为柔和水彩光晕，明度在 0.70 ~ 0.82，温润通透杜绝死白
     final maxL = (0.84 - excess * 0.10).clamp(0.70, 0.82);
     final clampedL = hsl.lightness.clamp(0.66, maxL);
     final clampedS = (hsl.saturation * 1.15).clamp(0.40, 0.75);
@@ -391,20 +538,19 @@ Color _clampForLightMode(
   }
 
   if (isMuted) {
-    // 亮色模式底色：柔和浅水彩背景
     final maxL = (0.86 - excess * 0.08).clamp(0.72, 0.84);
     final clampedL = hsl.lightness.clamp(0.68, maxL);
     final clampedS = (hsl.saturation * 0.50).clamp(0.08, 0.42);
     return hsl.withLightness(clampedL).withSaturation(clampedS).toColor();
   }
 
-  // 主色、次主色与强调色：在浅色模式作为前景主要色彩，高感光度色相应当下调明度以确保在白底上的可读性与饱满质感
   final maxLReduction = excess * 0.24;
   final effectiveMaxL = (targetMaxL - maxLReduction).clamp(0.38, targetMaxL);
   final effectiveMinL = (targetMinL - excess * 0.16).clamp(0.30, effectiveMaxL);
 
   final clampedL = hsl.lightness.clamp(effectiveMinL, effectiveMaxL);
-  final clampedS = (hsl.saturation * 1.02).clamp(0.40, (0.90 - excess * 0.12).clamp(0.55, 0.90));
+  final clampedS = (hsl.saturation * 1.02)
+      .clamp(0.40, (0.90 - excess * 0.12).clamp(0.55, 0.90));
   return hsl.withLightness(clampedL).withSaturation(clampedS).toColor();
 }
 
@@ -416,17 +562,84 @@ Color _cleanColor(Color color) {
   return color;
 }
 
+/// 智能主色优选：当首位候选色为死黑暗底（L < 0.14）或低饱和度灰底，且后续存在鲜活主体色时，
+/// 优先推举最具表现力的鲜活主体色作为 Primary，防止暗黑背景喧宾夺主。
+Color _selectPrimary(List<Color> colors) {
+  if (colors.length <= 1) return colors.first;
+  final first = colors.first;
+  final firstHsl = HSLColor.fromColor(first);
+  final firstChroma = _colorChroma(first);
+
+  final isFirstWeak = AlbumPalette.isNeutral(first) ||
+      firstHsl.lightness < 0.14 ||
+      firstHsl.lightness > 0.90 ||
+      (firstHsl.saturation < 0.18 && firstChroma < 0.045);
+
+  if (!isFirstWeak) return first;
+
+  for (var i = 1; i < colors.length; i++) {
+    final c = colors[i];
+    if (AlbumPalette.isNeutral(c)) continue;
+    final hsl = HSLColor.fromColor(c);
+    final chroma = _colorChroma(c);
+    if (hsl.saturation >= 0.24 &&
+        chroma >= 0.055 &&
+        hsl.lightness >= 0.15 &&
+        hsl.lightness <= 0.85) {
+      return c;
+    }
+  }
+  return first;
+}
+
+double _colorChroma(Color color) {
+  final lab = _toOklab(color);
+  return math.sqrt(lab.$2 * lab.$2 + lab.$3 * lab.$3);
+}
+
+double _chromaticDistance(Color left, Color right) {
+  final l = _toOklab(left);
+  final r = _toOklab(right);
+  final da = l.$2 - r.$2;
+  final db = l.$3 - r.$3;
+  return math.sqrt(da * da + db * db);
+}
+
+double _hueAngleDiff(Color a, Color b) {
+  final ha = HSLColor.fromColor(a).hue;
+  final hb = HSLColor.fromColor(b).hue;
+  final diff = (ha - hb).abs();
+  return diff > 180.0 ? 360.0 - diff : diff;
+}
+
 Color? _selectSecondary(List<Color> colors, Color primary) {
   if (colors.length < 2) return null;
+  final primaryIsNeutral = AlbumPalette.isNeutral(primary);
+  final hasChromaticCandidate =
+      colors.any((c) => c != primary && !AlbumPalette.isNeutral(c));
+
   Color? selected;
   var bestScore = double.negativeInfinity;
-  for (var index = 1; index < colors.length; index++) {
-    final distance = perceptualColorDistance(primary, colors[index]);
+  for (var index = 0; index < colors.length; index++) {
+    final candidate = colors[index];
+    if (candidate == primary) continue;
+    final distance = perceptualColorDistance(primary, candidate);
+    final chromaDist = _chromaticDistance(primary, candidate);
+    final candChroma = _colorChroma(candidate);
     final salience = 1 / (index + 1);
-    final score = distance * 0.82 + salience * 0.18;
+
+    var score = distance * 0.52 +
+        chromaDist * 0.68 +
+        candChroma * 0.32 +
+        salience * 0.16;
+    if (!primaryIsNeutral &&
+        hasChromaticCandidate &&
+        AlbumPalette.isNeutral(candidate)) {
+      score *= 0.28;
+    }
     if (score > bestScore) {
       bestScore = score;
-      selected = colors[index];
+      selected = candidate;
     }
   }
   return selected;
@@ -437,17 +650,36 @@ Color? _selectAccent(
   required Color primary,
   required Color secondary,
 }) {
+  final primaryIsNeutral = AlbumPalette.isNeutral(primary);
+  final hasChromaticCandidate = colors.any(
+    (c) => c != primary && c != secondary && !AlbumPalette.isNeutral(c),
+  );
+
   Color? selected;
   var bestScore = double.negativeInfinity;
-  for (var index = 1; index < colors.length; index++) {
+  for (var index = 0; index < colors.length; index++) {
     final candidate = colors[index];
-    if (candidate == secondary) continue;
+    if (candidate == primary || candidate == secondary) continue;
     final distance = math.min(
       perceptualColorDistance(primary, candidate),
       perceptualColorDistance(secondary, candidate),
     );
+    final chromaDist = math.min(
+      _chromaticDistance(primary, candidate),
+      _chromaticDistance(secondary, candidate),
+    );
+    final candChroma = _colorChroma(candidate);
     final salience = 1 / (index + 1);
-    final score = distance * 0.86 + salience * 0.14;
+
+    var score = distance * 0.54 +
+        chromaDist * 0.66 +
+        candChroma * 0.34 +
+        salience * 0.14;
+    if (!primaryIsNeutral &&
+        hasChromaticCandidate &&
+        AlbumPalette.isNeutral(candidate)) {
+      score *= 0.28;
+    }
     if (score > bestScore) {
       bestScore = score;
       selected = candidate;
@@ -504,7 +736,6 @@ Color _selectHighlight(
     final hsl = HSLColor.fromColor(candidate);
     final lum = AlbumPalette.pureHueLuminance(hsl.hue);
     final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
-    // 对高感光度色相 candidate 进行防过曝预收敛，避免把刺眼高光原样提取
     final maxL = 0.88 - excess * 0.20;
     if (hsl.lightness > maxL) {
       return hsl.withLightness(maxL).toColor();
@@ -516,7 +747,6 @@ Color _selectHighlight(
   if (forceNeutral) {
     return hsl.withSaturation(0.0).withLightness(0.85).toColor();
   }
-  // 依据主色色相感知亮度智能调和高光明度倍率，避免黄/橙等暖亮主色派生出过曝高光
   final lum = AlbumPalette.pureHueLuminance(hsl.hue);
   final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
   final lightnessMultiplier = 1.28 - excess * 0.26;
@@ -549,7 +779,8 @@ Color _deriveHarmoniousColor(
   final lum = AlbumPalette.pureHueLuminance(hsl.hue);
   final excess = ((lum - 0.30) / 0.62).clamp(0.0, 1.0);
   final maxL = 0.82 - excess * 0.18;
-  final baseSat = hsl.saturation.clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
+  final baseSat = hsl.saturation
+      .clamp(0.35, (0.95 - excess * 0.10).clamp(0.40, 0.95));
   return hsl
       .withHue((hsl.hue + hueOffset + 360.0) % 360.0)
       .withSaturation(baseSat)

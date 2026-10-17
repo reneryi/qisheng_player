@@ -189,19 +189,19 @@ List<Color> buildAuroraGlowGradient(
   AlbumPalette palette,
   Brightness brightness,
 ) {
+  final stagePalette =
+      palette.toAtmosphericStagePalette(brightness == Brightness.dark ? 1.0 : 0.0);
   if (brightness == Brightness.dark) {
-    final darkPalette = palette.forDarkMode();
     return [
-      Color.lerp(const Color(0xFF060A13), darkPalette.primary, 0.16)!,
-      Color.lerp(const Color(0xFF080D18), darkPalette.muted, 0.10)!,
-      Color.lerp(const Color(0xFF060A13), darkPalette.secondary, 0.16)!,
+      Color.lerp(const Color(0xFF060B14), stagePalette.primary, 0.22)!,
+      Color.lerp(const Color(0xFF080E1A), stagePalette.muted, 0.18)!,
+      Color.lerp(const Color(0xFF060B14), stagePalette.secondary, 0.22)!,
     ];
   }
-  final lightPalette = palette.forLightMode();
   return [
-    Color.lerp(const Color(0xFFF7F9FD), lightPalette.primary, 0.14)!,
-    Color.lerp(const Color(0xFFF1F5FA), lightPalette.muted, 0.08)!,
-    Color.lerp(const Color(0xFFF6F8FD), lightPalette.secondary, 0.14)!,
+    Color.lerp(const Color(0xFFF6F8FC), stagePalette.primary, 0.16)!,
+    Color.lerp(const Color(0xFFF0F4FA), stagePalette.muted, 0.10)!,
+    Color.lerp(const Color(0xFFF5F8FC), stagePalette.secondary, 0.16)!,
   ];
 }
 
@@ -250,7 +250,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   );
 
   static const int _maxPaletteCacheEntries = 128;
-  static const String _paletteRoleVersion = 'roles-v2';
+  static const String _paletteRoleVersion = 'roles-v3';
 
   final Map<String, AlbumPalette> _paletteCache = {};
   int _dynamicThemeRequestId = 0;
@@ -639,7 +639,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final rgbColors = await rust_palette.extractDominantColors(
       imageBytes: coverBytes,
-      maxColors: 6,
+      maxColors: 8,
     );
     if (rgbColors.isEmpty) return null;
 
@@ -647,9 +647,13 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       rgbColors.map(_colorFromRgbInt).toList(growable: false),
       fallback: _fallbackDominantColor(),
     );
-    return AlbumPalette.fromColors(
-      selected.colors.map(_normalizeColor).toList(growable: false),
-      fallback: _normalizeColor(_fallbackDominantColor()),
+    // 直接对已选定的 5 个角色进行规范化，杜绝二次调用 fromColors 导致主次色与高光/底色顺序错乱
+    return AlbumPalette(
+      primary: _normalizeColor(selected.primary),
+      secondary: _normalizeColor(selected.secondary),
+      accent: _normalizeColor(selected.accent),
+      muted: selected.muted,
+      highlight: selected.highlight,
     );
   }
 
