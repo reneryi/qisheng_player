@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/component/bottom_player_bar.dart';
-
 import 'package:qisheng_player/component/main_layout_frame.dart';
+import 'package:qisheng_player/component/mini_hardware_deck.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
 import 'package:qisheng_player/component/side_nav.dart';
 import 'package:qisheng_player/component/title_bar.dart';
@@ -102,21 +102,28 @@ class _AppShellState extends State<AppShell>
             backgroundColor: Colors.transparent,
             drawer: useDrawer ? const SideNav() : null,
             drawerScrimColor: Theme.of(context).colorScheme.scrim,
-            body: MainLayoutFrame(
-              // 采用经典稳定的桌面架构：顶部 TitleBar 和底部 BottomPlayerBar 作为全局通栏
-              titleBar: const TitleBar(),
-              overlay: const BottomPlayerBar(),
-              child: switch (screenType) {
-                ScreenType.small => _ShellPagePanel(
-                    page: widget.page,
-                  ),
-                ScreenType.medium || ScreenType.large => _ShellWideContent(
-                    page: widget.page,
-                    sideNavAnimation: _largeSidebarController,
-                    sideNavCollapsed: largeSidebarCollapsed,
-                    onToggleCollapsed: _toggleLargeSidebar,
-                  ),
-              },
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                MainLayoutFrame(
+                  // 采用现代空间画布架构：顶部 TitleBar 与底部悬浮声学控制舱 BottomPlayerBar
+                  titleBar: const TitleBar(),
+                  overlay: const BottomPlayerBar(),
+                  child: switch (screenType) {
+                    ScreenType.small => _ShellPagePanel(
+                        page: widget.page,
+                      ),
+                    ScreenType.medium || ScreenType.large => _ShellWideContent(
+                        page: widget.page,
+                        sideNavAnimation: _largeSidebarController,
+                        sideNavCollapsed: largeSidebarCollapsed,
+                        onToggleCollapsed: _toggleLargeSidebar,
+                      ),
+                  },
+                ),
+                // 工业拟物桌面微缩唱机挂件层（按需开启，自由拖拽）
+                const MiniHardwareDeckOverlay(),
+              ],
             ),
           );
         },

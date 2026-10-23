@@ -610,6 +610,7 @@ class UniPage<T> extends StatefulWidget {
     this.showRightPane = false,
     this.rightPaneWidth = 296,
     this.tableMaxCrossAxisExtent = 250,
+    this.topBanner,
   });
 
   final PagePreference pref;
@@ -646,6 +647,7 @@ class UniPage<T> extends StatefulWidget {
   final bool showRightPane;
   final double rightPaneWidth;
   final double tableMaxCrossAxisExtent;
+  final Widget? topBanner;
 
   @override
   State<UniPage<T>> createState() => _UniPageState<T>();
@@ -1281,6 +1283,7 @@ class _UniPageState<T> extends State<UniPage<T>>
       titleAction: widget.titleAction,
       primaryAction: effectivePrimaryAction,
       secondaryActions: effectiveSecondaryActions,
+      topBanner: widget.topBanner,
       body: body,
     );
   }

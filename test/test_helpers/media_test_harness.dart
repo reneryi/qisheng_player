@@ -230,6 +230,18 @@ class FakePlaybackController extends PlaybackController {
   }
 
   @override
+  void play(int audioIndex, List<Audio> playlist) {
+    _playlist.value = playlist;
+    _playlistIndex = audioIndex;
+    _nowPlaying = (audioIndex >= 0 && audioIndex < playlist.length)
+        ? playlist[audioIndex]
+        : null;
+    _playerState = PlayerState.playing;
+    _stateController.add(_playerState);
+    notifyListeners();
+  }
+
+  @override
   void playAgain() {
     _playerState = PlayerState.playing;
     _stateController.add(_playerState);

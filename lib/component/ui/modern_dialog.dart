@@ -159,11 +159,15 @@ class ModernDialogFrame extends StatelessWidget {
     super.key,
     required this.child,
     this.maxWidth = 480,
+    double? width,
+    this.maxHeight,
     this.padding = const EdgeInsets.all(24),
-  });
+  }) : _width = width;
 
   final Widget child;
   final double maxWidth;
+  final double? _width;
+  final double? maxHeight;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -181,8 +185,8 @@ class ModernDialogFrame extends StatelessWidget {
         type: MaterialType.transparency,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: maxWidth,
-            maxHeight: screenHeight - verticalMargin * 2,
+            maxWidth: _width ?? maxWidth,
+            maxHeight: maxHeight ?? (screenHeight - verticalMargin * 2),
           ),
           child: Container(
             margin: EdgeInsets.symmetric(

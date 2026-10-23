@@ -10,6 +10,7 @@ class PageScaffold extends StatelessWidget {
     this.titleAction,
     this.primaryAction,
     this.secondaryActions = const [],
+    this.topBanner,
     required this.body,
   });
 
@@ -19,6 +20,7 @@ class PageScaffold extends StatelessWidget {
   final Widget? titleAction;
   final Widget? primaryAction;
   final List<Widget> secondaryActions;
+  final Widget? topBanner;
   final Widget body;
 
   @override
@@ -60,6 +62,7 @@ class PageScaffold extends StatelessWidget {
                       child: header,
                     ),
                   ),
+                  if (topBanner != null) topBanner!,
                   Expanded(child: body),
                 ],
               ),
@@ -247,8 +250,8 @@ class _TitleBlock extends StatelessWidget {
                   fontSize: 28,
                   height: 1.25,
                   color: scheme.onSurface,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
                   leadingDistribution: TextLeadingDistribution.even,
                 ),
               ),
@@ -270,7 +273,8 @@ class _TitleBlock extends StatelessWidget {
               color: scheme.onSurface.withValues(alpha: isDark ? 0.85 : 0.94),
               fontWeight: FontWeight.w500,
               height: 1.38,
-              letterSpacing: 0,
+              letterSpacing: 0.1,
+              fontFeatures: const [FontFeature.tabularFigures()],
               leadingDistribution: TextLeadingDistribution.even,
             ),
           ),

@@ -628,6 +628,8 @@ class CpIconButton extends StatelessWidget {
     this.variant = CpButtonVariant.ghost,
     this.small = false,
     this.semanticsLabel,
+    this.selected = false,
+    this.size,
   });
 
   final Widget icon;
@@ -637,6 +639,8 @@ class CpIconButton extends StatelessWidget {
   final CpButtonVariant variant;
   final bool small;
   final String? semanticsLabel;
+  final bool selected;
+  final Size? size;
 
   @override
   Widget build(BuildContext context) {
@@ -669,7 +673,7 @@ class CpIconButton extends StatelessWidget {
     final glassShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(surfaces.radiusXxl),
     );
-    return switch (variant) {
+    var style = switch (variant) {
       CpButtonVariant.primary => IconButton.styleFrom(
           backgroundColor: scheme.primary,
           foregroundColor: scheme.onPrimary,
@@ -723,6 +727,22 @@ class CpIconButton extends StatelessWidget {
           }),
         ),
     };
+
+    if (size != null) {
+      style = style.copyWith(
+        fixedSize: WidgetStatePropertyAll(size),
+        minimumSize: WidgetStatePropertyAll(size),
+      );
+    }
+    if (selected) {
+      style = style.copyWith(
+        backgroundColor: WidgetStatePropertyAll(
+          scheme.primary.withValues(alpha: 0.16),
+        ),
+        foregroundColor: WidgetStatePropertyAll(scheme.primary),
+      );
+    }
+    return style;
   }
 }
 

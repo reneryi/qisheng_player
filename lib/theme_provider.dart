@@ -491,6 +491,8 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(_syncDesktopLyricTheme(sendThemeMode: true));
   }
 
+  void changeThemeMode(ThemeMode mode) => applyThemeMode(mode);
+
   Future<void> applyThemeFromAudio(Audio audio, {bool wait = false}) async {
     if (!AppSettings.instance.dynamicTheme) {
       final requestId = ++_dynamicThemeRequestId;
@@ -593,6 +595,11 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     await AppSettings.instance.saveSettings();
     return result;
   }
+
+  Future<WindowBackdropModeResult> setWindowBackdropMode(
+    WindowBackdropMode mode,
+  ) =>
+      applyWindowBackdropMode(mode);
 
   Future<void> applyUiScale(double scale) async {
     final clamped = scale.clamp(0.8, 2.0);

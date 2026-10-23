@@ -13,6 +13,7 @@ import 'package:qisheng_player/component/dual_layer_rhythm_slider.dart';
 import 'package:qisheng_player/component/now_playing_artwork_hero.dart';
 import 'package:qisheng_player/component/marquee_text.dart';
 import 'package:qisheng_player/component/now_playing_navigation.dart';
+import 'package:qisheng_player/component/signal_path_inspector.dart';
 import 'package:qisheng_player/component/ui/audio_format_badge.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/navigation_state.dart';
@@ -110,29 +111,56 @@ class BottomPlayerBar extends StatelessWidget {
       },
     );
     final scheme = Theme.of(context).colorScheme;
+    final accents = context.accents;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final podRadius = BorderRadius.circular(narrowWindow ? 0.0 : 22.0);
 
-    // 全宽轻薄毛玻璃通栏：融入全局流体背景，并带微弱顶部高光分界线防止滚动内容视觉干扰
+    // 悬浮光学声学控制舱 (Floating Refractive Acoustic Pod)：
+    // 严格保持 dockHeight (116.0px) 物理高度契约，同时赋予圆润晶体边缘折射高光与深邃悬浮投影
     return Container(
+      key: const ValueKey('bottom-player-bar-floating-pod'),
       height: context.chrome.dockHeight,
       decoration: transparent
           ? null
           : BoxDecoration(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.22)
-                  : Colors.white.withValues(alpha: 0.35),
-              border: Border(
-                top: BorderSide(
-                  color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
-                  width: 1.0,
-                ),
+              borderRadius: podRadius,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDark
+                    ? [
+                        Color.alphaBlend(
+                          accents.accent.withValues(alpha: 0.06),
+                          const Color(0xFF0A0E16).withValues(alpha: 0.36),
+                        ),
+                        const Color(0xFF070A10).withValues(alpha: 0.26),
+                      ]
+                    : [
+                        Color.alphaBlend(
+                          accents.accent.withValues(alpha: 0.04),
+                          Colors.white.withValues(alpha: 0.52),
+                        ),
+                        Colors.white.withValues(alpha: 0.38),
+                      ],
+              ),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : scheme.onSurface.withValues(alpha: 0.07),
+                width: 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.05),
-                  blurRadius: 16,
+                  color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.06),
+                  blurRadius: 22,
                   offset: const Offset(0, -4),
-                  spreadRadius: 0,
+                  spreadRadius: -2,
+                ),
+                BoxShadow(
+                  color: accents.accent.withValues(alpha: isDark ? 0.08 : 0.04),
+                  blurRadius: 18,
+                  offset: const Offset(0, -1),
+                  spreadRadius: -4,
                 ),
               ],
             ),
@@ -235,6 +263,7 @@ class _BottomBarTrackSection extends StatelessWidget {
                               AudioFormatBadge(
                                 audio: audio,
                                 compact: true,
+                                enableSignalPathInspector: true,
                               ),
                             ],
                           ],
@@ -1439,6 +1468,7 @@ class _ExclusiveModeControl extends StatelessWidget {
           message: "音频输出模式：${exclusive ? 'WASAPI 独占（高保真源码输出）' : '系统共享（常规音频混合）'}",
           child: CpMotionPressable(
             onTap: () => playback.useExclusiveMode(!exclusive),
+            onSecondaryTapDown: (_) => unawaited(showSignalPathInspector(context)),
             borderRadius: BorderRadius.circular(10),
             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
             border: false,

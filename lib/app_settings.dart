@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:qisheng_player/app_brand.dart';
+import 'package:qisheng_player/app_preference.dart';
 import 'package:qisheng_player/src/rust/api/system_theme.dart';
 import 'package:qisheng_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -311,6 +312,17 @@ class AppSettings {
 
   /// 全屏/沉浸播放时鼠标静止是否自动隐藏播控栏
   bool autoHideControls = false;
+
+  /// 音量均衡（ReplayGain）兼容代理配置
+  bool get enableReplayGain =>
+      AppPreference.instance.playbackPref.enableVolumeLeveling;
+  set enableReplayGain(bool val) =>
+      AppPreference.instance.playbackPref.enableVolumeLeveling = val;
+
+  double get replayGainPreampDb =>
+      AppPreference.instance.playbackPref.volumeLevelingPreampDb;
+  set replayGainPreampDb(double val) =>
+      AppPreference.instance.playbackPref.volumeLevelingPreampDb = val;
 
   final ValueNotifier<int> backgroundVersion = ValueNotifier(0);
 

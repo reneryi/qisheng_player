@@ -3,8 +3,11 @@ import 'dart:async';
 
 import 'package:qisheng_player/app_settings.dart';
 import 'package:qisheng_player/app_paths.dart' as app_paths;
+import 'package:qisheng_player/component/command_palette_dialog.dart';
 import 'package:qisheng_player/component/horizontal_lyric_view.dart';
+import 'package:qisheng_player/component/mini_hardware_deck.dart';
 import 'package:qisheng_player/component/responsive_builder.dart';
+import 'package:qisheng_player/component/signal_path_inspector.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart'; // 引入通用的 CpComponents 以支持沉浸式按钮
 import 'package:qisheng_player/component/window_drag_region.dart';
 import 'package:qisheng_player/hotkeys_helper.dart';
@@ -70,7 +73,9 @@ class _TitleBarSmall extends StatelessWidget {
         _TitleNavCluster(showLogo: false),
         SizedBox(width: 8),
         Expanded(child: _TitleLyricPill()),
-        SizedBox(width: 8),
+        SizedBox(width: 6),
+        _TitleStudioCluster(compact: true),
+        SizedBox(width: 6),
         WindowControlls(),
       ],
     );
@@ -87,7 +92,9 @@ class _TitleBarMedium extends StatelessWidget {
         _TitleNavCluster(),
         SizedBox(width: 12),
         Expanded(child: _TitleLyricPill()),
-        SizedBox(width: 12),
+        SizedBox(width: 8),
+        _TitleStudioCluster(compact: true),
+        SizedBox(width: 8),
         WindowControlls(),
       ],
     );
@@ -104,8 +111,62 @@ class _TitleBarLarge extends StatelessWidget {
         _TitleNavCluster(),
         SizedBox(width: 14),
         Expanded(child: _TitleLyricPill()),
-        SizedBox(width: 12),
+        SizedBox(width: 10),
+        _TitleStudioCluster(compact: false),
+        SizedBox(width: 10),
         WindowControlls(),
+      ],
+    );
+  }
+}
+
+/// 顶栏声学工坊与空间形态快捷簇（全局命令面板 / 微缩唱机态 / 声学信号链检视）
+class _TitleStudioCluster extends StatelessWidget {
+  const _TitleStudioCluster({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final accents = context.accents;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CpIconButton(
+          key: const ValueKey('title-bar-command-palette-btn'),
+          variant: CpButtonVariant.immersive,
+          tooltip: '全局命令与曲库瞬移面板 (Ctrl+P)',
+          onPressed: () => unawaited(showCommandPaletteDialog(context)),
+          icon: const Icon(Symbols.terminal_rounded, size: 19),
+        ),
+        if (!compact) ...[
+          const SizedBox(width: 2),
+          ValueListenableBuilder<bool>(
+            valueListenable: MiniHardwareDeckController.instance,
+            builder: (context, deckActive, _) {
+              return CpIconButton(
+                key: const ValueKey('title-bar-mini-deck-btn'),
+                variant: CpButtonVariant.immersive,
+                selected: deckActive,
+                tooltip: deckActive ? '收起桌面微缩唱机' : '开启桌面微缩唱机 (Mini Deck)',
+                onPressed: MiniHardwareDeckController.instance.toggle,
+                icon: Icon(
+                  Symbols.album_rounded,
+                  size: 19,
+                  color: deckActive ? accents.accent : null,
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 2),
+          CpIconButton(
+            key: const ValueKey('title-bar-signal-path-btn'),
+            variant: CpButtonVariant.immersive,
+            tooltip: '声学信号链检视器 (Signal Path)',
+            onPressed: () => unawaited(showSignalPathInspector(context)),
+            icon: const Icon(Symbols.radar_rounded, size: 19),
+          ),
+        ],
       ],
     );
   }
@@ -192,7 +253,14 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
     final isAlt = HardwareKeyboard.instance.isAltPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
-    if (!isCtrl || isAlt || isShift) return false;
+    if (!isCtrl || isAlt) return false;
+
+    if (event.logicalKey == LogicalKeyboardKey.keyP) {
+      unawaited(showCommandPaletteDialog(context));
+      return true;
+    }
+
+    if (isShift) return false;
 
     if (event.logicalKey == LogicalKeyboardKey.keyK ||
         event.logicalKey == LogicalKeyboardKey.keyF) {
@@ -291,9 +359,11 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
         child: Material(
           type: MaterialType.transparency,
           child: Container(
-            width: math.min(360.0, math.max(200.0, MediaQuery.sizeOf(context).width - 48.0)),
+            width: math.min(
+                360.0, math.max(200.0, MediaQuery.sizeOf(context).width - 48.0)),
             constraints: BoxConstraints(
-              maxHeight: (MediaQuery.sizeOf(context).height - 110.0).clamp(140.0, 380.0),
+              maxHeight: (MediaQuery.sizeOf(context).height - 110.0)
+                  .clamp(140.0, 380.0),
             ),
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -463,81 +533,82 @@ class _TitleLyricPillState extends State<_TitleLyricPill> {
                       duration: motion.searchExpandDuration,
                       curve: motion.emphasized,
                       width: _expanded ? maxExpandedWidth : 42,
-                  child: _expanded
-                      ? TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          decoration: InputDecoration(
-                            prefixIcon:
-                                const Icon(Symbols.search_rounded, size: 20),
-                            suffixIcon: Semantics(
-                              label: '关闭搜索',
+                      child: _expanded
+                          ? TextField(
+                              controller: _controller,
+                              focusNode: _focusNode,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Symbols.search_rounded,
+                                    size: 20),
+                                suffixIcon: Semantics(
+                                  label: '关闭搜索',
+                                  button: true,
+                                  child: IconButton(
+                                    enableFeedback: false,
+                                    onPressed: () {
+                                      _controller.clear();
+                                      _toggleExpanded(false);
+                                    },
+                                    icon: const Icon(Symbols.close_rounded,
+                                        size: 18),
+                                  ),
+                                ),
+                                hintText: '搜索歌曲、歌手、专辑 (支持拼音 / Ctrl+K)',
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                              ),
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: _submitSearch,
+                              onTapOutside: (_) {
+                                if (_controller.text.trim().isEmpty) {
+                                  _toggleExpanded(false);
+                                } else if (_overlayController.isShowing) {
+                                  _overlayController.hide();
+                                }
+                              },
+                            )
+                          : Semantics(
+                              label: '搜索',
                               button: true,
                               child: IconButton(
                                 enableFeedback: false,
-                                onPressed: () {
-                                  _controller.clear();
-                                  _toggleExpanded(false);
-                                },
-                                icon:
-                                    const Icon(Symbols.close_rounded, size: 18),
+                                onPressed: () => _toggleExpanded(true),
+                                icon: Icon(
+                                  Symbols.search_rounded,
+                                  size: 20,
+                                  color:
+                                      scheme.onSurface.withValues(alpha: 0.68),
+                                ),
                               ),
                             ),
-                            hintText: '搜索歌曲、歌手、专辑 (支持拼音 / Ctrl+K)',
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 11),
-                          ),
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: _submitSearch,
-                          onTapOutside: (_) {
-                            if (_controller.text.trim().isEmpty) {
-                              _toggleExpanded(false);
-                            } else if (_overlayController.isShowing) {
-                              _overlayController.hide();
-                            }
-                          },
-                        )
-                      : Semantics(
-                          label: '搜索',
-                          button: true,
-                          child: IconButton(
-                            enableFeedback: false,
-                            onPressed: () => _toggleExpanded(true),
-                            icon: Icon(
-                              Symbols.search_rounded,
-                              size: 20,
-                              color: scheme.onSurface.withValues(alpha: 0.68),
-                            ),
-                          ),
-                        ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        AnimatedContainer(
-          duration: motion.searchExpandDuration,
-          curve: motion.emphasized,
-          width: _expanded ? 14 : 8,
-        ),
-        Expanded(
-          child: WindowDragRegion(
-            onDoubleTap: WindowControls.toggleMaximized,
-            child: AnimatedOpacity(
-              duration: motion.controlTransitionDuration,
-              curve: motion.normal,
-              opacity: _expanded ? 0.0 : 1.0,
-              child: IgnorePointer(
-                ignoring: _expanded,
-                child: const HorizontalLyricView(),
+            AnimatedContainer(
+              duration: motion.searchExpandDuration,
+              curve: motion.emphasized,
+              width: _expanded ? 14 : 8,
+            ),
+            Expanded(
+              child: WindowDragRegion(
+                onDoubleTap: WindowControls.toggleMaximized,
+                child: AnimatedOpacity(
+                  duration: motion.controlTransitionDuration,
+                  curve: motion.normal,
+                  opacity: _expanded ? 0.0 : 1.0,
+                  child: IgnorePointer(
+                    ignoring: _expanded,
+                    child: const HorizontalLyricView(),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
-    );
+          ],
+        );
       },
     );
   }
@@ -894,7 +965,8 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         ),
         _WindowButton(
           key: _maximizeButtonKey,
-          semanticsLabel: _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
+          semanticsLabel:
+              _isFullScreen ? '全屏模式下不可用' : (_isMaximized ? '还原' : '最大化'),
           onPressed: _isFullScreen || _isProcessing ? null : _toggleMaximized,
           icon: _isMaximized
               ? Symbols.fullscreen_exit_rounded
@@ -958,7 +1030,8 @@ class _WindowButton extends StatelessWidget {
             if (states.contains(WidgetState.hovered)) {
               return defaultColor; // 悬停状态下图标呈现完全不透明高亮
             }
-            return defaultColor.withValues(alpha: 0.62); // 默认状态显示为 62% 不透明度的半透明图标
+            return defaultColor.withValues(
+                alpha: 0.62); // 默认状态显示为 62% 不透明度的半透明图标
           }),
         ),
       ),

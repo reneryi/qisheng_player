@@ -6,6 +6,130 @@ import 'package:flutter/widgets.dart';
 
 const int audioSpectrumBinCount = 64;
 
+/// 实时声学物理特征向量（由 64 频段对数 FFT 频谱解算，驱动着色器与微动量交互）
+@immutable
+class AcousticFeatures {
+  const AcousticFeatures({
+    this.subBassEnergy = 0.0,
+    this.midHarmonicEnergy = 0.0,
+    this.highBrilliance = 0.0,
+    this.spectralCentroid = 0.0,
+    this.rmsEnergy = 0.0,
+  });
+
+  static const AcousticFeatures zero = AcousticFeatures();
+
+  /// Sub-Bass 低频瞬态能量 (20~120Hz，前 4 个频段)，用于驱动鼓点脉冲与水波/流体扩散
+  final double subBassEnergy;
+
+  /// 中频谐波饱满度 (人声与主乐器基频区)
+  final double midHarmonicEnergy;
+
+  /// 高频空气感与泛音亮度 (擦片、泛音瞬态)
+  final double highBrilliance;
+
+  /// 归一化频谱质心 (0.0 低沉温暖 ~ 1.0 明亮清冽)，用于控制光学折射色散与噪波细腻度
+  final double spectralCentroid;
+
+  /// 全频段均方根响度能量 (0.0 ~ 1.0)
+  final double rmsEnergy;
+
+  bool get isActive => rmsEnergy > 0.005 || subBassEnergy > 0.005;
+
+  static AcousticFeatures lerp(
+    AcousticFeatures a,
+    AcousticFeatures b,
+    double t,
+  ) {
+    final p = t.clamp(0.0, 1.0).toDouble();
+    return AcousticFeatures(
+      subBassEnergy:
+          a.subBassEnergy + (b.subBassEnergy - a.subBassEnergy) * p,
+      midHarmonicEnergy:
+          a.midHarmonicEnergy + (b.midHarmonicEnergy - a.midHarmonicEnergy) * p,
+      highBrilliance:
+          a.highBrilliance + (b.highBrilliance - a.highBrilliance) * p,
+      spectralCentroid:
+          a.spectralCentroid + (b.spectralCentroid - a.spectralCentroid) * p,
+      rmsEnergy: a.rmsEnergy + (b.rmsEnergy - a.rmsEnergy) * p,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AcousticFeatures &&
+          (subBassEnergy - other.subBassEnergy).abs() < 1e-4 &&
+          (midHarmonicEnergy - other.midHarmonicEnergy).abs() < 1e-4 &&
+          (highBrilliance - other.highBrilliance).abs() < 1e-4 &&
+          (spectralCentroid - other.spectralCentroid).abs() < 1e-4 &&
+          (rmsEnergy - other.rmsEnergy).abs() < 1e-4;
+
+  @override
+  int get hashCode => Object.hash(
+        (subBassEnergy * 1000).round(),
+        (midHarmonicEnergy * 1000).round(),
+        (highBrilliance * 1000).round(),
+        (spectralCentroid * 1000).round(),
+        (rmsEnergy * 1000).round(),
+      );
+}
+
+/// 从对数频谱提取声学物理特征（Sub-Bass、中频、高频、频谱质心、RMS）
+AcousticFeatures computeAcousticFeatures(List<double> spectrum) {
+  if (spectrum.isEmpty) return AcousticFeatures.zero;
+
+  final len = spectrum.length;
+  final bassEnd = math.min(len, 4);
+  final midEnd = math.min(len, 24);
+
+  var bassSum = 0.0;
+  var midSum = 0.0;
+  var highSum = 0.0;
+  var weightedIndexSum = 0.0;
+  var magnitudeSum = 0.0;
+  var squareSum = 0.0;
+
+  for (var i = 0; i < len; i++) {
+    final raw = spectrum[i];
+    final v = raw.isFinite ? raw.clamp(0.0, 1.0).toDouble() : 0.0;
+    if (i < bassEnd) {
+      bassSum += v;
+    } else if (i < midEnd) {
+      midSum += v;
+    } else {
+      highSum += v;
+    }
+    weightedIndexSum += v * i;
+    magnitudeSum += v;
+    squareSum += v * v;
+  }
+
+  if (magnitudeSum <= 0.0001) return AcousticFeatures.zero;
+
+  final subBass = (bassSum / math.max(1, bassEnd)).clamp(0.0, 1.0).toDouble();
+  final midCount = math.max(1, midEnd - bassEnd);
+  final midHarmonic =
+      (len > bassEnd ? midSum / midCount : subBass).clamp(0.0, 1.0).toDouble();
+  final highCount = math.max(1, len - midEnd);
+  final highBrilliance =
+      (len > midEnd ? highSum / highCount : 0.0).clamp(0.0, 1.0).toDouble();
+  final centroid = len > 1
+      ? (weightedIndexSum / (magnitudeSum * (len - 1)))
+          .clamp(0.0, 1.0)
+          .toDouble()
+      : 0.0;
+  final rms = math.sqrt(squareSum / len).clamp(0.0, 1.0).toDouble();
+
+  return AcousticFeatures(
+    subBassEnergy: subBass,
+    midHarmonicEnergy: midHarmonic,
+    highBrilliance: highBrilliance,
+    spectralCentroid: centroid,
+    rmsEnergy: rms,
+  );
+}
+
 /// Converts native FFT magnitudes into log-spaced, display-ready bands.
 List<double> shapeFftSpectrum(
   List<double> fft, {
@@ -120,6 +244,8 @@ class AudioSpectrumNotifier extends ChangeNotifier
 
   @override
   List<double> get value => _value;
+
+  AcousticFeatures get acousticFeatures => computeAcousticFeatures(_value);
 
   @override
   void addListener(VoidCallback listener) {

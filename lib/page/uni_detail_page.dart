@@ -496,15 +496,28 @@ class _UniDetailPageHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    picShape == PicShape.rrect
+                        ? 'ALBUM LINER NOTES · 典藏专辑'
+                        : 'ARTIST PROFILE · 音乐人档案',
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  SizedBox(height: shortWindow ? 2 : 5),
+                  Text(
                     title,
                     maxLines: shortWindow ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.start,
                     style: TextStyle(
                       color: scheme.onSurface,
-                      fontSize: shortWindow ? 20 : (compact ? 22 : 28),
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
+                      fontSize: shortWindow ? 20 : (compact ? 23 : 30),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.35,
+                      height: 1.16,
                     ),
                   ),
                   SizedBox(height: shortWindow ? 4 : 8),

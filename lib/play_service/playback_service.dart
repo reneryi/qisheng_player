@@ -131,6 +131,7 @@ abstract class PlaybackController extends ChangeNotifier {
   void playAgain();
   void lastAudio();
   void nextAudio();
+  void play(int audioIndex, List<Audio> playlist) {}
   void playIndexOfPlaylist(int audioIndex);
   void reorderPlaylist(int oldIndex, int newIndex);
   void removeAudioFromPlaylistByPath(String path);

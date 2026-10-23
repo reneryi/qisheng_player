@@ -199,54 +199,73 @@ class _SyncLineContent extends StatelessWidget {
             );
 
             final List<InlineSpan> wordSpans = [];
+            final isBackingVocalLine = syncLine.content.trim().startsWith('(') ||
+                syncLine.content.trim().startsWith('（');
             for (var i = 0; i < syncLine.words.length; i++) {
               final word = syncLine.words[i];
               final wordStart = word.start.inMilliseconds;
               final wordLength = max(1, word.length.inMilliseconds);
+              final wordActiveStyle = isBackingVocalLine
+                  ? mainStyle.copyWith(fontStyle: FontStyle.italic)
+                  : mainStyle;
+              final wordInactiveStyle = isBackingVocalLine
+                  ? inactiveStyle.copyWith(fontStyle: FontStyle.italic)
+                  : inactiveStyle;
 
               if (posInMs >= wordStart + wordLength) {
                 // 已唱完：直接 TextSpan 渲染高亮文字，零离屏开销
                 wordSpans.add(TextSpan(
                   text: word.content,
-                  style: mainStyle,
+                  style: wordActiveStyle,
                 ));
               } else if (posInMs <= wordStart) {
                 // 尚未唱到：直接 TextSpan 渲染暗色文字，零离屏开销
                 wordSpans.add(TextSpan(
                   text: word.content,
-                  style: inactiveStyle,
+                  style: wordInactiveStyle,
                 ));
               } else {
-                // 正在演唱中：软边缘羽化字内擦除 + 长音字呼吸上浮与辉光膨胀
-                final progress =
+                // 正在演唱中：音节时长感知物理动效（长音节呼吸上浮+微缩放，短促快节奏阶跃）
+                final rawProgress =
                     ((posInMs - wordStart) / wordLength).clamp(0.0, 1.0);
-                final isSustained = wordLength >= 650;
-                final floatOffset =
-                    isSustained ? -1.5 * sin(progress * pi) : 0.0;
-                final leftStop = (progress - 0.08).clamp(0.0, 1.0);
-                final rightStop = (progress + 0.08).clamp(0.0, 1.0);
+                final isStaccato = wordLength < 220;
+                final isSustained = wordLength >= 550;
+                final progress = isStaccato
+                    ? Curves.easeOutCubic.transform(rawProgress)
+                    : rawProgress;
+                final wave = sin(rawProgress * pi);
+                final floatOffset = isSustained
+                    ? -2.1 * wave
+                    : (isStaccato ? -0.8 * wave : -1.1 * wave);
+                final syllableScale = isSustained ? (1.0 + 0.032 * wave) : 1.0;
+                final feather = isStaccato ? 0.04 : 0.09;
+                final leftStop = (progress - feather).clamp(0.0, 1.0);
+                final rightStop = (progress + feather).clamp(0.0, 1.0);
 
                 wordSpans.add(WidgetSpan(
                   alignment: PlaceholderAlignment.baseline,
                   baseline: TextBaseline.alphabetic,
                   child: Transform.translate(
                     offset: Offset(0, floatOffset),
-                    child: ShaderMask(
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (bounds) {
-                        return LinearGradient(
-                          colors: [
-                            scheme.primary,
-                            scheme.primary,
-                            scheme.primary.withValues(alpha: 0.28),
-                            scheme.primary.withValues(alpha: 0.28),
-                          ],
-                          stops: [0.0, leftStop, rightStop, 1.0],
-                        ).createShader(bounds);
-                      },
-                      child: Text(
-                        word.content,
-                        style: mainStyle,
+                    child: Transform.scale(
+                      scale: syllableScale,
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) {
+                          return LinearGradient(
+                            colors: [
+                              scheme.primary,
+                              scheme.primary,
+                              scheme.primary.withValues(alpha: 0.28),
+                              scheme.primary.withValues(alpha: 0.28),
+                            ],
+                            stops: [0.0, leftStop, rightStop, 1.0],
+                          ).createShader(bounds);
+                        },
+                        child: Text(
+                          word.content,
+                          style: wordActiveStyle,
+                        ),
                       ),
                     ),
                   ),

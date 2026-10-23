@@ -5,6 +5,7 @@ import 'package:qisheng_player/component/audio_lyric_preview_panel.dart';
 import 'package:qisheng_player/component/audio_grid_tile.dart';
 import 'package:qisheng_player/component/audio_tile.dart';
 import 'package:qisheng_player/component/cp/cp_components.dart';
+import 'package:qisheng_player/component/editorial_bento_header.dart';
 import 'package:qisheng_player/component/ui/modern_tooltip.dart';
 import 'package:qisheng_player/library/audio_library.dart';
 import 'package:qisheng_player/library/play_count_store.dart';
@@ -26,6 +27,7 @@ class AudiosPage extends StatefulWidget {
 class _AudiosPageState extends State<AudiosPage> {
   late final MultiSelectController<Audio> multiSelectController =
       MultiSelectController<Audio>();
+  LibraryFocusDimension _activeFocus = LibraryFocusDimension.all;
 
   @override
   void dispose() {
@@ -82,25 +84,40 @@ class _AudiosPageState extends State<AudiosPage> {
   @override
   Widget build(BuildContext context) {
     final sourceList = List<Audio>.from(AudioLibrary.instance.audioCollection);
-    final contentList = List<Audio>.from(sourceList);
+    final contentList = _activeFocus == LibraryFocusDimension.all
+        ? List<Audio>.from(sourceList)
+        : sourceList
+            .where((a) => matchesLibraryFocus(a, _activeFocus))
+            .toList();
 
     return UniPage<Audio>(
       pref: AppPreference.instance.audiosPagePref,
       title: "音乐",
       subtitle: _buildSubtitle(contentList.length),
+      topBanner: (sourceList.length >= 4 || _activeFocus != LibraryFocusDimension.all)
+          ? LibraryFocusFilterBar(
+              allAudios: sourceList,
+              activeFocus: _activeFocus,
+              onFocusChanged: (next) {
+                if (_activeFocus != next) {
+                  setState(() => _activeFocus = next);
+                }
+              },
+            )
+          : null,
       contentList: contentList,
-      contentRevision: AudioLibrary.revision.value,
+      contentRevision: Object.hash(AudioLibrary.revision.value, _activeFocus),
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
+        key: ValueKey('${item.path}_$i'),
         audioIndex: i,
         playlist: contentList,
-        showPlayCount: AppPreference.instance.audiosPagePref.sortMethod == 5,
         focus: item == widget.locateTo,
         multiSelectController: multiSelectController,
       ),
       gridBuilder: (context, item, i, multiSelectController) => AudioGridTile(
+        key: ValueKey('${item.path}_$i'),
         audioIndex: i,
         playlist: contentList,
-        showPlayCount: AppPreference.instance.audiosPagePref.sortMethod == 5,
         focus: item == widget.locateTo,
         multiSelectController: multiSelectController,
       ),
@@ -108,29 +125,36 @@ class _AudiosPageState extends State<AudiosPage> {
       enableSortMethod: true,
       enableSortOrder: true,
       enableContentViewSwitch: true,
+      locateTo: widget.locateTo,
+      sideIndexLabels: _letters,
+      sideIndexResolver: _resolveByLetter,
+      locateIndexResolver: (list) {
+        final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+        if (nowPlaying != null) {
+          final currentIndex =
+              list.indexWhere((item) => item.path == nowPlaying.path);
+          if (currentIndex >= 0) return currentIndex;
+        }
+        if (widget.locateTo != null) {
+          final targetIndex = list.indexOf(widget.locateTo!);
+          if (targetIndex >= 0) return targetIndex;
+        }
+        return null;
+      },
       extraActions: [
         CpIconButton(
           key: const ValueKey('toggle-lyric-preview'),
           variant: CpButtonVariant.immersive,
-          tooltip: _showLyricPreview ? '关闭歌词预览' : '打开歌词预览',
+          selected: _showLyricPreview,
+          tooltip: _showLyricPreview ? '隐藏歌词预览' : '显示歌词预览',
           tooltipDirection: ModernTooltipDirection.bottom,
           onPressed: _toggleLyricPreview,
-          icon: Icon(
-            Symbols.lyrics_rounded,
-            fill: _showLyricPreview ? 1 : 0,
-            color: _showLyricPreview
-                ? Theme.of(context).colorScheme.primary
-                : null,
-          ),
+          icon: const Icon(Symbols.lyrics_rounded),
         ),
       ],
-      locateTo: widget.locateTo,
-      locateIndexResolver: (list) {
-        final current = PlayService.instance.playbackService.nowPlaying;
-        if (current == null) return null;
-        final index = list.indexWhere((audio) => audio.path == current.path);
-        return index >= 0 ? index : null;
-      },
+      rightPaneBuilder: (_) => const AudioLyricPreviewPanel(),
+      showRightPane: _showLyricPreview,
+      rightPaneWidth: 332,
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
@@ -144,11 +168,6 @@ class _AudiosPageState extends State<AudiosPage> {
         ),
         MultiSelectExit(multiSelectController: multiSelectController),
       ],
-      sideIndexLabels: _letters,
-      sideIndexResolver: _resolveByLetter,
-      rightPaneBuilder: (_) => const AudioLyricPreviewPanel(),
-      showRightPane: _showLyricPreview,
-      rightPaneWidth: 284,
       sortMethods: [
         SortMethodDesc(
           icon: Symbols.title_rounded,
@@ -221,23 +240,24 @@ class _AudiosPageState extends State<AudiosPage> {
           },
         ),
         SortMethodDesc(
-          icon: Symbols.bar_chart_rounded,
+          icon: Symbols.local_fire_department_rounded,
           name: "播放次数",
           method: (list, order) {
+            final store = PlayCountStore.instance;
             switch (order) {
               case SortOrder.ascending:
-                list.sort(
-                  (a, b) => PlayCountStore.instance
-                      .get(a)
-                      .compareTo(PlayCountStore.instance.get(b)),
-                );
+                list.sort((a, b) {
+                  final cmp = store.get(a).compareTo(store.get(b));
+                  if (cmp != 0) return cmp;
+                  return a.title.localeCompareTo(b.title);
+                });
                 break;
               case SortOrder.descending:
-                list.sort(
-                  (a, b) => PlayCountStore.instance
-                      .get(b)
-                      .compareTo(PlayCountStore.instance.get(a)),
-                );
+                list.sort((a, b) {
+                  final cmp = store.get(b).compareTo(store.get(a));
+                  if (cmp != 0) return cmp;
+                  return a.title.localeCompareTo(b.title);
+                });
                 break;
             }
           },

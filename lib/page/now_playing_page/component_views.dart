@@ -769,16 +769,54 @@ class _ImmersiveLyricStage extends StatelessWidget {
                   end: 0.52,
                   beginOffset: const Offset(0, 0.012),
                   child: Center(
-                    child: Text(
-                      '暂无歌词',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(
-                          alpha: isDark ? 0.75 : 0.88,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: scheme.primary.withValues(alpha: 0.14),
+                            border: Border.all(
+                              color: scheme.primary.withValues(alpha: 0.30),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            'INSTRUMENTAL · 纯享声学舞台',
+                            style: TextStyle(
+                              color: scheme.primary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
                         ),
-                        fontSize: compact ? 22 : 24,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0,
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '暂无歌词',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(
+                              alpha: isDark ? 0.82 : 0.90,
+                            ),
+                            fontSize: compact ? 22 : 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '专注聆听器乐编配与声场细节',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.54),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

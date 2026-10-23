@@ -108,6 +108,20 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     return badges;
   }
 
+  /// 构建杂志内页级曲目副标题：优先展示词曲/编曲署名，避免在同一专辑内重复冗余专辑名
+  String _buildEditorialTrackSubtitle(Audio audio) {
+    final parts = <String>[audio.displayArtist];
+    final composer = audio.composer?.trim() ?? '';
+    final arranger = audio.arranger?.trim() ?? '';
+    if (composer.isNotEmpty) {
+      parts.add('作曲 $composer');
+    }
+    if (arranger.isNotEmpty) {
+      parts.add('编曲 $arranger');
+    }
+    return parts.join('  ·  ');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (album.works.isEmpty) {
@@ -136,6 +150,8 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     final subtitleText = artistNames.isNotEmpty
         ? '$artistNames  ·  ${formatWorkCount(secondaryContent.length)}'
         : formatWorkCount(secondaryContent.length);
+
+    final scheme = Theme.of(context).colorScheme;
 
     return UniDetailPage<Album, Audio, Artist>(
       pref: AppPreference.instance.albumDetailPagePref,
@@ -170,17 +186,34 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
             },
       secondaryContent: secondaryContent,
       secondaryContentRevision: AudioLibrary.revision.value,
-      secondaryContentBuilder: (context, audio, i, multiSelectController) =>
-          AudioTile(
-        leading: Text(
-          audio.disc > 0
-              ? "${audio.disc.toString().padLeft(2, "0")}-${audio.track.toString().padLeft(2, "0")}"
-              : audio.track.toString().padLeft(2, "0"),
-        ),
-        audioIndex: i,
-        playlist: secondaryContent,
-        multiSelectController: multiSelectController,
-      ),
+      secondaryContentBuilder: (context, audio, i, multiSelectController) {
+        final trackNum = audio.track > 0 ? audio.track : (i + 1);
+        final ordinalText = audio.disc > 0
+            ? "${audio.disc.toString().padLeft(2, "0")}-${trackNum.toString().padLeft(2, "0")}"
+            : trackNum.toString().padLeft(2, "0");
+
+        return AudioTile(
+          showCover: false,
+          editorialSubtitle: _buildEditorialTrackSubtitle(audio),
+          leading: SizedBox(
+            width: 38,
+            child: Text(
+              ordinalText,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.56),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          audioIndex: i,
+          playlist: secondaryContent,
+          multiSelectController: multiSelectController,
+        );
+      },
       tertiaryContentTitle: "参与艺术家",
       tertiaryContent: album.artistsMap.values.toList(),
       tertiaryContentBuilder: (context, artist, i, multiSelectController) =>

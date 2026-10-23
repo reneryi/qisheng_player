@@ -33,6 +33,8 @@ class AudioTile extends StatefulWidget {
     this.leading,
     this.action,
     this.multiSelectController,
+    this.showCover = true,
+    this.editorialSubtitle,
   });
 
   final int audioIndex;
@@ -42,6 +44,8 @@ class AudioTile extends StatefulWidget {
   final Widget? leading;
   final Widget? action;
   final MultiSelectController? multiSelectController;
+  final bool showCover;
+  final String? editorialSubtitle;
 
   @override
   State<AudioTile> createState() => _AudioTileState();
@@ -254,67 +258,87 @@ class _AudioTileState extends State<AudioTile> {
                         children: [
                           if (widget.leading != null)
                             Padding(
-                              padding: const EdgeInsets.only(right: 16.0),
+                              padding: EdgeInsets.only(
+                                right: widget.showCover ? 16.0 : 14.0,
+                              ),
                               child: widget.leading!,
                             ),
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              if (cachedCover != null)
-                                CoverFadeImage(
-                                  provider: cachedCover,
-                                  index: widget.audioIndex,
-                                  width: 48,
-                                  height: 48,
-                                  borderRadius: 10,
-                                  placeholder: Center(child: placeholder),
-                                )
-                              else
-                                ScrollAwareFutureBuilder(
-                                  futureKey: audio.path,
-                                  future: () => audio.cover,
-                                  builder: (context, snapshot) {
-                                    return CoverFadeImage(
-                                      provider: snapshot.data,
-                                      index: widget.audioIndex,
-                                      width: 48,
-                                      height: 48,
-                                      borderRadius: 10,
-                                      placeholder: Center(child: placeholder),
-                                    );
-                                  },
-                                ),
-                              // 正在播放时展示右下角微型动态跳动均衡器徽章
-                              if (effectiveFocus)
-                                Positioned(
-                                  right: -2,
-                                  bottom: -2,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: scheme.primary,
-                                      borderRadius: BorderRadius.circular(6),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: scheme.primary
-                                              .withValues(alpha: 0.4),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const EqualizerPlayingBars(
-                                      barColor: Colors.white,
-                                      height: 10,
+                          if (widget.showCover) ...[
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                if (cachedCover != null)
+                                  CoverFadeImage(
+                                    provider: cachedCover,
+                                    index: widget.audioIndex,
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 10,
+                                    placeholder: Center(child: placeholder),
+                                  )
+                                else
+                                  ScrollAwareFutureBuilder(
+                                    futureKey: audio.path,
+                                    future: () => audio.cover,
+                                    builder: (context, snapshot) {
+                                      return CoverFadeImage(
+                                        provider: snapshot.data,
+                                        index: widget.audioIndex,
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 10,
+                                        placeholder: Center(child: placeholder),
+                                      );
+                                    },
+                                  ),
+                                // 正在播放时展示右下角微型动态跳动均衡器徽章
+                                if (effectiveFocus)
+                                  Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: scheme.primary,
+                                        borderRadius: BorderRadius.circular(6),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: scheme.primary
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const EqualizerPlayingBars(
+                                        barColor: Colors.white,
+                                        height: 10,
+                                      ),
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(width: 16.0),
+                              ],
+                            ),
+                            const SizedBox(width: 16.0),
+                          ] else if (effectiveFocus) ...[
+                            Container(
+                              margin: const EdgeInsets.only(right: 12.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const EqualizerPlayingBars(
+                                barColor: Colors.white,
+                                height: 10,
+                              ),
+                            ),
+                          ],
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -342,9 +366,10 @@ class _AudioTileState extends State<AudioTile> {
                                       children: [
                                         Flexible(
                                           child: Text(
-                                            widget.showPlayCount
-                                                ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
-                                                : "${audio.artist} - ${audio.album}",
+                                            widget.editorialSubtitle ??
+                                                (widget.showPlayCount
+                                                    ? "${audio.artist} - ${audio.album} | 播放 ${PlayCountStore.instance.get(audio)} 次"
+                                                    : "${audio.artist} - ${audio.album}"),
                                             style: TextStyle(
                                               color: textColor.withValues(
                                                 alpha: isDark ? 0.82 : 0.90,
